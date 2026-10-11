@@ -24,6 +24,7 @@ const Constants = require('../util/constants.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
+const FcmPersistentIds = require('../util/fcmPersistentIds.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Map = require('../util/map.js');
 const Scrape = require('../util/scrape.js');
@@ -61,8 +62,20 @@ module.exports = async (client, guild, steamId) => {
 
     const androidId = credentials[steamId].gcm.android_id;
     const securityToken = credentials[steamId].gcm.security_token;
-    client.fcmListenersLite[guild.id][steamId] = new PushReceiverClient(androidId, securityToken, [])
+
+    /* Pass the notification ids processed in previous sessions so Firebase acknowledges them and stops
+       redelivering (and thus re-announcing) notifications that were already handled. */
+    const persistentIdsKey = `lite:${steamId}`;
+    const processedPersistentIds = FcmPersistentIds.getProcessed(guild.id, persistentIdsKey);
+
+    client.fcmListenersLite[guild.id][steamId] = new PushReceiverClient(androidId, securityToken, processedPersistentIds)
     client.fcmListenersLite[guild.id][steamId].on('ON_DATA_RECEIVED', (data) => {
+        if (FcmPersistentIds.isProcessed(guild.id, persistentIdsKey, data.persistentId)) {
+            /* Redelivered notification that was already handled in a previous session. */
+            return;
+        }
+        FcmPersistentIds.markProcessed(guild.id, persistentIdsKey, data.persistentId);
+
         const appData = data.appData;
 
         if (!appData) {
