@@ -18,18 +18,46 @@
 
 */
 
+const Path = require('path');
+
+/* Load the .env file (if present) before any process.env value below is read. */
+require('dotenv').config({
+    path: Path.join(__dirname, '..', '.env'),
+    quiet: true,
+});
+
+/* Parse a boolean environment variable. Accepts: 1/true/yes/on (case-insensitive). */
+function envBool(name, fallback) {
+    const value = process.env[name];
+    if (value === undefined || value.trim() === '') {
+        return fallback;
+    }
+    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+/* Parse an integer environment variable, falling back to the default if it is not a number. */
+function envInt(name, fallback) {
+    const value = Number.parseInt(process.env[name], 10);
+    return Number.isNaN(value) ? fallback : value;
+}
+
+/* Global debug mode, enabled with RPP_DEBUG=true (in the .env file or real environment). */
+const debug = envBool('RPP_DEBUG', false);
+
 module.exports = {
     general: {
         language: process.env.RPP_LANGUAGE || 'en',
-        pollingIntervalMs: process.env.RPP_POLLING_INTERVAL || 10000,
-        showCallStackError: process.env.RPP_LOG_CALL_STACK || false,
-        reconnectIntervalMs: process.env.RPP_RECONNECT_INTERVAL || 15000,
+        pollingIntervalMs: envInt('RPP_POLLING_INTERVAL', 10000),
+        reconnectIntervalMs: envInt('RPP_RECONNECT_INTERVAL', 15000),
+        /* Debug mode enables verbose (debug level) logging and call stacks in the logs. */
+        debug: debug,
+        showCallStackError: debug || envBool('RPP_LOG_CALL_STACK', false),
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',
         clientId: process.env.RPP_DISCORD_CLIENT_ID || '',
         token: process.env.RPP_DISCORD_TOKEN || '',
-        needAdminPrivileges: process.env.RPP_NEED_ADMIN_PRIVILEGES || true, /* If true, only admins can delete (server, switch..), manage credentials and reset a channel */
+        needAdminPrivileges: envBool('RPP_NEED_ADMIN_PRIVILEGES', true), /* If true, only admins can delete (server, switch..), manage credentials and reset a channel */
     },
     battlemetrics: {
         token: process.env.RPP_BATTLEMETRICS_TOKEN || '',
