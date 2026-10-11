@@ -42,6 +42,12 @@ class Player {
         this._wentOfflineTime = null;
 
         this.updatePos();
+
+        if (!this._isOnline) {
+            this._wentOfflineTime = rustplus.timestampToDate(
+                rustplus.getRuntimeState(`teamOfflineTime-${this._steamId}`)
+            );
+        }
     }
 
     /* Getters and Setters */
@@ -105,11 +111,14 @@ class Player {
     updatePlayer(player) {
         if (this.isGoneOffline(player)) {
             this.wentOfflineTime = new Date();
+            this.rustplus.setRuntimeState(`teamOfflineTime-${this.steamId}`,
+                this.rustplus.dateToTimestamp(this.wentOfflineTime));
         }
 
         if (this.isGoneOnline(player)) {
             this.lastMovement = new Date();
             this.afkSeconds = 0;
+            this.rustplus.deleteRuntimeState(`teamOfflineTime-${this.steamId}`);
         }
 
         if (this.isMoved(player)) {
