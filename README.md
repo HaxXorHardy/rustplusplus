@@ -21,6 +21,8 @@
 
 A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/rustplus.js) library to utilize the power of the [Rust+ Companion App](https://rust.facepunch.com/companion) with additional Quality-of-Life features.
 
+> **Note:** This repository is a fork of [FaiThiX/rustplusplus](https://github.com/faithix/rustplusplus), which itself is a fork of the original [alexemanuelol/rustplusplus](https://github.com/alexemanuelol/rustplusplus). All credit for the original bot and its main development goes to **alexemanuelol**.
+
 
 ## **How-to Setup Video**
 
@@ -41,7 +43,7 @@ A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/r
 
 ## **Documentation**
 
-> Documentation can be found [here](https://github.com/faithix/rustplusplus/blob/master/docs/documentation.md). The documentation explains the features as well as `how to setup the bot`, so make sure to take a look at it 😉
+> Documentation can be found [here](https://github.com/HaxXorHardy/rustplusplus/blob/master/docs/documentation.md). The documentation explains the features as well as `how to setup the bot`, so make sure to take a look at it 😉
 
 ## **Credentials**
 
@@ -68,7 +70,7 @@ or
 
 ## **Running via docker**
 
-    $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/faithix/rustplusplus
+    $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/haxxorhardy/rustplusplus
 
 or
 
@@ -83,3 +85,5 @@ Make sure you use the correct values for DISCORD_CLIENT_ID as well as DISCORD_TO
 **.Vegas.#4844**@Discord - for the awesome icons!
 <br>
 **alexemanuelol**@GitHub - for the Main Development of the [Rust++ Bot](https://github.com/alexemanuelol/rustPlusPlus).
+<br>
+**FaiThiX**@GitHub - for the fork [rustplusplus](https://github.com/faithix/rustplusplus) that this project is based on.

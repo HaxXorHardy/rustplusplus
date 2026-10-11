@@ -11,14 +11,14 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/faithix/rustplusplus.git"
+        "url": "https://github.com/HaxXorHardy/rustplusplus.git"
     },
-    "author": "FaiThiX forked from Alexemanuelol",
+    "author": "HaxXorHardy (https://github.com/HaxXorHardy) - fork of FaiThiX (https://github.com/faithix), originally by Alexander Emanuelsson (alexemanuelol, https://github.com/alexemanuelol)",
     "license": "SEE LICENSE IN LICENSE",
     "bugs": {
-        "url": "https://github.com/faithix/rustplusplus/issues"
+        "url": "https://github.com/HaxXorHardy/rustplusplus/issues"
     },
-    "homepage": "https://github.com/faithix/rustplusplus#readme",
+    "homepage": "https://github.com/HaxXorHardy/rustplusplus#readme",
     "dependencies": {
         "@discordjs/rest": "^2.5.1",
         "@discordjs/voice": "^0.18.0",
@@ -29,6 +29,7 @@
         "colors": "^1.4.0",
         "discord-api-types": "^0.38.14",
         "discord.js": "^14.21.0",
+        "dotenv": "^18.0.7",
         "ffmpeg-static": "^5.1.0",
         "gm": "^1.25.0",
         "jimp": "^0.22.7",

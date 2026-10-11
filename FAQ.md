@@ -33,7 +33,7 @@ This is intentional. While this might change in the future, the current solution
 
 ![DisallowedIntents](docs/images/faq/disallowedintents.png)
 
-If you're getting this error it's because you missed a step in the setup guide (Step 9). Kick the bot from your discord server and go [here](https://github.com/alexemanuelol/rustplusplus/blob/master/docs/discord_bot_setup.md) and follow the guide from step 9.
+If you're getting this error it's because you missed a step in the setup guide (Step 9). Kick the bot from your discord server and go [here](https://github.com/HaxXorHardy/rustplusplus/blob/master/docs/discord_bot_setup.md) and follow the guide from step 9.
 
 
 <a name="token-invalid"></a>
@@ -50,7 +50,7 @@ This happens when the token you placed in the config file is invalid. There have
 ![Unexpected token in json 1](docs/images/faq/unexpected_token_invalid_json.png)
 ![Unexpected token in json 2](docs/images/faq/unexpected_token_invalid_json_at_pos_0.png)
 
-This occurs for some people when their PC crash, there is still no solution for this but I hope to solve this in the future. Meanwhile you can follow the [issue on GitHub](https://github.com/alexemanuelol/rustplusplus/issues/309) for updates. Current solution to be able to continue is to remove your instance file and let the bot create a new one when you start the bot next time.
+This occurs for some people when their PC crash, there is still no solution for this but I hope to solve this in the future. Meanwhile you can follow the [issue on GitHub](https://github.com/HaxXorHardy/rustplusplus/issues) for updates. Current solution to be able to continue is to remove your instance file and let the bot create a new one when you start the bot next time.
 
 
 <a name="credential-app-empty"></a>

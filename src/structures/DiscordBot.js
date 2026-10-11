@@ -169,6 +169,11 @@ class DiscordBot extends Discord.Client {
     }
 
     build() {
+        if (Config.general.debug) {
+            this.log(this.intlGet(null, 'infoCap'),
+                'Debug mode is enabled (RPP_DEBUG=true), verbose logging is active.');
+        }
+
         this.login(Config.discord.token).catch(error => {
             const formattedError = this.logger.formatError(error);
             switch (error.code) {
@@ -191,6 +196,10 @@ class DiscordBot extends Discord.Client {
 
     log(title, text, level = 'info') {
         this.logger.log(title, text, level);
+    }
+
+    debug(title, text) {
+        this.logger.debug(title, text);
     }
 
     logInteraction(interaction, verifyId, type) {

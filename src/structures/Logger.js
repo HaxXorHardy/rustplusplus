@@ -27,6 +27,8 @@ const formatLogValue = require('../util/formatLogValue');
 class Logger {
     constructor(logFilePath, type) {
         this.logger = Winston.createLogger({
+            /* In debug mode the file transport must also accept the 'debug' level. */
+            level: Config.general.debug ? 'debug' : 'info',
             transports: [new Winston.transports.File({
                 filename: logFilePath,
                 maxsize: 10000000,
@@ -64,7 +66,12 @@ class Logger {
         });
     }
 
-    log(title, text, level) {
+    log(title, text, level = 'info') {
+        /* Debug logs are only emitted when debug mode is enabled (RPP_DEBUG=true). */
+        if (level === 'debug' && !Config.general.debug) {
+            return;
+        }
+
         let time = this.getTime();
         const lines = this.formatError(text, level === 'error' && Config.general.showCallStackError)
             .split(/\r?\n/);
@@ -80,7 +87,7 @@ class Logger {
 
                     console.log(
                         Colors.green(`${time} `) +
-                        ((level === 'error') ? Colors.red(line) : Colors.yellow(line))
+                        ((level === 'error') ? Colors.red(line) : ((level === 'debug') ? Colors.gray(line) : Colors.yellow(line)))
                     );
                 }
             } break;
@@ -96,7 +103,7 @@ class Logger {
                         Colors.green(`${time} `) +
                         Colors.cyan(`${this.guildId} `) +
                         Colors.white(`${this.serverName} `) +
-                        ((level === 'error') ? Colors.red(line) : Colors.yellow(line))
+                        ((level === 'error') ? Colors.red(line) : ((level === 'debug') ? Colors.gray(line) : Colors.yellow(line)))
                     );
                 }
             } break;
@@ -104,6 +111,11 @@ class Logger {
             default: {
             } break;
         }
+    }
+
+    /* Convenience wrapper: only writes when debug mode is enabled. */
+    debug(title, text) {
+        this.log(title, text, 'debug');
     }
 }
 
