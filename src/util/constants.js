@@ -32,6 +32,12 @@ module.exports = {
     BOT_MESSAGE_HISTORY_LIMIT: 16,
     BOT_LEAVE_VOICE_CHAT_TIMEOUT_MS: 10000,
 
+    /* Web scraping */
+    /* Steam answers requests without a browser-like User-Agent with HTTP 429 (Too Many Requests). */
+    SCRAPE_USER_AGENT: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    SCRAPE_MAX_ATTEMPTS: 3,
+    SCRAPE_RETRY_DELAY_MS: 1500,
+
     /* Embeds */
     EMBED_MAX_TOTAL_CHARACTERS: 6000,
     EMBED_MAX_TITLE_CHARACTERS: 256,

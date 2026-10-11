@@ -21,31 +21,65 @@
 const Axios = require('axios');
 
 const Constants = require('../util/constants.js');
+const Timer = require('../util/timer.js');
 const Utils = require('../util/utils.js');
+
+/* Headers that make the requests look like a regular browser. Steam answers requests made without a
+   browser-like User-Agent with HTTP 429 (Too Many Requests), which broke the profile scraping. */
+const REQUEST_HEADERS = {
+    'User-Agent': Constants.SCRAPE_USER_AGENT,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9'
+};
+
+/* Patterns used to extract the full size Steam avatar from a profile page. Steam moved the avatar out of
+   an <img> tag into the OpenGraph/Twitter meta tags / image_src link, so support the new layout first and
+   fall back to the legacy <img> layout for older/alternative pages. */
+const STEAM_PROFILE_PICTURE_PATTERNS = [
+    /<meta property="og:image" content="([^"]*_full\.jpg[^"]*)"/,
+    /<link rel="image_src" href="([^"]*_full\.jpg[^"]*)"/,
+    /<meta name="twitter:image" content="([^"]*_full\.jpg[^"]*)"/,
+    /<img src="([^"]*_full\.jpg[^"]*)"/
+];
 
 module.exports = {
     scrape: async function (url) {
-        try {
-            return await Axios.get(url);
+        for (let attempt = 1; attempt <= Constants.SCRAPE_MAX_ATTEMPTS; attempt += 1) {
+            let response = {};
+            try {
+                response = await Axios.get(url, { headers: REQUEST_HEADERS });
+            }
+            catch (e) {
+                response = e.response || {};
+            }
+
+            /* Steam rate limits (HTTP 429) or is temporarily unavailable (HTTP 503); retry with backoff. */
+            const retryable = response.status === 429 || response.status === 503;
+            if (!retryable || attempt === Constants.SCRAPE_MAX_ATTEMPTS) {
+                return response;
+            }
+
+            await Timer.sleep(Constants.SCRAPE_RETRY_DELAY_MS * attempt);
         }
-        catch (e) {
-            return {};
-        }
+
+        return {};
     },
 
     scrapeSteamProfilePicture: async function (client, steamId) {
         const response = await module.exports.scrape(`${Constants.STEAM_PROFILES_URL}${steamId}`);
 
-        if (response.status !== 200) {
+        if (response.status !== 200 || typeof response.data !== 'string') {
             client.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'failedToScrapeProfilePicture', {
                 link: `${Constants.STEAM_PROFILES_URL}${steamId}`
             }), 'error');
             return null;
         }
 
-        let png = response.data.match(/<img src="(.*_full.jpg)(.*?(?="))/);
-        if (png) {
-            return png[1];
+        for (const pattern of STEAM_PROFILE_PICTURE_PATTERNS) {
+            const match = response.data.match(pattern);
+            if (match) {
+                return match[1];
+            }
         }
 
         return null;
@@ -54,7 +88,7 @@ module.exports = {
     scrapeSteamProfileName: async function (client, steamId) {
         const response = await module.exports.scrape(`${Constants.STEAM_PROFILES_URL}${steamId}`);
 
-        if (response.status !== 200) {
+        if (response.status !== 200 || typeof response.data !== 'string') {
             client.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'failedToScrapeProfileName', {
                 link: `${Constants.STEAM_PROFILES_URL}${steamId}`
             }), 'error');
