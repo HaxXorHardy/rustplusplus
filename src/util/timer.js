@@ -206,6 +206,15 @@ module.exports = {
         });
     },
 
+    secondsToCompactHours: function (totSeconds) {
+        const hours = Math.floor(totSeconds / 3600);
+        if (hours >= 1000) {
+            const thousands = Math.round(hours / 100) / 10;
+            return Number.isInteger(thousands) ? `${thousands}k` : `${thousands.toFixed(1)}k`;
+        }
+        return `${hours}h`;
+    },
+
     getCurrentDateTime: function () {
         const newDate = new Date();
 

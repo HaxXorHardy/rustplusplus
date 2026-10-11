@@ -32,6 +32,9 @@ const SERVER_LOG_SIZE = 1000;
 const CONNECTION_LOG_SIZE = 1000;
 const PLAYER_CONNECTION_LOG_SIZE = 100;
 const NAME_CHANGE_LOG_SIZE = 100;
+const TIME_PLAYED_GAME = 'rust';
+const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
+const TIME_PLAYED_DEFAULT_LIMIT = 100;
 
 class Battlemetrics {
 
@@ -64,6 +67,9 @@ class Battlemetrics {
         this._offlinePlayers = [];      /* Player that are offline, updates every evaluation call. (id) */
 
         this._serverEvaluation = new Object();
+
+        this._timePlayedCache = new Object();    /* { [playerId]: { seconds, fetchedAt } } */
+        this._timePlayedPending = new Object();
 
         /* Init API parameter variables */
 
@@ -183,6 +189,29 @@ class Battlemetrics {
      */
     GET_PROFILE_DATA_API_CALL(id) {
         return `https://api.battlemetrics.com/players/${id}?include=identifier`;
+    }
+
+    /**
+     *  Construct the Battlemetrics API call for getting the time played statistics of a player.
+     *  Note: the start/stop window only limits the optional 'history' array. The 'timePlayed'
+     *  attribute is the all-time total and is not affected by the window.
+     *  @param {number} id The id of the player.
+     *  @param {number} days The number of days for the optional history window.
+     *  @return {string} The Battlemetrics API call string.
+     */
+    GET_PLAYER_TIME_PLAYED_STATISTICS_API_CALL(id, days = 1) {
+        const stop = new Date().toISOString();
+        const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        return `https://api.battlemetrics.com/players/${id}/time-played-statistics?start=${start}&stop=${stop}`;
+    }
+
+    /**
+     *  Construct the Battlemetrics API call for getting a player with the servers included.
+     *  @param {number} id The id of the player.
+     *  @return {string} The Battlemetrics API call string.
+     */
+    GET_PLAYER_API_CALL(id) {
+        return `https://api.battlemetrics.com/players/${id}?include=server`;
     }
 
     /**
@@ -830,6 +859,132 @@ class Battlemetrics {
         }
 
         return this.#formatTime(this.players[playerId]['logoutDate']);
+    }
+
+    /**
+     *  Get the cached total time played (all-time, in seconds) of a player.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {number|null} The time played in seconds or null when not cached.
+     */
+    getCachedTimePlayed(playerId) {
+        const cached = this._timePlayedCache[playerId];
+        return cached ? cached.seconds : null;
+    }
+
+    /**
+     *  Get the total time played (all-time, in seconds) of a player, using the cache when fresh.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {number|null} The time played in seconds or null when it could not be fetched.
+     */
+    async getTotalTimePlayed(playerId) {
+        const cached = this._timePlayedCache[playerId];
+        if (cached && (Date.now() - cached.fetchedAt) < TIME_PLAYED_CACHE_TTL_MS) {
+            return cached.seconds;
+        }
+
+        const seconds = await this.fetchTotalTimePlayed(playerId);
+        if (seconds === null) return cached ? cached.seconds : null;
+
+        this._timePlayedCache[playerId] = { seconds: seconds, fetchedAt: Date.now() };
+        return seconds;
+    }
+
+    /**
+     *  Fetch the total time played (all-time, in seconds) of a player.
+     *  Primary: the 'rust' entry of the time played statistics.
+     *  Fallback: the sum of meta.timePlayed over all servers included with the player.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {number|null} The time played in seconds or null.
+     */
+    async fetchTotalTimePlayed(playerId) {
+        const statistics = await this.request(this.GET_PLAYER_TIME_PLAYED_STATISTICS_API_CALL(playerId));
+        if (statistics && Array.isArray(statistics.data)) {
+            for (const entry of statistics.data) {
+                if (typeof (entry.id) !== 'string' || !entry.id.endsWith(`:${TIME_PLAYED_GAME}`)) continue;
+
+                const value = entry.attributes ? entry.attributes.timePlayed : null;
+                if (typeof (value) === 'number') return value;
+            }
+        }
+
+        const player = await this.request(this.GET_PLAYER_API_CALL(playerId));
+        if (player && Array.isArray(player.included)) {
+            let total = 0;
+            for (const entity of player.included) {
+                if (entity.type !== 'server') continue;
+
+                const value = entity.meta ? entity.meta.timePlayed : null;
+                if (typeof (value) === 'number') total += value;
+            }
+            if (total > 0) return total;
+        }
+
+        return null;
+    }
+
+    /**
+     *  Find the Battlemetrics player id of a player based on the name in the players list.
+     *  @param {string} name The name of the player.
+     *  @return {string|null} The Battlemetrics player id or null.
+     */
+    getPlayerIdByName(name) {
+        if (typeof (name) !== 'string' || name === '') return null;
+
+        for (const [playerId, player] of Object.entries(this.players)) {
+            if (player['name'] === name) return playerId;
+        }
+
+        return null;
+    }
+
+    /**
+     *  Warm the time played cache of the given player ids (rate limited).
+     *  @param {Array} playerIds The Battlemetrics player ids to warm.
+     *  @param {number} maxPerCall Maximum number of fetches per call.
+     */
+    async #warmTimePlayed(playerIds, maxPerCall) {
+        if (!Config.battlemetrics.enabled) return;
+
+        let fetched = 0;
+        for (const playerId of playerIds) {
+            if (fetched >= maxPerCall) break;
+
+            const cached = this._timePlayedCache[playerId];
+            if (cached && (Date.now() - cached.fetchedAt) < TIME_PLAYED_CACHE_TTL_MS) continue;
+            if (this._timePlayedPending.hasOwnProperty(playerId)) continue;
+
+            this._timePlayedPending[playerId] = true;
+            try {
+                await this.getTotalTimePlayed(playerId);
+            }
+            finally {
+                delete this._timePlayedPending[playerId];
+            }
+            fetched += 1;
+        }
+    }
+
+    /**
+     *  Warm the time played cache of the currently online players (rate limited).
+     *  @param {number} maxPerCall Maximum number of fetches per call.
+     */
+    async warmTimePlayedCache(maxPerCall = TIME_PLAYED_DEFAULT_LIMIT) {
+        await this.#warmTimePlayed(this.onlinePlayers.slice(), maxPerCall);
+    }
+
+    /**
+     *  Warm the time played cache of a set of players identified by their in-game name (rate limited).
+     *  @param {Array} names The in-game names of the players.
+     *  @param {number} maxPerCall Maximum number of fetches per call.
+     */
+    async warmTimePlayedCacheByNames(names, maxPerCall = TIME_PLAYED_DEFAULT_LIMIT) {
+        const playerIds = [];
+        for (const name of names) {
+            const playerId = this.getPlayerIdByName(name);
+            if (playerId !== null && !playerIds.includes(playerId)) playerIds.push(playerId);
+        }
+
+        await this.#warmTimePlayed(playerIds, maxPerCall);
     }
 }
 

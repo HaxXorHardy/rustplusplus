@@ -808,9 +808,26 @@ module.exports = {
         let fieldIndex = 0;
         let teammateName = [''], teammateStatus = [''], teammateLocation = [''];
         let teammateNameCharacters = 0, teammateStatusCharacters = 0, teammateLocationCharacters = 0;
+        const teamBmId = instance.serverList[rustplus.serverId].battlemetricsId;
+        const teamBmInstance = (teamBmId !== null && teamBmId !== undefined) ?
+            Client.client.battlemetricsInstances[teamBmId] : null;
+
         for (const player of rustplus.team.players) {
-            let name = player.name === '' ? '-' : `[${player.name}](${Constants.STEAM_PROFILES_URL}${player.steamId})`;
-            name += (player.teamLeader) ? `${Constants.LEADER_EMOJI}\n` : '\n';
+            let playtimeStr = '';
+            if (teamBmInstance) {
+                const playerId = teamBmInstance.getPlayerIdByName(player.name);
+                const playtime = (playerId !== null) ? teamBmInstance.getCachedTimePlayed(playerId) : null;
+                if (typeof (playtime) === 'number') playtimeStr = ` ${Timer.secondsToCompactHours(playtime)}`;
+            }
+
+            const nameMaxLength = Math.max(4, Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_3 - playtimeStr.length - 3);
+            const displayName = player.name.length <= nameMaxLength ? player.name :
+                player.name.substring(0, nameMaxLength - 2) + '..';
+
+            let name = displayName === '' ? '-' : `\u200E[${displayName}](${Constants.STEAM_PROFILES_URL}${player.steamId})\u200E`;
+            name += (player.teamLeader) ? `${Constants.LEADER_EMOJI}` : '';
+            name += playtimeStr;
+            name += '\n';
             let status = '';
             let location = (player.isOnline || player.isAlive) ? `${player.pos.string}\n` : '-\n';
 
@@ -901,7 +918,6 @@ module.exports = {
         const playerIds = bmInstance.getOnlinePlayerIdsOrderedByTime();
 
         let totalCharacters = 0;
-        let fieldCharacters = 0;
 
         const title = Client.client.intlGet(guildId, 'battlemetricsOnlinePlayers');
         const footer = { text: bmInstance.server_name };
@@ -911,8 +927,7 @@ module.exports = {
         totalCharacters += Client.client.intlGet(guildId, 'andMorePlayers', { number: 100 }).length;
         totalCharacters += `${Client.client.intlGet(guildId, 'players')}`.length;
 
-        const fields = [''];
-        let fieldIndex = 0;
+        const playerStrs = [];
         let isEmbedFull = false;
         let playerCounter = 0;
         for (const playerId of playerIds) {
@@ -922,31 +937,44 @@ module.exports = {
             let time = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
             time = time !== null ? time[1] : '';
 
-            let playerStr = status ? Constants.ONLINE_EMOJI : Constants.OFFLINE_EMOJI;
-            playerStr += ` [${time}] `;
+            const playtime = bmInstance.getCachedTimePlayed(playerId);
+            const playtimeStr = (typeof (playtime) === 'number') ? ` ${Timer.secondsToCompactHours(playtime)}` : '';
 
-            const nameMaxLength = Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_3 - (3 + time.length);
+            let playerStr = `\u200E[${time}] `;
+
+            /* Reserve room for the playtime so every name truncates the same way. */
+            const nameMaxLength = Math.max(4, Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_2 -
+                (time.length + 3 + Constants.BATTLEMETRICS_PLAYTIME_RESERVED_LENGTH));
 
             let name = bmInstance.players[playerId]['name'].replace('[', '(').replace(']', ')');
             name = name.length <= nameMaxLength ? name : name.substring(0, nameMaxLength - 2) + '..';
 
-            playerStr += `[${name}](${Constants.BATTLEMETRICS_PROFILE_URL + `${playerId}`})\n`;
+            /* Anchor the line to LTR (LRM) so RTL names (e.g. Arabic) cannot flip it. */
+            playerStr += `[${name}](${Constants.BATTLEMETRICS_PROFILE_URL + `${playerId}`})\u200E${playtimeStr}\n`;
 
             if (totalCharacters + playerStr.length >= Constants.EMBED_MAX_TOTAL_CHARACTERS) {
                 isEmbedFull = true;
                 break;
             }
 
-            if (fieldCharacters + playerStr.length >= Constants.EMBED_MAX_FIELD_VALUE_CHARACTERS) {
-                fieldCharacters = 0;
-                fieldIndex += 1;
-                fields.push('');
-            }
-
-            fields[fieldIndex] += playerStr;
             totalCharacters += playerStr.length;
-            fieldCharacters += playerStr.length;
+            playerStrs.push(playerStr);
         }
+
+        /* Spread the players evenly over an even number of columns so the grid stays 2 wide. */
+        let consumedCharacters = 0;
+        for (const playerStr of playerStrs) consumedCharacters += playerStr.length;
+
+        let columnCount = Math.max(2, Math.ceil(consumedCharacters / Constants.EMBED_MAX_FIELD_VALUE_CHARACTERS));
+        if ((columnCount % 2) === 1) columnCount += 1;
+
+        const playersPerColumn = Math.ceil(playerStrs.length / columnCount);
+        const fields = [];
+        for (let i = 0; i < playerStrs.length; i += playersPerColumn) {
+            fields.push(playerStrs.slice(i, i + playersPerColumn).join(''));
+        }
+
+        if (fields.length === 0) fields.push('');
 
         const embed = module.exports.getEmbed({
             title: title,
@@ -961,14 +989,21 @@ module.exports = {
             }));
         }
 
-        let fieldCounter = 0;
-        for (const field of fields) {
+        for (let i = 0; i < fields.length; i++) {
             embed.addFields({
-                name: fieldCounter === 0 ? Client.client.intlGet(guildId, 'players') : '\u200B',
-                value: field === '' ? '\u200B' : field,
+                name: i === 0 ? Client.client.intlGet(guildId, 'players') : '\u200B',
+                value: fields[i] === '' ? '\u200B' : fields[i],
                 inline: true
             });
-            fieldCounter += 1;
+
+            if ((i % 2) === 1 && (i + 1) < fields.length) {
+                embed.addFields({ name: '\u200B', value: '\u200B', inline: false });
+            }
+        }
+
+        /* Pad the last row so both columns stay narrow. */
+        if ((fields.length % 2) === 1) {
+            embed.addFields({ name: '\u200B', value: '\u200B', inline: true });
         }
 
         return embed;

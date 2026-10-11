@@ -33,6 +33,13 @@ module.exports = {
 
         if (!firstTime) await client.updateBattlemetricsInstances();
 
+        /* Warm the time played cache before the embeds are built (rate limited). */
+        for (const bmInstance of Object.values(client.battlemetricsInstances)) {
+            if (!bmInstance || !bmInstance.lastUpdateSuccessful) continue;
+
+            await bmInstance.warmTimePlayedCache();
+        }
+
         for (const guildItem of client.guilds.cache) {
             const guildId = guildItem[0];
             const instance = client.getInstance(guildId);

@@ -734,6 +734,7 @@
     "timeDeepSeaIsActiveFor": "Deep Sea is active and will close in approximately {time}.",
     "timeFormatInvalid": "Time format invalid.",
     "timeLeftTimer": "{id}: Time left: {time}, Message: {message}",
+    "timePlayed": "Time played",
     "timeSinceAlarmWasTriggered": "The alarm {alarm} was triggered {time} ago.",
     "timeSinceCargoLeft": "{time} since Cargo Ship left the map.",
     "timeSinceChinook47OnMap": "{time} since the last Chinook 47 was on the map.",

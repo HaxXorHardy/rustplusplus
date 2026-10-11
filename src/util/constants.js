@@ -24,6 +24,7 @@ module.exports = {
     STEAM_PROFILES_URL: 'https://steamcommunity.com/profiles/',
     BATTLEMETRICS_PROFILE_URL: 'https://www.battlemetrics.com/players/',
     BATTLEMETRICS_SERVER_URL: 'https://www.battlemetrics.com/servers/rust/',
+    BATTLEMETRICS_PLAYTIME_RESERVED_LENGTH: 6, /* Room for the playtime text (" 2.8k"). */
     AFK_TIME_SECONDS: 5 * 60, /* 5 min */
     MAX_LENGTH_TEAM_MESSAGE: 128,
     STEAMID64_LENGTH: 17,

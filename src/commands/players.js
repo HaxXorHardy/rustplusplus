@@ -23,6 +23,7 @@ const Builder = require('@discordjs/builders');
 const Constants = require('../util/constants.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordTools = require('../discordTools/discordTools.js');
+const Timer = require('../util/timer.js');
 
 module.exports = {
 	name: 'players',
@@ -219,8 +220,13 @@ async function displaySpecificUser(client, interaction, battlemetricsId, playerI
 	description += `__**${client.intlGet(guildId, 'status')}:**__ ${status}\n`;
 	description += `__**${onOffString}:**__ ${time !== null ? `[${time[1]}]` : ''}\n`;
 
+	const playtimeSeconds = await bmInstance.getTotalTimePlayed(playerId);
+	description += `__**${client.intlGet(guildId, 'timePlayed')}:**__ `;
+	description += (typeof (playtimeSeconds) === 'number') ? Timer.secondsToCompactHours(playtimeSeconds) : client.intlGet(guildId, 'empty');
+	description += '\n';
+
 	const embed = DiscordEmbeds.getEmbed({
-		title: `${client.intlGet(interaction.guildId, 'playersSearch')}: ${userName}`,
+		title: `${client.intlGet(interaction.guildId, 'playersSearch')}: ${userName}\u200E`,
 		color: Constants.COLOR_DEFAULT,
 		description: description,
 		footer: { text: bmInstance.server_name }
@@ -339,15 +345,18 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
 		const status = bmInstance.players[playerId]['status'];
 		const time = status ? bmInstance.getOnlineTime(playerId)[1] : bmInstance.getOfflineTime(playerId)[1];
 
-		let playerStr = status ? Constants.ONLINE_EMOJI : Constants.OFFLINE_EMOJI;
-		playerStr += ` [${time}] `;
+		const playtime = bmInstance.getCachedTimePlayed(playerId);
+		const playtimeStr = (typeof (playtime) === 'number') ? ` ${Timer.secondsToCompactHours(playtime)}` : '';
 
-		const nameMaxLength = Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_3 - (3 + time.length);
+		let playerStr = `\u200E[${time}] `;
+
+		const nameMaxLength = Math.max(4, Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_2 - (time.length + 3 + Constants.BATTLEMETRICS_PLAYTIME_RESERVED_LENGTH));
 
 		let name = bmInstance.players[playerId]['name'].replace('[', '(').replace(']', ')');
 		name = name.length <= nameMaxLength ? name : name.substring(0, nameMaxLength - 2) + '..';
 
-		playerStr += `[${name}](${Constants.BATTLEMETRICS_PROFILE_URL + `${playerId}`})\n`;
+		/* Anchor the line to LTR (LRM) so RTL names (e.g. Arabic) cannot flip it. */
+		playerStr += `[${name}](${Constants.BATTLEMETRICS_PROFILE_URL + `${playerId}`})\u200E${playtimeStr}\n`;
 
 		if (totalCharacters + playerStr.length >= Constants.EMBED_MAX_TOTAL_CHARACTERS) {
 			isEmbedFull = true;
