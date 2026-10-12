@@ -927,6 +927,15 @@ module.exports = {
         totalCharacters += Client.client.intlGet(guildId, 'andMorePlayers', { number: 100 }).length;
         totalCharacters += `${Client.client.intlGet(guildId, 'players')}`.length;
 
+        /* Time and playtime go in inline code (monospace) so the numbers line up. */
+        let playtimeWidth = 2;
+        for (const playerId of playerIds) {
+            const playtimeValue = bmInstance.getCachedTimePlayed(playerId);
+            if (typeof (playtimeValue) === 'number') {
+                playtimeWidth = Math.max(playtimeWidth, Timer.secondsToCompactHours(playtimeValue).length);
+            }
+        }
+
         const playerStrs = [];
         let isEmbedFull = false;
         let playerCounter = 0;
@@ -938,19 +947,20 @@ module.exports = {
             time = time !== null ? time[1] : '';
 
             const playtime = bmInstance.getCachedTimePlayed(playerId);
-            const playtimeStr = (typeof (playtime) === 'number') ? ` ${Timer.secondsToCompactHours(playtime)}` : '';
+            const playtimeStr = (typeof (playtime) === 'number') ?
+                Timer.secondsToCompactHours(playtime) : '-';
+            const playtimePadded = playtimeStr.padStart(playtimeWidth);
 
-            let playerStr = `\u200E[${time}] `;
-
-            /* Reserve room for the playtime so every name truncates the same way. */
+            /* Reserve room for the numbers so every name truncates the same way. */
             const nameMaxLength = Math.max(4, Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_2 -
-                (time.length + 3 + Constants.BATTLEMETRICS_PLAYTIME_RESERVED_LENGTH));
+                (time.length + playtimeWidth + Constants.BATTLEMETRICS_PLAYTIME_RESERVED_LENGTH));
 
             let name = bmInstance.players[playerId]['name'].replace('[', '(').replace(']', ')');
             name = name.length <= nameMaxLength ? name : name.substring(0, nameMaxLength - 2) + '..';
 
-            /* Anchor the line to LTR (LRM) so RTL names (e.g. Arabic) cannot flip it. */
-            playerStr += `[${name}](${Constants.BATTLEMETRICS_PROFILE_URL + `${playerId}`})\u200E${playtimeStr}\n`;
+            /* Numbers in inline code (monospace) so they line up; LRM keeps the line LTR. */
+            let playerStr = '\u200E`[' + time + '] ' + playtimePadded + '` ';
+            playerStr += `[${name}](${Constants.BATTLEMETRICS_PROFILE_URL + `${playerId}`})\n`;
 
             if (totalCharacters + playerStr.length >= Constants.EMBED_MAX_TOTAL_CHARACTERS) {
                 isEmbedFull = true;
