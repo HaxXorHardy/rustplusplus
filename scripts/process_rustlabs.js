@@ -35,13 +35,15 @@ catch (error) {
 
 /* Constants */
 
-const SLEEP_TIMEOUT_MS = 2000;
+const DEFAULT_SLEEP_TIMEOUT_MS = 2000;
+const SLEEP_TIMEOUT_MS = Number.parseInt(process.env.RPP_RUSTLABS_SLEEP_MS || `${DEFAULT_SLEEP_TIMEOUT_MS}`, 10);
 const OUTPUT_DIRECTORY = Path.join(__dirname, 'rustlabs');
 const DEFAULT_TIMEOUT_MS = 30000;
 const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.RPP_RUSTLABS_TIMEOUT_MS || `${DEFAULT_TIMEOUT_MS}`, 10);
 const CHALLENGE_WAIT_MS = Number.parseInt(process.env.RPP_RUSTLABS_CHALLENGE_WAIT_MS || '180000', 10);
 const USE_PROXY = (process.env.RPP_RUSTLABS_USE_PROXY || '').toLowerCase() === 'true';
 const BROWSER_HEADLESS = (process.env.RPP_RUSTLABS_HEADLESS || '').toLowerCase() === 'true';
+const HEADLESS_AFTER_CHALLENGE = (process.env.RPP_RUSTLABS_HEADLESS_AFTER_CHALLENGE || 'true').toLowerCase() === 'true';
 const BROWSER_PROFILE_DIRECTORY = Path.join(OUTPUT_DIRECTORY, '.browser-profile');
 const BROWSER_EXECUTABLE_PATH = (process.env.RPP_RUSTLABS_BROWSER_PATH || '').trim();
 const BROWSER_USER_AGENT = (process.env.RPP_RUSTLABS_USER_AGENT ||
@@ -124,7 +126,7 @@ const RUSTLABS_ITEM_SMELTING_REGEX1 =
     /<a\shref="\/item\/(\n|.)*?img\/.*?\/(.*?)\.png"\salt="(.*?)"(\n|.)*?<\/a><a\shref="\/item\/(\n|.)*?img\/.*?\/wood\.png"(\n|.)*?text-in-icon">(.*?)<\/span(\n|.)*?<a\shref="\/item\/(\n|.)*?img\/.*?\/(.*?)\.png"\salt="(.*?)"(\n|.)*?text-in-icon">(.*?)<(\n|.)*?<td>(.*?sec|.*?min)</gm
 const RUSTLABS_ITEM_SMELTING_REGEX2 = /<a\shref="\/item\/(\n|.)*?img\/.*?\/(.*?)\.png"\salt="(.*?)"(\n|.)*?<a\shref="\/item\/(\n|.)*?img\/.*?\/(.*?)\.png"\salt="(.*?)"(\n|.)*?text-in-icon">(.*?)<\/span(\n|.)*?<td>(.*?sec|.*?min)</gm
 
-const RUSTLABS_ITEM_DESPAWN_REGEX = /<td>Despawn\stime<\/td>(\n|.)*?<td>(.*?)<\/td>/gm
+const RUSTLABS_ITEM_DESPAWN_REGEX = /<td>Despawn(?:\stime)?<\/td>(\n|.)*?<td>(.*?)<\/td>/gm
 
 const RUSTLABS_ITEM_STACK_REGEX = /<td>Stack\sSize<\/td>(\n|.)*?<td>(.*?)<\/td>/gm
 
@@ -175,9 +177,14 @@ rustlabsUpkeepData['other'] = new Object();
 
 let browserContext = null;
 let browserPage = null;
+let browserHeadless = BROWSER_HEADLESS;
 
 function getRequestTimeout() {
     return Number.isNaN(REQUEST_TIMEOUT_MS) ? DEFAULT_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+}
+
+function getSleepTimeoutMs() {
+    return Number.isNaN(SLEEP_TIMEOUT_MS) ? DEFAULT_SLEEP_TIMEOUT_MS : SLEEP_TIMEOUT_MS;
 }
 
 function getChallengeWaitMs() {
@@ -323,7 +330,7 @@ async function initializeBrowser() {
     }
 
     const launchOptions = {
-        headless: BROWSER_HEADLESS,
+        headless: browserHeadless,
         executablePath: executablePath,
         userAgent: BROWSER_USER_AGENT,
         args: ['--disable-blink-features=AutomationControlled']
@@ -371,8 +378,35 @@ async function closeBrowser() {
     browserPage = null;
 }
 
+async function switchToHeadless(url) {
+    try {
+        await closeBrowser();
+        browserHeadless = true;
+        await initializeBrowser();
+
+        const response = await browserPage.goto(url, {
+            waitUntil: 'domcontentloaded',
+            timeout: getRequestTimeout()
+        });
+        const status = response ? response.status() : null;
+        const content = await browserPage.content();
+
+        if (status !== 200 || isCloudflareChallenge(status, content)) {
+            throw new Error(`headless verification returned status ${status}`);
+        }
+
+        console.log('Cloudflare challenge solved. Continuing in headless mode.');
+    }
+    catch (error) {
+        console.log(`Could not switch to headless mode (${error.message}). Continuing with a visible browser.`);
+        await closeBrowser();
+        browserHeadless = false;
+        await initializeBrowser();
+    }
+}
+
 async function waitForCloudflareBypass(url) {
-    if (BROWSER_HEADLESS) {
+    if (browserHeadless) {
         return null;
     }
 
@@ -398,6 +432,10 @@ async function waitForCloudflareBypass(url) {
         const retryContent = await browserPage.content();
 
         if (status === 200 && !isCloudflareChallenge(status, retryContent)) {
+            if (!browserHeadless && HEADLESS_AFTER_CHALLENGE) {
+                await switchToHeadless(url);
+            }
+
             return {
                 status: status,
                 data: retryContent,
@@ -481,7 +519,7 @@ async function scrape(url) {
 
             const hints = [
                 'Cloudflare challenge detected.',
-                BROWSER_HEADLESS ?
+                browserHeadless ?
                     'Run with RPP_RUSTLABS_HEADLESS=false to solve the challenge interactively.' :
                     `Challenge was not solved within ${Math.floor(getChallengeWaitMs() / 1000)} seconds.`,
                 'Set RPP_RUSTLABS_COOKIE=<full-cookie-header> if you already have valid session cookies.'
@@ -660,7 +698,7 @@ async function processAllItems() {
         processItemDecay(rustlabsName, shortname, name, data);
         processItemUpkeep(rustlabsName, shortname, name, data);
 
-        await sleep(SLEEP_TIMEOUT_MS);
+        await sleep(getSleepTimeoutMs());
     }
 }
 
@@ -707,7 +745,7 @@ async function processAllBuildingBlocks() {
         processItemDecay(rustlabsName, null, name, data, 'buildingBlocks');
         processItemUpkeep(rustlabsName, null, name, data, 'buildingBlocks');
 
-        await sleep(SLEEP_TIMEOUT_MS);
+        await sleep(getSleepTimeoutMs());
     }
 }
 
@@ -751,7 +789,7 @@ async function processAllOther() {
         processItemDecay(rustlabsName, null, name, data, 'other');
         processItemUpkeep(rustlabsName, null, name, data, 'other');
 
-        await sleep(SLEEP_TIMEOUT_MS);
+        await sleep(getSleepTimeoutMs());
     }
 }
 
@@ -1125,15 +1163,20 @@ function processItemRecycle(rustlabsName, shortname, name, data) {
     data = data[0];
 
     const recycleData = new Object();
-    recycleData['recycler'] = new Object();
-    recycleData['recycler']['efficiency'] = null;
-    recycleData['recycler']['yield'] = [];
-    recycleData['shredder'] = new Object();
-    recycleData['shredder']['efficiency'] = null;
-    recycleData['shredder']['yield'] = [];
-    recycleData['safe-zone-recycler'] = new Object();
-    recycleData['safe-zone-recycler']['efficiency'] = null;
-    recycleData['safe-zone-recycler']['yield'] = [];
+
+    /* The wiki keeps adding new recycler variants. Create the entry on demand so unknown
+       recycler types do not abort the whole run. The three classic types are always
+       present because the runtime iterates over them unconditionally. */
+    const ensureRecyclerType = (recyclerType) => {
+        if (recycleData[recyclerType] === undefined) {
+            recycleData[recyclerType] = new Object();
+            recycleData[recyclerType]['efficiency'] = null;
+            recycleData[recyclerType]['yield'] = [];
+        }
+    };
+    ensureRecyclerType('recycler');
+    ensureRecyclerType('shredder');
+    ensureRecyclerType('safe-zone-recycler');
 
     const rows = data.matchAll(RUSTLABS_ITEM_RECYCLE_ROW_REGEX);
     for (const row of rows) {
@@ -1156,6 +1199,7 @@ function processItemRecycle(rustlabsName, shortname, name, data) {
             efficiency = match[1];
             break;
         }
+        ensureRecyclerType(recyclerType);
         recycleData[recyclerType]['efficiency'] = efficiency;
 
         const matches = rowData.matchAll(RUSTLABS_ITEM_RECYCLE_OUTPUT_ITEMS_REGEX);

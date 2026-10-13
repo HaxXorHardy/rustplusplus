@@ -68,6 +68,15 @@ or
     $ ./update.sh
 
 
+## **How to update the static game data**
+
+> Refresh the item list and the RustLabs data after a game update and rebuild the static database:
+
+    $ npm run update:static-data
+
+> See [docs/static_data.md](docs/static_data.md) for options and details.
+
+
 ## **Running via docker**
 
     $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/haxxorhardy/rustplusplus
