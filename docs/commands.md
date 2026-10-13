@@ -1,6 +1,6 @@
 # Commands Documentation
 
-> Commands can be executed via Discord or In-Game Team Chat. To be able to run Slash Commands in Discord, you need to be part of the designated Discord Role for the bot. If no role is set for the bot then everyone should be able to use the Slash Commands by default. To be able to run In-Game Commands, you need to be in the same In-Game Team as the hoster. In-Game Commands can only be run from Team Chat, not global chat. You can also run In-Game commands from the Discord Text-Channel `commands`.
+> Commands can be executed via Discord or In-Game Chat. To be able to run Slash Commands in Discord, you need to be part of the designated Discord Role for the bot. If no role is set for the bot then everyone should be able to use the Slash Commands by default. To be able to run In-Game Commands, you need to be in the same In-Game Team (or Clan) as the hoster. In-Game Commands can only be run from the In-Game Team Chat or Clan Chat, not global chat. Which of the two is used by the bot is configured with the `In-Game Chat Channel` setting in the `settings` Channel (see [Discord Text Channels](discord_text_channels.md#clanchat-channel)). You can also run In-Game commands from the Discord Text-Channel `commands`.
 
 - [Discord Slash Commands](commands.md#discord-slash-commands)
 - [In-Game Commands](commands.md#in-game-commands)

@@ -6,6 +6,7 @@
 - [Im getting 'ERROR: {"code": "TokenInvalid"}' when trying to start the bot](#token-invalid)
 - [Im getting 'ERROR: SyntaxError: Unexpected token '', ""... is not valid JSON' or 'ERROR: SyntaxError: Unexpected token in JSON at position 0' when trying to start the bot](#unexpected-token-invalid-json)
 - [When trying to get my credentials from the app, it's completely empty](#credential-app-empty)
+- [In-Game chat messages are not shown In-Game (or not mirrored to Discord) on some servers](#ingame-chat-on-some-servers)
 
 <a name="when-i-run-npm-install-i-get-an-error"></a>
 ## When I run 'npm install' I get an error
@@ -59,3 +60,19 @@ This occurs for some people when their PC crash, there is still no solution for 
 If the rustplusplus credential application looks like the image below after you've logged in with your steam details this might be because of where you live or something else blocking you from generating. The solution for you would be to try it on the [rustplusplus website](https://rustplusplus-credentials.netlify.app/) instead.
 
 ![credential app empty](docs/images/faq/empty-credential-app.png)
+
+
+<a name="ingame-chat-on-some-servers"></a>
+## In-Game chat messages are not shown In-Game (or not mirrored to Discord) on some servers
+
+rustplusplus uses the chat of the Rust+ Companion API. That chat is always the **Team Chat** or the **Clan Chat** of the hoster's steam account (the Rust+ API has no global chat). Some rust servers handle that chat differently, which the bot cannot change:
+
+* **Messages sent by the bot never appear In-Game:** the Rust+ API does not deliver every chat message. On some servers the request is answered *without* an error, but the message never reaches the In-Game chat; on other servers the AppError `message_not_sent` is returned even though the message *was* delivered (see [liamcottle/rustplus.js#31](https://github.com/liamcottle/rustplus.js/issues/31)). rustplusplus logs the server answer and, with `RPP_DEBUG=true`, also verifies the delivery using the team chat history.
+* **In-Game chat messages are not mirrored to Discord:** the Rust+ API does not provide In-Game clan chat messages on many servers, so the `clanchat` Channel only works one way there (Discord -> In-Game).
+* **Nothing appears In-Game although the bot is connected:** make sure you are looking at the right chat In-Game (Team Chat / Clan Chat, not the Global Chat).
+
+You can check what a server supports without touching the running bot:
+
+```
+node scripts/clanChatProbe.js [--server=<ip-appPort>] [--send] [--send-team]
+```

@@ -8,6 +8,7 @@
 * [**Commands**](discord_text_channels.md#commands-channel)
 * [**Events**](discord_text_channels.md#events-channel)
 * [**Teamchat**](discord_text_channels.md#teamchat-channel)
+* [**Clanchat**](discord_text_channels.md#clanchat-channel)
 * [**Switches**](discord_text_channels.md#switches-channel)
 * [**Switchgroups**](discord_text_channels.md#switch-groups-channel)
 * [**Alarms**](discord_text_channels.md#alarms-channel)
@@ -99,6 +100,13 @@ There are a few buttons for each server. The `CONNECT` button lets you start a c
 > The Teamchat Channel makes it possible to communicate with your teammates In-Game. What you write in `teamchat` Channel appears In-Game and whatever you write In-Game appears in the `teamchat` Channel.
 
 ![Discord Text Channel Teamchat](images/channels/teamchat_channel.png)
+
+
+## Clanchat Channel
+
+> The Clanchat Channel makes it possible to communicate with your clan In-Game. What you write in the `clanchat` Channel appears in the In-Game Clan Chat and vice versa. This requires the clan support of the Rust+ API: the hoster's steam account has to be a member of a rust clan.
+
+> **Note:** The Rust+ API does not deliver In-Game Clan Chat messages on many servers. There the `clanchat` Channel only works one way: Discord -> In-Game. In-Game commands are read from the Team Chat and the Clan Chat, the `In-Game Chat Channel` setting in the `settings` Channel only decides where the bot writes its own messages. You can check what a server delivers with `node scripts/clanChatProbe.js`.
 
 
 ## Switches Channel
