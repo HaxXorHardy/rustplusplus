@@ -56,6 +56,14 @@ async function addTextChannel(name, idName, client, guild, parent, permissionWri
         }
     }
     if (channel === undefined) {
+        /* Reuse an already existing channel of this bot instead of creating a duplicate one. */
+        channel = getTextChannelsByName(guild, parent.id, name)[0];
+        if (channel) {
+            instance.channelId[idName] = channel.id;
+            client.setInstance(guild.id, instance);
+        }
+    }
+    if (channel === undefined) {
         channel = await DiscordTools.addTextChannel(guild.id, name, parent.id, perms);
         if (!channel) {
             return;
@@ -63,6 +71,9 @@ async function addTextChannel(name, idName, client, guild, parent, permissionWri
         instance.channelId[idName] = channel.id;
         client.setInstance(guild.id, instance);
     }
+
+    /* A lost channel id (or two running bot instances) can leave duplicate channels behind, warn about them. */
+    warnAboutDuplicateChannels(client, guild, parent.id, name, channel.id);
 
     if (channel && (instance.firstTime || channel.parentId !== parent.id)) {
         try {
@@ -85,6 +96,25 @@ async function addTextChannel(name, idName, client, guild, parent, permissionWri
     /* Currently, this halts the entire application... Too lazy to fix...
        It is possible to just remove the channels and let the bot recreate them with correct name language */
     //channel.setName(name);
+}
+
+/* All text channels of the bot with the given name inside the given category. */
+function getTextChannelsByName(guild, parentId, name) {
+    return [...guild.channels.cache.values()].filter((channel) =>
+        channel.type === Discord.ChannelType.GuildText &&
+        channel.parentId === parentId &&
+        channel.name === name);
+}
+
+/* Channel ids can get lost (or two bot instances can run at the same time), which creates duplicates. */
+function warnAboutDuplicateChannels(client, guild, parentId, name, usedChannelId) {
+    const duplicates = getTextChannelsByName(guild, parentId, name).filter((channel) => channel.id !== usedChannelId);
+    if (duplicates.length === 0) return;
+
+    client.log(client.intlGet(null, 'infoCap'),
+        `Found ${duplicates.length} duplicate channel(s) named "${name}": ` +
+        `${duplicates.map((channel) => channel.id).join(', ')}. The bot uses ${usedChannelId}, ` +
+        `the duplicates can be removed manually.`, 'warn');
 }
 
 function botCanUseTextChannel(guild, channel) {
