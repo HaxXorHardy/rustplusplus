@@ -114,6 +114,7 @@ class RustPlus extends RustPlusLib {
         this.info = null;           /* Stores the Info structure. */
         this.time = null;           /* Stores the Time structure. */
         this.team = null;           /* Stores the Team structure. */
+        this.clanInfo = null;       /* Stores the clan of the paired account, null when not fetched (yet). */
         this.mapMarkers = null;     /* Stores the MapMarkers structure. */
 
         this.loadRustPlusEvents();
@@ -566,6 +567,11 @@ class RustPlus extends RustPlusLib {
         this.messagesSentByBot.unshift(message);
     }
 
+    /* Is the paired steam account currently a member of a rust clan (only known after fetching the clan info)? */
+    isInClan() {
+        return (this.clanInfo !== null && this.clanInfo.clanId !== null);
+    }
+
     deleteThisRustplusInstance() {
         this.isDeleted = true;
         this.disconnect();
@@ -583,18 +589,18 @@ class RustPlus extends RustPlusLib {
         this.logger.log(title, text, level);
     }
 
-    logInGameCommand(type = 'Default', message) {
+    logInGameCommand(type = 'Default', chatMessage) {
         const args = new Object();
         args['type'] = type;
-        args['command'] = message.broadcast.teamMessage.message.message;
-        args['user'] = `${message.broadcast.teamMessage.message.name}`;
-        args['user'] += ` (${message.broadcast.teamMessage.message.steamId.toString()})`;
+        args['command'] = chatMessage.message;
+        args['user'] = `${chatMessage.name}`;
+        args['user'] += ` (${chatMessage.steamId.toString()})`;
 
         this.log(Client.client.intlGet(null, 'infoCap'), Client.client.intlGet(null, `logInGameCommand`, args));
     }
 
-    sendInGameMessage(message) {
-        InGameChatHandler.inGameChatHandler(this, Client.client, message);
+    sendInGameMessage(message, chatChannel = null) {
+        InGameChatHandler.inGameChatHandler(this, Client.client, message, chatChannel);
     }
 
     async sendEvent(setting, text, event, embed_color, firstPoll = false, image = null) {
@@ -686,6 +692,26 @@ class RustPlus extends RustPlusLib {
 
             return await this.sendRequestAsync({
                 sendTeamMessage: {
+                    message: message
+                }
+            }, timeout).catch((e) => {
+                return e;
+            });
+        }
+        catch (e) {
+            return e;
+        }
+    }
+
+    async sendClanMessageAsync(message, timeout = 10000) {
+        try {
+            /* The clan chat request is not listed in the rate limit table of rustplus.js, 2 tokens like team chat. */
+            if (!(await this.waitForAvailableTokens(2))) {
+                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+            }
+
+            return await this.sendRequestAsync({
+                sendClanMessage: {
                     message: message
                 }
             }, timeout).catch((e) => {
@@ -886,6 +912,23 @@ class RustPlus extends RustPlusLib {
 
             return await this.sendRequestAsync({
                 getTeamChat: {}
+            }, timeout).catch((e) => {
+                return e;
+            })
+        }
+        catch (e) {
+            return e;
+        }
+    }
+
+    async getClanInfoAsync(timeout = 10000) {
+        try {
+            if (!(await this.waitForAvailableTokens(1))) {
+                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+            }
+
+            return await this.sendRequestAsync({
+                getClanInfo: {}
             }, timeout).catch((e) => {
                 return e;
             })

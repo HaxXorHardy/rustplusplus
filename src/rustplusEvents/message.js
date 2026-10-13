@@ -19,6 +19,7 @@
 
 */
 
+const ClanChatHandler = require('../handlers/clanChatHandler.js');
 const CommandHandler = require('../handlers/inGameCommandHandler.js');
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
@@ -26,6 +27,7 @@ const InGameChatHandler = require('../handlers/inGameChatHandler.js');
 const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js');
 const TeamChatHandler = require("../handlers/teamChatHandler.js");
 const TeamHandler = require('../handlers/teamHandler.js');
+const { CHANNELS } = require('../util/inGameChat.js');
 
 module.exports = {
     name: 'message',
@@ -57,8 +59,19 @@ async function messageBroadcast(rustplus, client, message) {
     else if (message.broadcast.hasOwnProperty('entityChanged')) {
         messageBroadcastEntityChanged(rustplus, client, message);
     }
+    else if (message.broadcast.hasOwnProperty('clanChanged')) {
+        messageBroadcastClanChanged(rustplus, client, message);
+    }
+    else if (message.broadcast.hasOwnProperty('clanMessage')) {
+        messageBroadcastClanMessage(rustplus, client, message);
+    }
     else if (message.broadcast.hasOwnProperty('cameraRays')) {
         messageBroadcastCameraRays(rustplus, client, message);
+    }
+    else {
+        /* Diagnostic (RPP_DEBUG=true): log broadcasts that rustplusplus does not handle yet. */
+        rustplus.log(client.intlGet(null, 'infoCap'),
+            `UNHANDLED BROADCAST: ${Object.keys(message.broadcast).join(', ')}`, 'debug');
     }
 }
 
@@ -70,8 +83,16 @@ async function messageBroadcastTeamChanged(rustplus, client, message) {
 }
 
 async function messageBroadcastTeamMessage(rustplus, client, message) {
+    await handleInGameChatMessage(rustplus, client, message.broadcast.teamMessage.message, CHANNELS.TEAM);
+}
+
+/*
+    Handles an in-game chat message of the team chat or of the clan chat. In-Game commands are read from both
+    channels, the bot writes its own messages to the channel configured in the settings.
+*/
+async function handleInGameChatMessage(rustplus, client, chatMessage, chatChannel) {
     const instance = client.getInstance(rustplus.guildId);
-    const steamId = message.broadcast.teamMessage.message.steamId.toString();
+    const steamId = chatMessage.steamId.toString();
 
     if (steamId === rustplus.playerId) {
         /* Delay inGameChatHandler */
@@ -81,50 +102,58 @@ async function messageBroadcastTeamMessage(rustplus, client, message) {
             InGameChatHandler.inGameChatHandler, commandDelayMs, rustplus, client);
     }
 
-    let tempName = message.broadcast.teamMessage.message.name;
-    let tempMessage = message.broadcast.teamMessage.message.message;
+    /* Some servers (Rustafied) add size and color tags to the name and the message. */
+    chatMessage.name = chatMessage.name.replace(/^<size=.*?><color=.*?>/, '')
+        .replace(/<\/color><\/size>$/, '');
+    chatMessage.message = chatMessage.message.replace(/^<size=.*?><color=.*?>/, '')
+        .replace(/<\/color><\/size>$/, '')
+        .replace(/^<color.+?<\/color>/g, '');
 
-    tempName = tempName.replace(/^<size=.*?><color=.*?>/, '');  /* Rustafied */
-    tempName = tempName.replace(/<\/color><\/size>$/, '');      /* Rustafied */
-    message.broadcast.teamMessage.message.name = tempName;
-
-    tempMessage = tempMessage.replace(/^<size=.*?><color=.*?>/, '');  /* Rustafied */
-    tempMessage = tempMessage.replace(/<\/color><\/size>$/, '');      /* Rustafied */
-    tempMessage = tempMessage.replace(/^<color.+?<\/color>/g, '');      /* Unknown */
-    message.broadcast.teamMessage.message.message = tempMessage;
+    let executeInGameCommand = true;
 
     const inGameCommandAccessMode = getInGameCommandAccessMode(rustplus);
-    if (steamId !== rustplus.playerId &&
+    if (executeInGameCommand && steamId !== rustplus.playerId &&
         shouldIgnoreInGameCommand(instance, steamId, inGameCommandAccessMode)) {
         const strId = inGameCommandAccessMode === 'whitelist' ?
             'userNotPartOfWhitelistInGame' : 'userPartOfBlacklistInGame';
         rustplus.log(client.intlGet(null, 'infoCap'), client.intlGet(null, strId, {
-            user: `${message.broadcast.teamMessage.message.name} (${steamId})`,
-            message: message.broadcast.teamMessage.message.message
+            user: `${chatMessage.name} (${steamId})`,
+            message: chatMessage.message
         }));
-        TeamChatHandler(rustplus, client, message.broadcast.teamMessage.message);
-        return;
+        executeInGameCommand = false;
     }
 
-    if (rustplus.messagesSentByBot.includes(message.broadcast.teamMessage.message.message)) {
+    if (executeInGameCommand && rustplus.messagesSentByBot.includes(chatMessage.message)) {
         /* Remove message from messagesSendByBot */
         for (let i = rustplus.messagesSentByBot.length - 1; i >= 0; i--) {
-            if (rustplus.messagesSentByBot[i] === message.broadcast.teamMessage.message.message) {
+            if (rustplus.messagesSentByBot[i] === chatMessage.message) {
                 rustplus.messagesSentByBot.splice(i, 1);
             }
         }
         return;
     }
 
-    const isCommand = await CommandHandler.inGameCommandHandler(rustplus, client, message);
-    if (isCommand) return;
+    if (executeInGameCommand) {
+        const isCommand = await CommandHandler.inGameCommandHandler(rustplus, client, chatMessage);
+        if (isCommand) return;
 
-    rustplus.log(client.intlGet(null, 'infoCap'), client.intlGet(null, `logInGameMessage`, {
-        message: message.broadcast.teamMessage.message.message,
-        user: `${message.broadcast.teamMessage.message.name} (${steamId})`
-    }));
+        rustplus.log(client.intlGet(null, 'infoCap'), client.intlGet(null, `logInGameMessage`, {
+            message: chatMessage.message,
+            user: `${chatMessage.name} (${steamId})`
+        }));
+    }
 
-    TeamChatHandler(rustplus, client, message.broadcast.teamMessage.message);
+    await forwardChatMessageToDiscord(rustplus, client, chatMessage, chatChannel);
+}
+
+/* Mirrors an in-game chat message into the Discord channel of the same chat. */
+async function forwardChatMessageToDiscord(rustplus, client, chatMessage, chatChannel) {
+    if (chatChannel === CHANNELS.CLAN) {
+        await ClanChatHandler.handler(rustplus, client, chatMessage);
+    }
+    else {
+        await TeamChatHandler(rustplus, client, chatMessage);
+    }
 }
 
 async function messageBroadcastEntityChanged(rustplus, client, message) {
@@ -144,6 +173,15 @@ async function messageBroadcastEntityChanged(rustplus, client, message) {
 
 async function messageBroadcastCameraRays(rustplus, client, message) {
     /* Not implemented */
+}
+
+async function messageBroadcastClanChanged(rustplus, client, message) {
+    /* The paired account joined, left or changed its clan: refresh the cached clan info. */
+    await ClanChatHandler.updateClanInfo(rustplus, client);
+}
+
+async function messageBroadcastClanMessage(rustplus, client, message) {
+    await handleInGameChatMessage(rustplus, client, message.broadcast.clanMessage.message, CHANNELS.CLAN);
 }
 
 async function messageBroadcastEntityChangedSmartSwitch(rustplus, client, message) {

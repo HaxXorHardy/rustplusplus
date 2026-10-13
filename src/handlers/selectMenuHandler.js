@@ -23,6 +23,7 @@ const Discord = require('discord.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordSelectMenus = require('../discordTools/discordSelectMenus.js');
 const DiscordTools = require('../discordTools/discordTools.js');
+const { normalizeChannel } = require('../util/inGameChat.js');
 
 module.exports = async (client, interaction) => {
     const instance = client.getInstance(interaction.guildId);
@@ -110,6 +111,22 @@ module.exports = async (client, interaction) => {
 
         await client.interactionUpdate(interaction, {
             components: [DiscordSelectMenus.getCommandDelaySelectMenu(guildId, interaction.values[0])]
+        });
+    }
+    else if (interaction.customId === 'InGameChatChannel') {
+        instance.generalSettings.inGameChatChannel = normalizeChannel(interaction.values[0]);
+        client.setInstance(guildId, instance);
+
+        if (rustplus) rustplus.generalSettings.inGameChatChannel = instance.generalSettings.inGameChatChannel;
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'selectMenuValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.inGameChatChannel}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordSelectMenus.getInGameChatChannelSelectMenu(guildId,
+                instance.generalSettings.inGameChatChannel)]
         });
     }
     else if (interaction.customId === 'VoiceGender') {

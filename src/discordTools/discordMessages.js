@@ -384,6 +384,28 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.teamchat);
     },
 
+    sendClanChatMessage: async function (guildId, message) {
+        const instance = Client.client.getInstance(guildId);
+
+        let color = Constants.COLOR_CLANCHAT_DEFAULT;
+        if (instance.teamChatColors.hasOwnProperty(message.steamId)) {
+            color = instance.teamChatColors[message.steamId];
+        }
+
+        const content = {
+            embeds: [DiscordEmbeds.getEmbed({
+                color: color,
+                description: `**${message.name}**: ${message.message}`
+            })]
+        }
+
+        if (message.message.includes('@everyone')) {
+            content.content = '@everyone';
+        }
+
+        await module.exports.sendMessage(guildId, content, null, instance.channelId.clanchat);
+    },
+
     sendTTSMessage: async function (guildId, name, text) {
         const instance = Client.client.getInstance(guildId);
 

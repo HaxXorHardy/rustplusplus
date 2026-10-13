@@ -20,6 +20,7 @@
 
 const DiscordCommandHandler = require('../handlers/discordCommandHandler.js');
 const DiscordTools = require('../discordTools/discordTools');
+const { CHANNELS } = require('../util/inGameChat.js');
 
 module.exports = {
     name: 'messageCreate',
@@ -42,10 +43,14 @@ module.exports = {
             return;
         }
 
+        /* The Discord chat channels are the counterparts of the in-game chat channels. */
+        const chatChannel = (message.channelId === instance.channelId.teamchat) ? CHANNELS.TEAM :
+            ((message.channelId === instance.channelId.clanchat) ? CHANNELS.CLAN : null);
+
         if (message.channelId === instance.channelId.commands) {
             await DiscordCommandHandler.discordCommandHandler(rustplus, client, message);
         }
-        else if (message.channelId === instance.channelId.teamchat) {
+        else if (chatChannel !== null) {
             const guild = DiscordTools.getGuild(message.guild.id);
             const channel = DiscordTools.getTextChannelById(guild.id, message.channelId);
             client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, `logDiscordMessage`, {
@@ -54,7 +59,7 @@ module.exports = {
                 user: `${message.author.username} (${message.author.id})`,
                 message: message.cleanContent
             }));
-            await rustplus.sendInGameMessage(`${message.author.username}: ${message.cleanContent}`);
+            await rustplus.sendInGameMessage(`${message.author.username}: ${message.cleanContent}`, chatChannel);
         }
     },
 }

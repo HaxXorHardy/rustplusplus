@@ -3,6 +3,7 @@
     "voiceGender": "male",
     "prefix": "!",
     "muteInGameBotMessages": false,
+    "inGameChatChannel": "team",
     "trademark": "rustplusplus",
     "inGameCommandsEnabled": true,
     "inGameCommandAccessMode": "blacklist",

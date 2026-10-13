@@ -25,6 +25,7 @@ const Path = require('path');
 const Client = require('../../index.ts');
 const Constants = require('../util/constants.js');
 const Languages = require('../util/languages.js');
+const { CHANNELS, normalizeChannel } = require('../util/inGameChat.js');
 
 module.exports = {
     getSelectMenu: function (options = {}) {
@@ -145,6 +146,29 @@ module.exports = {
                         label: Client.client.intlGet(guildId, 'notShowingCap'),
                         description: Client.client.intlGet(guildId, 'hideTrademark'),
                         value: 'NOT SHOWING'
+                    }]
+            }));
+    },
+
+    getInGameChatChannelSelectMenu: function (guildId, chatChannel) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getSelectMenu({
+                customId: 'InGameChatChannel',
+                placeholder: Client.client.intlGet(guildId, 'inGameChatChannelCurrent', {
+                    channel: Client.client.intlGet(guildId,
+                        (normalizeChannel(chatChannel) === CHANNELS.CLAN) ?
+                            'inGameChatChannelClan' : 'inGameChatChannelTeam')
+                }),
+                options: [
+                    {
+                        label: Client.client.intlGet(guildId, 'inGameChatChannelTeam'),
+                        description: Client.client.intlGet(guildId, 'inGameChatChannelTeamDesc'),
+                        value: CHANNELS.TEAM
+                    },
+                    {
+                        label: Client.client.intlGet(guildId, 'inGameChatChannelClan'),
+                        description: Client.client.intlGet(guildId, 'inGameChatChannelClanDesc'),
+                        value: CHANNELS.CLAN
                     }]
             }));
     },

@@ -18,6 +18,7 @@
 
 */
 
+const ClanChatHandler = require('../handlers/clanChatHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Info = require('../structures/Info');
 const Map = require('../structures/Map');
@@ -110,6 +111,14 @@ module.exports = {
         rustplus.persistMapMarkersRuntimeState();
         rustplus.pollingTaskId = setInterval(PollingHandler.pollingHandler, client.pollingIntervalMs, rustplus, client);
         rustplus.isOperational = true;
+
+        /* Fetch the clan of the paired steam account, the clan chat support of rustplusplus depends on it. */
+        try {
+            await ClanChatHandler.updateClanInfo(rustplus, client);
+        }
+        catch (e) {
+            rustplus.log(client.intlGet(null, 'errorCap'), `Could not fetch the clan info: ${e}`, 'error');
+        }
 
         rustplus.updateLeaderRustPlusLiteInstance();
     },

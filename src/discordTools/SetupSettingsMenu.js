@@ -46,6 +46,9 @@ module.exports = async (client, guild, forced = false) => {
         instance.firstTime = false;
         client.setInstance(guild.id, instance);
     }
+    else {
+        await ensureInGameChatChannelSetting(client, guild, channel);
+    }
 
 };
 
@@ -127,6 +130,24 @@ async function setupGeneralSettings(client, guildId, channel) {
             thumbnail: `attachment://settings_logo.png`
         })],
         components: [DiscordButtons.getBotMutedInGameButton(guildId, instance.generalSettings.muteInGameBotMessages)],
+        files: [new Discord.AttachmentBuilder(
+            Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+    });
+
+    await client.messageSend(channel, {
+        embeds: [DiscordEmbeds.getEmbed({
+            color: Constants.COLOR_SETTINGS,
+            title: client.intlGet(guildId, 'inGameChatChannelSetting'),
+            thumbnail: `attachment://settings_logo.png`,
+            fields: [
+                {
+                    name: client.intlGet(guildId, 'noteCap'),
+                    value: client.intlGet(guildId, 'inGameChatChannelNote'),
+                    inline: true
+                }]
+        })],
+        components: [DiscordSelectMenus.getInGameChatChannelSelectMenu(guildId,
+            instance.generalSettings.inGameChatChannel)],
         files: [new Discord.AttachmentBuilder(
             Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
     });
@@ -296,5 +317,51 @@ async function setupNotificationSettings(client, guildId, channel) {
                     Path.join(__dirname, '..',
                         `resources/images/events/${instance.notificationSettings[setting].image}`))]
         });
+    }
+}
+
+/*
+    Settings are only recreated on /reset settings (or on the very first run of the bot in a guild), so a setting
+    that was added by a newer version has to be added here when it is missing in the settings Channel. It also
+    replaces the message when its text changed (bot update or language change).
+*/
+async function ensureInGameChatChannelSetting(client, guild, channel) {
+    const instance = client.getInstance(guild.id);
+
+    try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+        const message = messages.find((message) => message.components.some((row) =>
+            row.components.some((component) => component.customId === 'InGameChatChannel')));
+
+        if (message) {
+            if (message.embeds.length !== 0 &&
+                message.embeds[0].title === client.intlGet(guild.id, 'inGameChatChannelSetting')) {
+                return;
+            }
+
+            await message.delete().catch(() => undefined);
+        }
+
+        await client.messageSend(channel, {
+            embeds: [DiscordEmbeds.getEmbed({
+                color: Constants.COLOR_SETTINGS,
+                title: client.intlGet(guild.id, 'inGameChatChannelSetting'),
+                thumbnail: `attachment://settings_logo.png`,
+                fields: [
+                    {
+                        name: client.intlGet(guild.id, 'noteCap'),
+                        value: client.intlGet(guild.id, 'inGameChatChannelNote'),
+                        inline: true
+                    }]
+            })],
+            components: [DiscordSelectMenus.getInGameChatChannelSelectMenu(guild.id,
+                instance.generalSettings.inGameChatChannel)],
+            files: [new Discord.AttachmentBuilder(
+                Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+        });
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'errorCap'),
+            `Could not add the In-Game Chat Channel setting: ${e}. Use /reset settings instead.`, 'warn');
     }
 }

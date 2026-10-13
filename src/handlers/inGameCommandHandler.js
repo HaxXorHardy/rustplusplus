@@ -23,17 +23,17 @@ const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const SmartSwitchHandler = require('./smartSwitchHandler.js');
 
 module.exports = {
-    inGameCommandHandler: async function (rustplus, client, message) {
+    inGameCommandHandler: async function (rustplus, client, chatMessage) {
         const guildId = rustplus.guildId;
         const instance = client.getInstance(guildId);
 
-        let command = message.broadcast.teamMessage.message.message;
+        let command = chatMessage.message;
         for (const alias of instance.aliases) {
             command = command.replace(alias.alias, alias.value);
         }
 
-        const callerSteamId = message.broadcast.teamMessage.message.steamId.toString();
-        const callerName = message.broadcast.teamMessage.message.name;
+        const callerSteamId = chatMessage.steamId.toString();
+        const callerName = chatMessage.name;
         const commandLowerCase = command.toLowerCase();
         const prefix = rustplus.generalSettings.prefix;
 
@@ -222,24 +222,24 @@ module.exports = {
             /* Maybe a custom command? */
 
             if (SmartAlarmHandler.smartAlarmCommandHandler(rustplus, client, command)) {
-                rustplus.logInGameCommand('Smart Alarm', message);
+                rustplus.logInGameCommand('Smart Alarm', chatMessage);
                 return true;
             }
 
             if (await SmartSwitchHandler.smartSwitchCommandHandler(rustplus, client, command)) {
-                rustplus.logInGameCommand('Smart Switch', message);
+                rustplus.logInGameCommand('Smart Switch', chatMessage);
                 return true;
             }
 
             if (await SmartSwitchGroupHandler.smartSwitchGroupCommandHandler(rustplus, client, command)) {
-                rustplus.logInGameCommand('Smart Switch Group', message);
+                rustplus.logInGameCommand('Smart Switch Group', chatMessage);
                 return true;
             }
 
             return false;
         }
 
-        rustplus.logInGameCommand('Default', message);
+        rustplus.logInGameCommand('Default', chatMessage);
 
         return true;
     },
