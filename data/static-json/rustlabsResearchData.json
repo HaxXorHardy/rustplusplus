@@ -39,6 +39,10 @@
       "totalScrap": 165
     }
   },
+  "91167975": {
+    "researchTable": 10,
+    "workbench": null
+  },
   "95950017": {
     "researchTable": 60,
     "workbench": null
@@ -168,7 +172,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 15,
-      "totalScrap": 240
+      "totalScrap": 150
     }
   },
   "418081930": {
@@ -203,6 +207,14 @@
     "researchTable": 60,
     "workbench": null
   },
+  "486661382": {
+    "researchTable": 30,
+    "workbench": {
+      "type": "1524187186",
+      "scrap": 30,
+      "totalScrap": 90
+    }
+  },
   "492357192": {
     "researchTable": 15,
     "workbench": {
@@ -226,6 +238,10 @@
       "scrap": 30,
       "totalScrap": 435
     }
+  },
+  "556232090": {
+    "researchTable": 10,
+    "workbench": null
   },
   "559147458": {
     "researchTable": 10,
@@ -379,6 +395,10 @@
       "totalScrap": 150
     }
   },
+  "777041831": {
+    "researchTable": 10,
+    "workbench": null
+  },
   "785728077": {
     "researchTable": 30,
     "workbench": {
@@ -386,6 +406,10 @@
       "scrap": 30,
       "totalScrap": 390
     }
+  },
+  "789540413": {
+    "researchTable": 10,
+    "workbench": null
   },
   "794356786": {
     "researchTable": 10,
@@ -420,7 +444,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 15,
-      "totalScrap": 255
+      "totalScrap": 165
     }
   },
   "832133926": {
@@ -511,6 +535,14 @@
       "totalScrap": 240
     }
   },
+  "963150711": {
+    "researchTable": 30,
+    "workbench": {
+      "type": "-41896755",
+      "scrap": 30,
+      "totalScrap": 960
+    }
+  },
   "963906841": {
     "researchTable": 10,
     "workbench": null
@@ -577,6 +609,14 @@
       "type": "210787554",
       "scrap": 15,
       "totalScrap": 135
+    }
+  },
+  "1143376304": {
+    "researchTable": null,
+    "workbench": {
+      "type": "1524187186",
+      "scrap": 30,
+      "totalScrap": 75
     }
   },
   "1145722690": {
@@ -713,6 +753,10 @@
   },
   "1234880403": {
     "researchTable": 30,
+    "workbench": null
+  },
+  "1243083208": {
+    "researchTable": 10,
     "workbench": null
   },
   "1248356124": {
@@ -899,6 +943,14 @@
       "totalScrap": 420
     }
   },
+  "1459828804": {
+    "researchTable": 60,
+    "workbench": {
+      "type": "-41896755",
+      "scrap": 60,
+      "totalScrap": 930
+    }
+  },
   "1478091698": {
     "researchTable": 60,
     "workbench": {
@@ -919,7 +971,15 @@
     "researchTable": 10,
     "workbench": null
   },
+  "1519395656": {
+    "researchTable": 10,
+    "workbench": null
+  },
   "1525520776": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "1527700610": {
     "researchTable": 10,
     "workbench": null
   },
@@ -1096,6 +1156,10 @@
     }
   },
   "1722154847": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "1738714421": {
     "researchTable": 10,
     "workbench": null
   },
@@ -1383,6 +1447,14 @@
     "researchTable": 15,
     "workbench": null
   },
+  "-1814195745": {
+    "researchTable": null,
+    "workbench": {
+      "type": "1524187186",
+      "scrap": 15,
+      "totalScrap": 45
+    }
+  },
   "-1615281216": {
     "researchTable": 60,
     "workbench": {
@@ -1451,6 +1523,14 @@
       "totalScrap": 405
     }
   },
+  "-1661343913": {
+    "researchTable": 30,
+    "workbench": {
+      "type": "1524187186",
+      "scrap": 30,
+      "totalScrap": 105
+    }
+  },
   "-690968985": {
     "researchTable": 15,
     "workbench": {
@@ -1464,11 +1544,11 @@
     "workbench": null
   },
   "-321247698": {
-    "researchTable": 120,
+    "researchTable": 30,
     "workbench": {
       "type": "1524187186",
-      "scrap": 120,
-      "totalScrap": 210
+      "scrap": 30,
+      "totalScrap": 120
     }
   },
   "-1903165497": {
@@ -1508,7 +1588,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 15,
-      "totalScrap": 315
+      "totalScrap": 225
     }
   },
   "-411735114": {
@@ -1516,7 +1596,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 30,
-      "totalScrap": 300
+      "totalScrap": 210
     }
   },
   "-1117626326": {
@@ -1578,6 +1658,30 @@
       "scrap": 30,
       "totalScrap": 210
     }
+  },
+  "-1882497808": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-1661676046": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-132349657": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-1244746477": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-744942541": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-844428380": {
+    "researchTable": 10,
+    "workbench": null
   },
   "-1056824343": {
     "researchTable": 30,
@@ -1717,6 +1821,14 @@
       "type": "210787554",
       "scrap": 15,
       "totalScrap": 195
+    }
+  },
+  "-486432631": {
+    "researchTable": 30,
+    "workbench": {
+      "type": "-41896755",
+      "scrap": 30,
+      "totalScrap": 960
     }
   },
   "-1999722522": {
@@ -2015,6 +2127,14 @@
       "totalScrap": 30
     }
   },
+  "-75264812": {
+    "researchTable": 15,
+    "workbench": {
+      "type": "1524187186",
+      "scrap": 15,
+      "totalScrap": 90
+    }
+  },
   "-493159321": {
     "researchTable": 15,
     "workbench": {
@@ -2074,6 +2194,22 @@
       "scrap": 30,
       "totalScrap": 225
     }
+  },
+  "-1341272471": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-1644292642": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-1388103748": {
+    "researchTable": 10,
+    "workbench": null
+  },
+  "-1057052157": {
+    "researchTable": 10,
+    "workbench": null
   },
   "-1539025626": {
     "researchTable": 15,
@@ -2164,7 +2300,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 15,
-      "totalScrap": 255
+      "totalScrap": 165
     }
   },
   "-365097295": {
@@ -2200,12 +2336,8 @@
     }
   },
   "-892718768": {
-    "researchTable": 15,
-    "workbench": {
-      "type": "1524187186",
-      "scrap": 15,
-      "totalScrap": 105
-    }
+    "researchTable": 10,
+    "workbench": null
   },
   "-1827561369": {
     "researchTable": 30,
@@ -2424,7 +2556,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 15,
-      "totalScrap": 270
+      "totalScrap": 180
     }
   },
   "-692338819": {
@@ -2528,7 +2660,7 @@
     "workbench": {
       "type": "1524187186",
       "scrap": 15,
-      "totalScrap": 225
+      "totalScrap": 135
     }
   },
   "-1535621066": {
