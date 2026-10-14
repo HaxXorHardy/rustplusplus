@@ -462,6 +462,15 @@ module.exports = {
             }));
     },
 
+    getCredentialsExpiryButton: function (guildId) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                style: LINK,
+                label: Client.client.intlGet(guildId, 'credentialsRefreshCap'),
+                url: Constants.CREDENTIALS_URL
+            }));
+    },
+
     getBotMutedInGameButton: function (guildId, isMuted) {
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({

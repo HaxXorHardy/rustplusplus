@@ -23,6 +23,7 @@ const Path = require('path');
 
 const BattlemetricsHandler = require('../handlers/battlemetricsHandler.js');
 const Config = require('../../config');
+const CredentialsExpiryHandler = require('../handlers/credentialsExpiryHandler.js');
 
 module.exports = {
     name: 'clientReady',
@@ -78,6 +79,11 @@ module.exports = {
             BattlemetricsHandler.handler(client, true);
             client.battlemetricsIntervalId = setInterval(BattlemetricsHandler.handler, 60000, client, false);
         }
+
+        /* Notify users when their stored Rust+ credentials are about to expire or have expired. */
+        await CredentialsExpiryHandler.handler(client, true);
+        client.credentialsExpiryIntervalId = setInterval(CredentialsExpiryHandler.handler,
+            Config.general.credentialsExpiryCheckIntervalMs, client, false);
 
         client.createRustplusInstancesFromConfig();
     },

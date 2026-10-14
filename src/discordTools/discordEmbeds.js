@@ -1068,6 +1068,21 @@ module.exports = {
         });
     },
 
+    getCredentialsExpiryEmbed: function (guildId, steamId, expireDate, expired) {
+        const date = DiscordTools.getDiscordFormattedDate(expireDate);
+        return module.exports.getEmbed({
+            color: expired ? Constants.COLOR_INACTIVE : Constants.COLOR_DEFAULT,
+            title: Client.client.intlGet(guildId,
+                expired ? 'credentialsExpiredTitle' : 'credentialsExpiringSoonTitle'),
+            description: Client.client.intlGet(guildId,
+                expired ? 'credentialsExpired' : 'credentialsExpiringSoon', {
+                    steamId: steamId,
+                    date: date
+                }),
+            timestamp: true
+        });
+    },
+
     getItemAvailableVendingMachineEmbed: function (guildId, serverId, str) {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];

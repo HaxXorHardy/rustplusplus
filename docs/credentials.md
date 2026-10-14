@@ -38,3 +38,7 @@ Credentials are necessary in order to get the following:
 * Facepunch News
 
 Without these, the bot would not operate properly.
+
+## Expiring Credentials
+
+> The generated credentials include a Steam Auth Token that expires after roughly two weeks. rustplusplus monitors the stored `expire_date` of every registered user and sends a direct message to the Discord user a few days before the token expires, and again once it has expired. Each notification is sent only once per credential. You can run `/credentials show` at any time to see which credentials are registered, and re-generate them through the [rustplusplus-credentials page](https://rustplusplus-credentials.netlify.app/).
