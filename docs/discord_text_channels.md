@@ -99,6 +99,8 @@ There are a few buttons for each server. The `CONNECT` button lets you start a c
 
 > The Teamchat Channel makes it possible to communicate with your teammates In-Game. What you write in `teamchat` Channel appears In-Game and whatever you write In-Game appears in the `teamchat` Channel.
 
+> **Note:** Messages you write in the `teamchat` Channel are sent to the In-Game chat channel that is configured with the `In-Game Chat Channel` setting (Team Chat by default, Clan Chat if you switched it). The `clanchat` Channel always sends to the In-Game Clan Chat.
+
 ![Discord Text Channel Teamchat](images/channels/teamchat_channel.png)
 
 

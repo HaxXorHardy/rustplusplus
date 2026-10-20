@@ -20,7 +20,7 @@
 
 const DiscordCommandHandler = require('../handlers/discordCommandHandler.js');
 const DiscordTools = require('../discordTools/discordTools');
-const { CHANNELS } = require('../util/inGameChat.js');
+const { CHANNELS, resolveChannel } = require('../util/inGameChat.js');
 
 module.exports = {
     name: 'messageCreate',
@@ -43,8 +43,12 @@ module.exports = {
             return;
         }
 
-        /* The Discord chat channels are the counterparts of the in-game chat channels. */
-        const chatChannel = (message.channelId === instance.channelId.teamchat) ? CHANNELS.TEAM :
+        /*
+            The clanchat Channel always writes to the In-Game clan chat. The teamchat Channel follows the In-Game
+            chat channel setting, so its messages are sent to the same channel the bot uses for its own messages.
+        */
+        const chatChannel = (message.channelId === instance.channelId.teamchat) ?
+            resolveChannel(instance.generalSettings) :
             ((message.channelId === instance.channelId.clanchat) ? CHANNELS.CLAN : null);
 
         if (message.channelId === instance.channelId.commands) {
