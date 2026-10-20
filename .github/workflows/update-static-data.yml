@@ -1,0 +1,107 @@
+name: Update static game data
+
+on:
+  workflow_dispatch:
+    inputs:
+      rustlabs:
+        description: "Refresh the RustLabs wiki data (has to get past Cloudflare)"
+        required: false
+        default: false
+        type: boolean
+      sleep_ms:
+        description: "Delay between RustLabs page requests in milliseconds"
+        required: false
+        default: "1500"
+        type: string
+      headless:
+        description: "Run the scraper browser without a window"
+        required: false
+        default: true
+        type: boolean
+      dry_run:
+        description: "Only report changes, do not commit"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Monthly, on the 1st at 04:00 UTC.
+    - cron: "0 4 1 * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-static-data
+  cancel-in-progress: false
+
+jobs:
+  update-static-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The pipeline only uses Node built-ins; only the RustLabs scraper needs playwright-core.
+      - name: Install scraper dependency
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core
+
+      - name: Locate browser
+        id: browser
+        run: |
+          for candidate in google-chrome google-chrome-stable chromium chromium-browser; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              echo "path=$(command -v "$candidate")" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "No supported browser found (only required for the RustLabs refresh)."
+
+      - name: Update static data
+        env:
+          INPUT_RUSTLABS: ${{ github.event_name == 'schedule' && 'true' || inputs.rustlabs }}
+          INPUT_HEADLESS: ${{ github.event_name == 'schedule' && 'true' || inputs.headless }}
+          INPUT_SLEEP_MS: ${{ inputs.sleep_ms || '1500' }}
+          RPP_RUSTLABS_BROWSER_PATH: ${{ steps.browser.outputs.path }}
+          RPP_RUSTLABS_BROWSER_ARGS: "--no-sandbox --disable-dev-shm-usage"
+        run: |
+          set -euo pipefail
+
+          # The runner has no Rust installation, so the item metadata step cannot run here.
+          args=(--skip-items)
+
+          if [ "${INPUT_RUSTLABS:-}" != "true" ]; then
+            args+=(--skip-rustlabs)
+          fi
+
+          if [ "${INPUT_HEADLESS:-}" = "true" ]; then
+            args+=(--headless)
+          else
+            args+=(--visible)
+          fi
+
+          node scripts/updateStaticData.js "${args[@]}" --sleep "${INPUT_SLEEP_MS:-1500}"
+
+      - name: Commit changes
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/static-json data/staticData.sqlite
+
+          if git diff --cached --quiet; then
+            echo "No static data changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(static-data): automated refresh"
+          git push origin "HEAD:${{ github.ref_name }}"

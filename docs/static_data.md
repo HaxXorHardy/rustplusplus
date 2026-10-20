@@ -75,6 +75,7 @@ The wiki is protected by Cloudflare, so the script drives a real Edge/Chrome via
 | `RPP_RUSTLABS_TIMEOUT_MS` | `30000` | Per-request timeout. |
 | `RPP_RUSTLABS_CHALLENGE_WAIT_MS` | `180000` | How long to wait for a manually solved Cloudflare challenge. |
 | `RPP_RUSTLABS_BROWSER_PATH` | auto | Explicit Edge/Chrome executable. |
+| `RPP_RUSTLABS_BROWSER_ARGS` | - | Extra browser flags, e.g. `--no-sandbox --disable-dev-shm-usage` (CI). |
 | `RPP_RUSTLABS_COOKIE` / `RPP_RUSTLABS_CF_CLEARANCE` | - | Reuse existing Cloudflare cookies. |
 | `RPP_RUSTLABS_USE_PROXY` | `false` | Use the `HTTP(S)_PROXY` environment variables for the browser. |
 
@@ -99,3 +100,28 @@ This compiles every JSON file in `data/static-json` into `data/staticData.sqlite
 * If the RustLabs scrape fails (network/Cloudflare), the existing datasets are kept and the item
   list plus the database are still rebuilt.
 * Generated scratch data (`data/items`, `scripts/items.json`, `scripts/rustlabs`) is git-ignored.
+
+## Automated updates (GitHub Actions)
+
+[`.github/workflows/update-static-data.yml`](../.github/workflows/update-static-data.yml) runs the
+pipeline on GitHub Actions:
+
+* **Scheduled** - monthly, on the 1st at 04:00 UTC: refreshes the RustLabs data (best effort) and
+  rebuilds the database.
+* **Manual (`workflow_dispatch`)** - choose whether to refresh RustLabs, the page delay, headless
+  mode and a dry run that does not commit.
+
+The workflow only commits when `data/static-json` or `data/staticData.sqlite` actually changed, and
+pushes directly to the branch it runs on (default: `master`).
+
+### Limitations in CI
+
+* A GitHub runner has no Rust installation, so **step 1 (item metadata) is skipped** with
+  `--skip-items`. Run the updater locally after a Rust update to refresh `items.json`.
+* `wiki.rustclash.com` is protected by Cloudflare and datacenter IPs are frequently challenged, so
+  the RustLabs refresh may fail in CI. In that case the existing datasets are kept and the database
+  is still rebuilt.
+* The browser session (`scripts/rustlabs/.browser-profile`) is not committed and does not exist on a
+  fresh runner, so no Cloudflare clearance from a local run can be reused.
+* If `master` is protected, the automated commit is rejected. Allow `github-actions[bot]` to push
+  (or switch the workflow to open a pull request instead).

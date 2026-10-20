@@ -46,6 +46,7 @@ const BROWSER_HEADLESS = (process.env.RPP_RUSTLABS_HEADLESS || '').toLowerCase()
 const HEADLESS_AFTER_CHALLENGE = (process.env.RPP_RUSTLABS_HEADLESS_AFTER_CHALLENGE || 'true').toLowerCase() === 'true';
 const BROWSER_PROFILE_DIRECTORY = Path.join(OUTPUT_DIRECTORY, '.browser-profile');
 const BROWSER_EXECUTABLE_PATH = (process.env.RPP_RUSTLABS_BROWSER_PATH || '').trim();
+const BROWSER_EXTRA_ARGS = (process.env.RPP_RUSTLABS_BROWSER_ARGS || '').trim();
 const BROWSER_USER_AGENT = (process.env.RPP_RUSTLABS_USER_AGENT ||
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36').trim();
 
@@ -335,6 +336,10 @@ async function initializeBrowser() {
         userAgent: BROWSER_USER_AGENT,
         args: ['--disable-blink-features=AutomationControlled']
     };
+
+    if (BROWSER_EXTRA_ARGS !== '') {
+        launchOptions.args.push(...BROWSER_EXTRA_ARGS.split(/\s+/).filter((value) => value !== ''));
+    }
 
     if (!USE_PROXY) {
         launchOptions.args.push('--no-proxy-server');
