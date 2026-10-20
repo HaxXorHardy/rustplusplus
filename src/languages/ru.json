@@ -333,6 +333,7 @@
     "credentialsExpired": "Срок действия ваших учетных данных FCM для steamId `{steamId}` истек {date}. Уведомления FCM (сопряжение, умные будильники, смерти и т. д.) больше не будут работать, пока вы не обновите свои учетные данные.",
     "credentialsExpiredNotified": "Уведомили пользователя Discord {discordUserId} о том, что срок действия учетных данных FCM для steamId: {steamId} истек.",
     "credentialsExpiredTitle": "Срок действия учетных данных FCM истек",
+    "credentialsExpires": "Срок действия",
     "credentialsExpiringSoon": "Срок действия ваших учетных данных FCM для steamId `{steamId}` истекает {date}. Пожалуйста, обновите свои учетные данные, чтобы бот продолжал работать.",
     "credentialsExpiringSoonNotified": "Уведомили пользователя Discord {discordUserId} о том, что срок действия учетных данных FCM для steamId: {steamId} скоро истекает.",
     "credentialsExpiringSoonTitle": "Срок действия учетных данных FCM скоро истекает",

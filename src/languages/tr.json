@@ -333,6 +333,7 @@
     "credentialsExpired": "SteamId `{steamId}` için FCM kimlik bilgilerinizin geçerlilik süresi {date} tarihinde doldu. Kimlik bilgilerinizi yenilemeden FCM bildirimleri (eşleştirme, akıllı alarmlar, ölümler vb.) artık çalışmayacaktır.",
     "credentialsExpiredNotified": "Discord kullanıcısı {discordUserId}'a, steamId: {steamId} için FCM kimlik bilgilerinin süresinin dolduğu bildirildi.",
     "credentialsExpiredTitle": "FCM Kimlik Bilgilerinin Süresi Doldu",
+    "credentialsExpires": "Son kullanma tarihi",
     "credentialsExpiringSoon": "steamId `{steamId}` için FCM kimlik bilgilerinizin geçerlilik süresi {date} tarihinde sona erecektir. Botun çalışmaya devam etmesi için lütfen kimlik bilgilerinizi yenileyin.",
     "credentialsExpiringSoonNotified": "Discord kullanıcısı {discordUserId}'a, steamId: {steamId} için FCM Kimlik Bilgilerinin geçerlilik süresinin dolmak üzere olduğu bildirildi.",
     "credentialsExpiringSoonTitle": "FCM Kimlik Bilgilerinin Süresi Yakında Dolacak",

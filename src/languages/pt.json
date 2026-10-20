@@ -333,6 +333,7 @@
     "credentialsExpired": "As suas credenciais FCM para o steamId `{steamId}` expiraram em {date}. As notificações FCM (emparelhamento, alarmes inteligentes, mortes, ...) deixarão de funcionar até que atualize as suas credenciais.",
     "credentialsExpiredNotified": "Notificou o utilizador do Discord {discordUserId} de que as credenciais FCM para o steamId: {steamId} expiraram.",
     "credentialsExpiredTitle": "Credenciais do FCM expiradas",
+    "credentialsExpires": "Expira",
     "credentialsExpiringSoon": "As suas credenciais FCM para o steamId `{steamId}` expiram em {date}. Atualize as suas credenciais para manter o bot a funcionar.",
     "credentialsExpiringSoonNotified": "Notificou o utilizador do Discord {discordUserId} de que as credenciais FCM para o steamId: {steamId} estão prestes a expirar.",
     "credentialsExpiringSoonTitle": "Credenciais FCM prestes a expirar",

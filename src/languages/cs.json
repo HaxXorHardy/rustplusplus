@@ -333,6 +333,7 @@
     "credentialsExpired": "Vaše přihlašovací údaje FCM pro steamId `{steamId}` vypršely dne {date}. Oznámení FCM (spárování, chytré budíky, úmrtí atd.) již nebudou fungovat, dokud své přihlašovací údaje neobnovíte.",
     "credentialsExpiredNotified": "Uživatel Discord s ID {discordUserId} byl informován, že platnost přihlašovacích údajů FCM pro steamId: {steamId} vypršela.",
     "credentialsExpiredTitle": "Vypršela platnost přihlašovacích údajů FCM",
+    "credentialsExpires": "Vyprší",
     "credentialsExpiringSoon": "Vaše přihlašovací údaje FCM pro steamId `{steamId}` vyprší dne {date}. Obnovte prosím své přihlašovací údaje, aby bot nadále fungoval.",
     "credentialsExpiringSoonNotified": "Uživatel Discord s přezdívkou {discordUserId} byl upozorněn, že platnost přihlašovacích údajů FCM pro steamId: {steamId} brzy vyprší.",
     "credentialsExpiringSoonTitle": "Platnost přihlašovacích údajů FCM brzy vyprší",

@@ -333,6 +333,7 @@
     "credentialsExpired": "Tus credenciales de FCM para el steamId `{steamId}` caducaron el {date}. Las notificaciones de FCM (emparejamiento, alarmas inteligentes, muertes, etc.) dejarán de funcionar hasta que actualices tus credenciales.",
     "credentialsExpiredNotified": "Se ha notificado al usuario de Discord {discordUserId} que las credenciales de FCM para el steamId: {steamId} han caducado.",
     "credentialsExpiredTitle": "Credenciales de FCM caducadas",
+    "credentialsExpires": "Caduca",
     "credentialsExpiringSoon": "Tus credenciales de FCM para el steamId `{steamId}` caducarán el {date}. Actualiza tus credenciales para que el bot siga funcionando.",
     "credentialsExpiringSoonNotified": "Se ha notificado al usuario de Discord {discordUserId} que las credenciales de FCM para el steamId: {steamId} están a punto de caducar.",
     "credentialsExpiringSoonTitle": "Las credenciales de FCM caducarán pronto",
