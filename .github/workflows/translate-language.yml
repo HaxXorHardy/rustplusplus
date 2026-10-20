@@ -4,24 +4,44 @@ on:
   pull_request:
     branches:
       - master
+    paths:
+      - src/languages/en.json
+  workflow_dispatch:
+    inputs:
+      languages:
+        description: "Space separated language codes (empty = all default languages)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Only report missing keys, do not call DeepL or commit"
+        required: false
+        default: false
+        type: boolean
+      force:
+        description: "Re-translate all keys (overwrites existing translations!)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
-  group: translate-pr-${{ github.event.pull_request.number }}
+  group: translate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   translate-language:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -32,18 +52,42 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install "requests>=2.31,<3"
+
+      # The API key must never run together with a translation script from an untrusted PR.
+      - name: Extract translation script from base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          git show "origin/${{ github.base_ref }}:scripts/translate_language_json.py" \
+            > "$RUNNER_TEMP/translate_language_json.py"
+
+      - name: Use translation script from checked out branch
+        if: github.event_name == 'workflow_dispatch'
+        run: cp scripts/translate_language_json.py "$RUNNER_TEMP/translate_language_json.py"
 
       - name: Run translation script
         env:
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          DEEPL_API_URL: ${{ vars.DEEPL_API_URL }}
+          INPUT_LANGUAGES: ${{ github.event.inputs.languages }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          INPUT_FORCE: ${{ github.event.inputs.force }}
         run: |
-          python src/external/translate_language_json.py \
-            --source src/languages/en.json \
-            --output-dir src/languages \
-            --provider deepl
+          args=(--source src/languages/en.json --output-dir src/languages --provider deepl)
+          if [ -n "$INPUT_LANGUAGES" ]; then
+            read -r -a languages <<< "$INPUT_LANGUAGES"
+            args+=(--languages "${languages[@]}")
+          fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ "$INPUT_FORCE" = "true" ]; then
+            args+=(--force)
+          fi
+          python "$RUNNER_TEMP/translate_language_json.py" "${args[@]}"
 
       - name: Commit translation changes
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -56,4 +100,4 @@ jobs:
           fi
 
           git commit -m "chore(i18n): update translations"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
