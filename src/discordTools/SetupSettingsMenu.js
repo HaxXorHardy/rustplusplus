@@ -24,6 +24,7 @@ const Path = require('path');
 const Constants = require('../util/constants.js');
 const DiscordButtons = require('./discordButtons.js');
 const DiscordEmbeds = require('./discordEmbeds.js');
+const DiscordMessages = require('./discordMessages.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
 
@@ -48,7 +49,10 @@ module.exports = async (client, guild, forced = false) => {
     }
     else {
         await ensureInGameChatChannelSetting(client, guild, channel);
+        await ensureInformationDisplaySettings(client, guild, channel);
     }
+
+    await removeDisabledInformationMessages(client, guild);
 
 };
 
@@ -281,6 +285,30 @@ async function setupGeneralSettings(client, guildId, channel) {
     await client.messageSend(channel, {
         embeds: [DiscordEmbeds.getEmbed({
             color: Constants.COLOR_SETTINGS,
+            title: client.intlGet(guildId, 'displayInformationEventInformation'),
+            thumbnail: `attachment://settings_logo.png`
+        })],
+        components: [DiscordButtons.getDisplayInformationEventInformationButton(guildId,
+            instance.generalSettings.displayInformationEventInformation)],
+        files: [new Discord.AttachmentBuilder(
+            Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+    });
+
+    await client.messageSend(channel, {
+        embeds: [DiscordEmbeds.getEmbed({
+            color: Constants.COLOR_SETTINGS,
+            title: client.intlGet(guildId, 'displayInformationMonumentInformation'),
+            thumbnail: `attachment://settings_logo.png`
+        })],
+        components: [DiscordButtons.getDisplayInformationMonumentInformationButton(guildId,
+            instance.generalSettings.displayInformationMonumentInformation)],
+        files: [new Discord.AttachmentBuilder(
+            Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+    });
+
+    await client.messageSend(channel, {
+        embeds: [DiscordEmbeds.getEmbed({
+            color: Constants.COLOR_SETTINGS,
             title: client.intlGet(guildId, 'subscribeToChangesBattlemetrics'),
             thumbnail: `attachment://settings_logo.png`
         })],
@@ -363,5 +391,77 @@ async function ensureInGameChatChannelSetting(client, guild, channel) {
     catch (e) {
         client.log(client.intlGet(null, 'errorCap'),
             `Could not add the In-Game Chat Channel setting: ${e}. Use /reset settings instead.`, 'warn');
+    }
+}
+
+/*
+    Same as ensureInGameChatChannelSetting but for the information channel display toggles that were added
+    after the settings channel was originally created.
+*/
+async function ensureInformationDisplaySettings(client, guild, channel) {
+    const instance = client.getInstance(guild.id);
+
+    const settings = [
+        {
+            customId: 'DisplayInformationEventInformation',
+            titleId: 'displayInformationEventInformation',
+            enabled: instance.generalSettings.displayInformationEventInformation,
+            getButton: DiscordButtons.getDisplayInformationEventInformationButton
+        },
+        {
+            customId: 'DisplayInformationMonumentInformation',
+            titleId: 'displayInformationMonumentInformation',
+            enabled: instance.generalSettings.displayInformationMonumentInformation,
+            getButton: DiscordButtons.getDisplayInformationMonumentInformationButton
+        }
+    ];
+
+    try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+
+        for (const setting of settings) {
+            const message = messages.find((message) => message.components.some((row) =>
+                row.components.some((component) => component.customId === setting.customId)));
+
+            if (message) {
+                if (message.embeds.length !== 0 &&
+                    message.embeds[0].title === client.intlGet(guild.id, setting.titleId)) {
+                    continue;
+                }
+
+                await message.delete().catch(() => undefined);
+            }
+
+            await client.messageSend(channel, {
+                embeds: [DiscordEmbeds.getEmbed({
+                    color: Constants.COLOR_SETTINGS,
+                    title: client.intlGet(guild.id, setting.titleId),
+                    thumbnail: `attachment://settings_logo.png`
+                })],
+                components: [setting.getButton(guild.id, setting.enabled)],
+                files: [new Discord.AttachmentBuilder(
+                    Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+            });
+        }
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'errorCap'),
+            `Could not add the information channel settings: ${e}. Use /reset settings instead.`, 'warn');
+    }
+}
+
+/*
+    A section can be disabled while the bot is not connected to a server. In that case the periodic information
+    handler never runs, so remove the message here on startup instead.
+*/
+async function removeDisabledInformationMessages(client, guild) {
+    const instance = client.getInstance(guild.id);
+
+    if (!instance.generalSettings.displayInformationEventInformation) {
+        await DiscordMessages.deleteInformationMessage(guild.id, 'event');
+    }
+
+    if (!instance.generalSettings.displayInformationMonumentInformation) {
+        await DiscordMessages.deleteInformationMessage(guild.id, 'monument');
     }
 }

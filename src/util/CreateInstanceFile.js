@@ -54,7 +54,8 @@ module.exports = (client, guild) => {
                 server: null,
                 event: null,
                 team: null,
-                battlemetricsPlayers: null
+                battlemetricsPlayers: null,
+                monument: null
             },
             activeServer: null,
             serverList: {},
@@ -161,7 +162,8 @@ module.exports = (client, guild) => {
                 server: null,
                 event: null,
                 team: null,
-                battlemetricsPlayers: null
+                battlemetricsPlayers: null,
+                monument: null
             }
         }
         else {
@@ -169,8 +171,9 @@ module.exports = (client, guild) => {
             if (!instance.informationMessageId.hasOwnProperty('server')) instance.informationMessageId.server = null;
             if (!instance.informationMessageId.hasOwnProperty('event')) instance.informationMessageId.event = null;
             if (!instance.informationMessageId.hasOwnProperty('team')) instance.informationMessageId.team = null;
-            if (!instance.informationMessageId.hasOwnProperty('team'))
+            if (!instance.informationMessageId.hasOwnProperty('battlemetricsPlayers'))
                 instance.informationMessageId.battlemetricsPlayers = null;
+            if (!instance.informationMessageId.hasOwnProperty('monument')) instance.informationMessageId.monument = null;
         }
 
         if (!instance.hasOwnProperty('activeServer')) instance.activeServer = null;

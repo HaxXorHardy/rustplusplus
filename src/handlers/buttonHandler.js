@@ -340,6 +340,62 @@ module.exports = async (client, interaction) => {
                 instance.generalSettings.displayInformationBattlemetricsAllOnlinePlayers)]
         });
     }
+    else if (interaction.customId === 'DisplayInformationEventInformation') {
+        instance.generalSettings.displayInformationEventInformation =
+            !instance.generalSettings.displayInformationEventInformation;
+        client.setInstance(guildId, instance);
+
+        if (rustplus) rustplus.generalSettings.displayInformationEventInformation =
+            instance.generalSettings.displayInformationEventInformation;
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.displayInformationEventInformation}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getDisplayInformationEventInformationButton(guildId,
+                instance.generalSettings.displayInformationEventInformation)]
+        });
+
+        if (instance.generalSettings.displayInformationEventInformation) {
+            if (rustplus && rustplus.isOperational) {
+                await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
+                await DiscordMessages.ensureInformationMessageOrder(rustplus);
+            }
+        }
+        else {
+            await DiscordMessages.deleteInformationMessage(guildId, 'event');
+        }
+    }
+    else if (interaction.customId === 'DisplayInformationMonumentInformation') {
+        instance.generalSettings.displayInformationMonumentInformation =
+            !instance.generalSettings.displayInformationMonumentInformation;
+        client.setInstance(guildId, instance);
+
+        if (rustplus) rustplus.generalSettings.displayInformationMonumentInformation =
+            instance.generalSettings.displayInformationMonumentInformation;
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.displayInformationMonumentInformation}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getDisplayInformationMonumentInformationButton(guildId,
+                instance.generalSettings.displayInformationMonumentInformation)]
+        });
+
+        if (instance.generalSettings.displayInformationMonumentInformation) {
+            if (rustplus && rustplus.isOperational) {
+                await DiscordMessages.sendUpdateMonumentInformationMessage(rustplus);
+                await DiscordMessages.ensureInformationMessageOrder(rustplus);
+            }
+        }
+        else {
+            await DiscordMessages.deleteInformationMessage(guildId, 'monument');
+        }
+    }
     else if (interaction.customId === 'BattlemetricsServerNameChanges') {
         instance.generalSettings.battlemetricsServerNameChanges =
             !instance.generalSettings.battlemetricsServerNameChanges;

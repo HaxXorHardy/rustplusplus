@@ -170,15 +170,19 @@ module.exports = {
     deleteMessageById: async function (guildId, channelId, messageId) {
         const message = await module.exports.getMessageById(guildId, channelId, messageId);
 
+        /* If the message is already gone there is nothing left to delete. */
+        if (!message) return true;
+
         try {
             await message.delete();
+            return true;
         }
         catch (e) {
             Client.client.log(Client.client.intlGet(null, 'errorCap'),
                 Client.client.intlGet(null, 'couldNotDeleteMessage', { message: messageId }), 'error');
 
+            return false;
         }
-        return undefined;
     },
 
     addCategory: async function (guildId, name, permissionOverwrites = null) {

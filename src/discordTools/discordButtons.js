@@ -546,6 +546,28 @@ module.exports = {
             }));
     },
 
+    getDisplayInformationEventInformationButton: function (guildId, enabled) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                customId: 'DisplayInformationEventInformation',
+                label: enabled ?
+                    Client.client.intlGet(guildId, 'enabledCap') :
+                    Client.client.intlGet(guildId, 'disabledCap'),
+                style: enabled ? SUCCESS : DANGER
+            }));
+    },
+
+    getDisplayInformationMonumentInformationButton: function (guildId, enabled) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                customId: 'DisplayInformationMonumentInformation',
+                label: enabled ?
+                    Client.client.intlGet(guildId, 'enabledCap') :
+                    Client.client.intlGet(guildId, 'disabledCap'),
+                style: enabled ? SUCCESS : DANGER
+            }));
+    },
+
     getSubscribeToChangesBattlemetricsButtons: function (guildId) {
         const instance = Client.client.getInstance(guildId);
 

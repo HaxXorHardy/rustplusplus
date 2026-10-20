@@ -417,6 +417,19 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.teamchat);
     },
 
+    deleteInformationMessage: async function (guildId, messageType) {
+        const instance = Client.client.getInstance(guildId);
+        const messageId = instance.informationMessageId[messageType];
+
+        if (!messageId) return;
+
+        const deleted = await DiscordTools.deleteMessageById(guildId, instance.channelId.information, messageId);
+        if (!deleted) return;
+
+        instance.informationMessageId[messageType] = null;
+        Client.client.setInstance(guildId, instance);
+    },
+
     sendUpdateMapInformationMessage: async function (rustplus) {
         const instance = Client.client.getInstance(rustplus.guildId);
 
@@ -472,6 +485,25 @@ module.exports = {
         }
     },
 
+    sendUpdateMonumentInformationMessage: async function (rustplus) {
+        const instance = Client.client.getInstance(rustplus.guildId);
+
+        const content = {
+            embeds: [DiscordEmbeds.getUpdateMonumentInformationEmbed(rustplus)],
+            files: [new Discord.AttachmentBuilder(
+                Path.join(__dirname, '..', 'resources/images/monument_info_logo.png')
+            )]
+        }
+
+        const message = await module.exports.sendMessage(rustplus.guildId, content,
+            instance.informationMessageId.monument, instance.channelId.information);
+
+        if (message.id !== instance.informationMessageId.monument) {
+            instance.informationMessageId.monument = message.id;
+            Client.client.setInstance(rustplus.guildId, instance);
+        }
+    },
+
     sendUpdateTeamInformationMessage: async function (rustplus) {
         const instance = Client.client.getInstance(rustplus.guildId);
 
@@ -504,6 +536,104 @@ module.exports = {
         if (message.id !== instance.informationMessageId.battlemetricsPlayers) {
             instance.informationMessageId.battlemetricsPlayers = message.id;
             Client.client.setInstance(rustplus.guildId, instance);
+        }
+    },
+
+    /*
+        Discord messages can only be appended to a channel, they cannot be moved. If the information messages are
+        out of order (for example because a section was enabled later on), remove them and create them again in
+        the wanted order. The Map message is kept when it is already the first message.
+    */
+    ensureInformationMessageOrder: async function (rustplus) {
+        const instance = Client.client.getInstance(rustplus.guildId);
+        const channel = DiscordTools.getTextChannelById(rustplus.guildId, instance.channelId.information);
+        if (!channel) return;
+
+        const order = ['map', 'server', 'monument', 'event', 'team', 'battlemetricsPlayers'];
+
+        let messages = null;
+        try {
+            messages = await channel.messages.fetch({ limit: 100 });
+        }
+        catch (e) {
+            return;
+        }
+
+        const positions = new Object();
+        Array.from(messages.values())
+            .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+            .forEach((message, index) => { positions[message.id] = index; });
+
+        /*
+            Remove information messages that are not tracked anymore, for example duplicates that were created by an
+            earlier race condition. Only messages written by the bot with one of the section titles are considered.
+        */
+        const trackedIds = Object.values(instance.informationMessageId).filter(messageId => messageId !== null);
+        const sectionTitles = [
+            Client.client.intlGet(rustplus.guildId, 'serverInfo'),
+            Client.client.intlGet(rustplus.guildId, 'monumentInformation'),
+            Client.client.intlGet(rustplus.guildId, 'eventInfo'),
+            Client.client.intlGet(rustplus.guildId, 'teamMemberInfo'),
+            Client.client.intlGet(rustplus.guildId, 'battlemetricsOnlinePlayers')
+        ];
+
+        if (Client.client.user) {
+            for (const message of messages.values()) {
+                if (message.author.id !== Client.client.user.id) continue;
+                if (trackedIds.includes(message.id)) continue;
+                if (message.embeds.length === 0) continue;
+                if (!sectionTitles.includes(message.embeds[0].title)) continue;
+
+                await message.delete().catch(() => undefined);
+            }
+        }
+
+        let previousPosition = -1;
+        let firstSectionType = null;
+        let isOrdered = true;
+
+        for (const type of order) {
+            const messageId = instance.informationMessageId[type];
+            if (!messageId || !positions.hasOwnProperty(messageId)) continue;
+
+            if (firstSectionType === null) firstSectionType = type;
+            if (positions[messageId] < previousPosition) isOrdered = false;
+
+            previousPosition = positions[messageId];
+        }
+
+        if (isOrdered) return;
+
+        const keepMap = (firstSectionType === 'map');
+
+        for (const type of order) {
+            if (keepMap && type === 'map') continue;
+            await informationMessageOperationsUnlocked.deleteInformationMessage(rustplus.guildId, type);
+        }
+
+        if (!keepMap) {
+            await informationMessageOperationsUnlocked.sendUpdateMapInformationMessage(rustplus);
+        }
+
+        await informationMessageOperationsUnlocked.sendUpdateServerInformationMessage(rustplus);
+
+        if (instance.generalSettings.displayInformationMonumentInformation) {
+            await informationMessageOperationsUnlocked.sendUpdateMonumentInformationMessage(rustplus);
+        }
+
+        if (instance.generalSettings.displayInformationEventInformation) {
+            await informationMessageOperationsUnlocked.sendUpdateEventInformationMessage(rustplus);
+        }
+
+        await informationMessageOperationsUnlocked.sendUpdateTeamInformationMessage(rustplus);
+
+        const server = (instance.activeServer !== null) ? instance.serverList[instance.activeServer] : null;
+        const battlemetricsId = (server !== null) ? server.battlemetricsId : null;
+        if (instance.generalSettings.displayInformationBattlemetricsAllOnlinePlayers &&
+            battlemetricsId !== null && battlemetricsId !== undefined &&
+            Client.client.battlemetricsInstances.hasOwnProperty(battlemetricsId)) {
+            await informationMessageOperationsUnlocked.sendUpdateBattlemetricsOnlinePlayersInformationMessage(
+                rustplus, battlemetricsId);
         }
     },
 
@@ -622,4 +752,53 @@ module.exports = {
 
         await Client.client.interactionEditReply(interaction, content);
     },
+}
+
+/*
+    Every information channel message is created, edited and deleted through the functions above and they all read
+    and write the same message ids in the instance. Running them concurrently (for example when two toggles are
+    clicked right after each other, or when a toggle is clicked while the information cycle runs) can therefore
+    create duplicate messages. Serialize these operations per guild to prevent that.
+*/
+const informationMessageQueues = new Object();
+const informationMessageOperationsUnlocked = new Object();
+
+function queueInformationMessageOperation(guildId, operation) {
+    const previous = informationMessageQueues[guildId] || Promise.resolve();
+
+    const current = previous
+        .catch(() => undefined)
+        .then(operation);
+
+    informationMessageQueues[guildId] = current.catch(() => undefined);
+
+    return current;
+}
+
+const informationMessageOperations = [
+    'sendInformationMapMessage',
+    'sendUpdateMapInformationMessage',
+    'sendUpdateServerInformationMessage',
+    'sendUpdateEventInformationMessage',
+    'sendUpdateMonumentInformationMessage',
+    'sendUpdateTeamInformationMessage',
+    'sendUpdateBattlemetricsOnlinePlayersInformationMessage',
+    'deleteInformationMessage',
+    'ensureInformationMessageOrder'
+];
+
+for (const operation of informationMessageOperations) {
+    if (typeof module.exports[operation] !== 'function') continue;
+
+    informationMessageOperationsUnlocked[operation] = module.exports[operation];
+
+    module.exports[operation] = async function (...args) {
+        const guildId = (typeof args[0] === 'string') ? args[0] : (args[0] ? args[0].guildId : null);
+
+        /* Without a guild there is nothing to serialize. */
+        if (guildId === null) return informationMessageOperationsUnlocked[operation].apply(module.exports, args);
+
+        return queueInformationMessageOperation(guildId, () =>
+            informationMessageOperationsUnlocked[operation].apply(module.exports, args));
+    };
 }

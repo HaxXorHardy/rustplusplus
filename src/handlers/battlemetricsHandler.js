@@ -21,7 +21,6 @@
 const Constants = require('../util/constants.js');
 const Config = require('../../config');
 const DiscordMessages = require('../discordTools/discordMessages.js');
-const DiscordTools = require('../discordTools/discordTools.js');
 const Scrape = require('../util/scrape.js');
 
 module.exports = {
@@ -60,13 +59,7 @@ module.exports = {
                 await DiscordMessages.sendUpdateBattlemetricsOnlinePlayersInformationMessage(rustplus, bmId);
             }
             else {
-                if (instance.informationMessageId.battlemetricsPlayers !== null) {
-                    await DiscordTools.deleteMessageById(guildId, instance.channelId.information,
-                        instance.informationMessageId.battlemetricsPlayers);
-
-                    instance.informationMessageId.battlemetricsPlayers = null;
-                    client.setInstance(guildId, instance);
-                }
+                await DiscordMessages.deleteInformationMessage(guildId, 'battlemetricsPlayers');
             }
 
             for (const [trackerId, content] of Object.entries(instance.trackers)) {

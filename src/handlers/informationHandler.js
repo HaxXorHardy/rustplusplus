@@ -36,10 +36,27 @@ async function warmTeamTimePlayed(rustplus) {
 module.exports = {
     handler: async function (rustplus) {
         if (rustplus.informationIntervalCounter === 0) {
+            const instance = Client.client.getInstance(rustplus.guildId);
+
             await DiscordMessages.sendUpdateServerInformationMessage(rustplus);
-            await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
+
+            if (instance.generalSettings.displayInformationMonumentInformation) {
+                await DiscordMessages.sendUpdateMonumentInformationMessage(rustplus);
+            }
+            else {
+                await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'monument');
+            }
+
+            if (instance.generalSettings.displayInformationEventInformation) {
+                await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
+            }
+            else {
+                await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'event');
+            }
+
             await warmTeamTimePlayed(rustplus);
             await DiscordMessages.sendUpdateTeamInformationMessage(rustplus);
+            await DiscordMessages.ensureInformationMessageOrder(rustplus);
         }
 
         if (rustplus.informationIntervalCounter === 5) {

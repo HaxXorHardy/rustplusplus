@@ -3298,6 +3298,36 @@ class RustPlus extends RustPlusLib {
             respawnMax: Timer.secondsToFullScale(respawnMaxSeconds, 's')
         });
     }
+
+    /* Returns the monuments of the map grouped by name, e.g. Oxum's Gas Station: 2x at G3, J17. */
+    getMonumentInformation() {
+        if (this.map === null || this.info === null || !this.map.monuments) return [];
+
+        const mapSize = this.info.correctedMapSize;
+        const monuments = new Object();
+
+        for (const monument of this.map.monuments) {
+            if (monument.token === 'DungeonBase') continue;
+            if (!Object.prototype.hasOwnProperty.call(this.map.monumentInfo, monument.token)) continue;
+
+            const name = this.map.monumentInfo[monument.token].clean;
+            if (name === '') continue;
+
+            if (!monuments.hasOwnProperty(name)) {
+                monuments[name] = { name: name, count: 0, grids: [] };
+            }
+
+            const grid = Map.getGridPos(monument.x, monument.y, mapSize);
+            if (grid !== null && !monuments[name].grids.includes(grid)) {
+                monuments[name].grids.push(grid);
+            }
+
+            monuments[name].count += 1;
+        }
+
+        return Object.values(monuments).sort((a, b) =>
+            (b.count - a.count) || a.name.localeCompare(b.name));
+    }
 }
 
 module.exports = RustPlus;

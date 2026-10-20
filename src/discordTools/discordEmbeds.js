@@ -794,6 +794,54 @@ module.exports = {
         });
     },
 
+    getUpdateMonumentInformationEmbed: function (rustplus) {
+        const guildId = rustplus.guildId;
+        const instance = Client.client.getInstance(guildId);
+
+        const monuments = rustplus.getMonumentInformation();
+        const nameMaxLength = 21;
+        const maxLineLength = 40;
+        const codeBlock = '```';
+
+        let table = '';
+        for (const monument of monuments) {
+            const count = `${monument.count}x`;
+            const name = monument.name.length <= nameMaxLength ? monument.name :
+                monument.name.substring(0, nameMaxLength - 2).trimEnd() + '..';
+            const prefix = `${name.padEnd(nameMaxLength)} ${count.padEnd(3)} `;
+            const grids = monument.grids.length !== 0 ? monument.grids : ['-'];
+
+            let line = prefix;
+            for (const grid of grids) {
+                if (line !== prefix && (line.length + 1 + grid.length) > maxLineLength) {
+                    table += `${line}\n`;
+                    line = `${' '.repeat(prefix.length)}${grid}`;
+                }
+                else {
+                    line += `${line === prefix ? '' : ' '}${grid}`;
+                }
+            }
+
+            const row = `${line}\n`;
+
+            if (table.length + row.length >= (Constants.EMBED_MAX_DESCRIPTION_CHARACTERS -
+                codeBlock.length * 2 - 2)) {
+                break;
+            }
+
+            table += row;
+        }
+
+        return module.exports.getEmbed({
+            title: Client.client.intlGet(guildId, 'monumentInformation'),
+            color: Constants.COLOR_DEFAULT,
+            thumbnail: 'attachment://monument_info_logo.png',
+            description: `${codeBlock}\n${table !== '' ? table.trimEnd() :
+                Client.client.intlGet(guildId, 'empty')}\n${codeBlock}`,
+            footer: { text: instance.serverList[rustplus.serverId].title }
+        });
+    },
+
     getUpdateTeamInformationEmbed: function (rustplus) {
         const guildId = rustplus.guildId;
         const instance = Client.client.getInstance(guildId);
