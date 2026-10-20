@@ -313,7 +313,7 @@ module.exports = {
         }
     },
 
-    getDiscordFormattedDate: function (unixtime) {
-        return `<t:${unixtime}:d>`;
+    getDiscordFormattedDate: function (unixtime, format = 'd') {
+        return `<t:${unixtime}:${format}>`;
     },
 }

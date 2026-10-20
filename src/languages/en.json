@@ -339,6 +339,7 @@
     "credentialsExpired": "Your FCM Credentials for steamId `{steamId}` expired on {date}. FCM notifications (pairing, smart alarms, deaths, ...) will no longer work until you refresh your credentials.",
     "credentialsExpiredNotified": "Notified discord user {discordUserId} that FCM Credentials for steamId: {steamId} have expired.",
     "credentialsExpiredTitle": "FCM Credentials Expired",
+    "credentialsExpires": "Expires",
     "credentialsExpiringSoon": "Your FCM Credentials for steamId `{steamId}` will expire on {date}. Please refresh your credentials to keep the bot working.",
     "credentialsExpiringSoonNotified": "Notified discord user {discordUserId} that FCM Credentials for steamId: {steamId} are about to expire.",
     "credentialsExpiringSoonTitle": "FCM Credentials Expiring Soon",
