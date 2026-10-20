@@ -19,7 +19,7 @@
 
 ## Information Channel
 
-> The Information Channel present information about the currently connected Rust Server. It is split up into four sections, `The Map`, `Server Information`, `Event Information` and `Team Member Information` (See below).
+> The Information Channel present information about the currently connected Rust Server. It is split up into five sections, `The Map`, `Server Information`, `Event Information`, `Monument Information` and `Team Member Information` (See below). The sections are ordered from top to bottom as `The Map`, `Server Information`, `Monument Information`, `Event Information`, `Team Member Information` and `Battlemetrics Online Players`; when a section is enabled later on, the bot recreates the sections in that order automatically.
 
 **The Map** is simple an image of the Rust Server Map.
 <br>
@@ -44,11 +44,16 @@
 - Chinookk 47
 <br>
 
+**Monument Information** shows a table of all monuments on the map with how many there are and which grid they are located in, for example `Oxum's Gas Station  2x  G3, J17`.
+<br>
+
 **Team Member Information** shows the entire team. Whos online/offline/afk/alive/dead, location, leader and paired.
 
 ![Discord Text Channel Information](images/channels/information_channel.png)
 
 **Battlemetrics Online Players** shows all online players on the server.
+
+> The `Event Information` and `Monument Information` sections can individually be enabled/disabled with the `Should event information be displayed in the information channel?` and `Should monument information be displayed in the information channel?` settings in the [Settings Channel](discord_text_channels.md#settings-channel).
 
 
 ## Servers Channel
