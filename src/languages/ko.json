@@ -333,6 +333,7 @@
     "credentialsExpired": "steamId `{steamId}`에 대한 FCM 자격 증명이 {date}에 만료되었습니다. 자격 증명을 갱신할 때까지 FCM 알림(페어링, 스마트 알람, 사망 알림 등)이 더 이상 작동하지 않습니다.",
     "credentialsExpiredNotified": "steamId: {steamId}에 대한 FCM 자격 증명이 만료되었음을 디스코드 사용자 {discordUserId}에게 알렸습니다.",
     "credentialsExpiredTitle": "FCM 자격 증명 만료됨",
+    "credentialsExpires": "만료일",
     "credentialsExpiringSoon": "steamId `{steamId}`에 대한 FCM 자격 증명은 {date}에 만료됩니다. 봇이 계속 작동하도록 자격 증명을 갱신해 주세요.",
     "credentialsExpiringSoonNotified": "Discord 사용자 {discordUserId}에게 steamId: {steamId}에 대한 FCM 자격 증명이 곧 만료될 예정임을 알렸습니다.",
     "credentialsExpiringSoonTitle": "FCM 자격 증명이 곧 만료됩니다",

@@ -333,6 +333,7 @@
     "credentialsExpired": "Twoje dane uwierzytelniające FCM dla identyfikatora steamId `{steamId}` straciły ważność w dniu {date}. Powiadomienia FCM (parowanie, inteligentne alarmy, zgony itp.) nie będą działać do momentu odświeżenia danych uwierzytelniających.",
     "credentialsExpiredNotified": "Powiadomiono użytkownika Discorda {discordUserId}, że po upływie ważności wygasły poświadczenia FCM dla identyfikatora Steam: {steamId}.",
     "credentialsExpiredTitle": "Wygasły poświadczenia FCM",
+    "credentialsExpires": "Wygasanie",
     "credentialsExpiringSoon": "Twoje dane uwierzytelniające FCM dla identyfikatora steamId `{steamId}` wygasną w dniu {date}. Odśwież swoje dane uwierzytelniające, aby bot nadal działał.",
     "credentialsExpiringSoonNotified": "Powiadomiono użytkownika Discorda {discordUserId}, że dane uwierzytelniające FCM dla identyfikatora Steam: {steamId} wkrótce wygasną.",
     "credentialsExpiringSoonTitle": "Wkrótce wygasną poświadczenia FCM",

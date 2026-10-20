@@ -333,6 +333,7 @@
     "credentialsExpired": "Dina FCM-autentiseringsuppgifter för steamId `{steamId}` löpte ut den {date}. FCM-aviseringar (parning, smarta larm, dödsfall, ...) kommer inte längre att fungera förrän du uppdaterar dina autentiseringsuppgifter.",
     "credentialsExpiredNotified": "Meddelade Discord-användaren {discordUserId} att FCM-autentiseringsuppgifterna för steamId: {steamId} har gått ut.",
     "credentialsExpiredTitle": "FCM-inloggningsuppgifterna har gått ut",
+    "credentialsExpires": "Giltighetstid",
     "credentialsExpiringSoon": "Dina FCM-inloggningsuppgifter för steamId `{steamId}` löper ut den {date}. Uppdatera dina inloggningsuppgifter för att boten ska fortsätta fungera.",
     "credentialsExpiringSoonNotified": "Meddelade Discord-användaren {discordUserId} att FCM-autentiseringsuppgifterna för steamId: {steamId} snart löper ut.",
     "credentialsExpiringSoonTitle": "FCM-autentiseringsuppgifterna går snart ut",

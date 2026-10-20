@@ -333,6 +333,7 @@
     "credentialsExpired": "Deine FCM-Anmeldedaten für die Steam-ID `{steamId}` sind am {date} abgelaufen. FCM-Benachrichtigungen (Kopplung, Smart Alarms, Todesfälle, …) funktionieren erst wieder, wenn du deine Anmeldedaten aktualisierst.",
     "credentialsExpiredNotified": "Der Discord-Nutzer {discordUserId} wurde darüber informiert, dass die FCM-Anmeldedaten für die Steam-ID: {steamId} abgelaufen sind.",
     "credentialsExpiredTitle": "FCM-Anmeldedaten abgelaufen",
+    "credentialsExpires": "Ablaufdatum",
     "credentialsExpiringSoon": "Deine FCM-Anmeldedaten für die Steam-ID `{steamId}` laufen am {date} ab. Bitte aktualisiere deine Anmeldedaten, damit der Bot weiterhin funktioniert.",
     "credentialsExpiringSoonNotified": "Der Discord-Nutzer {discordUserId} wurde darüber informiert, dass die FCM-Anmeldedaten für die Steam-ID: {steamId} bald ablaufen.",
     "credentialsExpiringSoonTitle": "FCM-Anmeldedaten laufen bald ab",
