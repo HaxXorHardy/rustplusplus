@@ -21,8 +21,8 @@
 const Fs = require('fs');
 const Path = require('path');
 
-const RustlabsStaticStorage = require('./RustlabsStaticStorage');
-const getStaticFilesStorage = require('./getStaticFilesStorage');
+const RustlabsStaticStorage = require('./storage/RustlabsStaticStorage.js');
+const getStaticFilesStorage = require('./storage/getStaticFilesStorage.js');
 
 let htmlReservedSymbols = null;
 

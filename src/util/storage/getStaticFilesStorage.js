@@ -1,4 +1,4 @@
-const RustlabsStaticStorage = require('./RustlabsStaticStorage');
+const RustlabsStaticStorage = require('./RustlabsStaticStorage.js');
 
 let staticFilesStorage = null;
 

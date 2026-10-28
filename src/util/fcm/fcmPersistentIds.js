@@ -18,7 +18,7 @@
 
 */
 
-const getRuntimeDataStorage = require('./getRuntimeDataStorage');
+const getRuntimeDataStorage = require('../storage/getRuntimeDataStorage.js');
 
 /* Namespace used to store the fcm state inside the runtime data storage. */
 const STATE_NAMESPACE = 'fcm';

@@ -130,7 +130,7 @@ module.exports = {
 
         if (instance.channelId.category === null) return;
 
-        const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
+        const category = DiscordTools.getCategoryById(guild.id, instance.channelId.category);
         if (category) {
             const perms = module.exports.getPermissionsReset(client, guild);
             await setPermissionOverwrites(client, category, perms);

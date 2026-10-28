@@ -98,7 +98,7 @@ class RustlabsStaticStorage {
     }
 
     static getProjectRootPath() {
-        return Path.join(__dirname, '..', '..');
+        return Path.join(__dirname, '..', '..', '..');
     }
 
     static getDefaultDataPath() {

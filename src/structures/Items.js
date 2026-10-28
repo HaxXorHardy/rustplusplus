@@ -18,7 +18,7 @@
 
 */
 
-const getStaticFilesStorage = require('../util/getStaticFilesStorage');
+const getStaticFilesStorage = require('../util/storage/getStaticFilesStorage.js');
 const Utils = require('../util/utils.js');
 
 class Items {

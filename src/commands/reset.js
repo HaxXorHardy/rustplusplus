@@ -49,7 +49,7 @@ async function setCategoryPermissions(client, category, permissions) {
 }
 
 async function resetCategoryPermissions(client, guild, instance) {
-    const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
+    const category = DiscordTools.getCategoryById(guild.id, instance.channelId.category);
     await setCategoryPermissions(client, category, PermissionHandler.getPermissionsRemoved(client, guild));
 }
 

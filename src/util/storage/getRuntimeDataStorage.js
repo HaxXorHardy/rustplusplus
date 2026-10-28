@@ -1,4 +1,4 @@
-const RuntimeDataStorage = require('./RuntimeDataStorage');
+const RuntimeDataStorage = require('./RuntimeDataStorage.js');
 
 let runtimeDataStorage = null;
 

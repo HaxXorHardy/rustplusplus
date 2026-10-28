@@ -35,7 +35,7 @@ const TABLE_NAME = 'runtime_server_state';
 
 class RuntimeDataStorage {
     constructor(options = {}) {
-        this.dataPath = options.dataPath ?? Path.join(__dirname, '..', '..', 'data');
+        this.dataPath = options.dataPath ?? Path.join(__dirname, '..', '..', '..', 'data');
         this.databasePath = options.databasePath ?? Path.join(this.dataPath, DATABASE_FILE_NAME);
 
         this.db = null;
