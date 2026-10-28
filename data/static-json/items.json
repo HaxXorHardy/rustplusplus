@@ -194,6 +194,11 @@
         "name": "Black Berry Clone",
         "description": "A clipping of a Black Berry Plant."
     },
+    "139776459": {
+        "shortname": "halloween.string.lights",
+        "name": "Halloween String Lights",
+        "description": "Spooky Halloween string lights for your base. Part of the Spooky Decor Bundle."
+    },
     "140006625": {
         "shortname": "ptz.cctv.camera",
         "name": "PTZ CCTV Camera",
@@ -1624,6 +1629,11 @@
         "name": "AND Switch",
         "description": "A logic gate that allows electrical passthrough if BOTH inputs receives power, passthrough amount is the greater of either power source"
     },
+    "1174330346": {
+        "shortname": "halloweenwreath",
+        "name": "Halloween Wreath",
+        "description": "A spooky Halloween Wreath for the doors in your base. Part of the Spooky Decor Bundle."
+    },
     "1174484438": {
         "shortname": "mini fridge",
         "name": "Mini Fridge",
@@ -2919,6 +2929,11 @@
         "name": "Spoiled Pork Meat",
         "description": "Spoiled Pork Meat. Consuming will damage your health."
     },
+    "1930628359": {
+        "shortname": "alien.costume",
+        "name": "Alien Costume",
+        "description": "An inflatable alien costume. Acting as a replacement for wooden pants, you can equip this item to look as silly as possible. Three varieties."
+    },
     "1931713481": {
         "shortname": "black.raspberries",
         "name": "Black Raspberries",
@@ -3907,6 +3922,11 @@
     "-1800102806": {
         "shortname": "discord.plushie",
         "name": "Wumpus Plush",
+        "description": "Exclusive to the Rust Shop on Discord!"
+    },
+    "-570638754": {
+        "shortname": "discord.zombie.plushie",
+        "name": "Zombie Wumpus Plush",
         "description": "Exclusive to the Rust Shop on Discord!"
     },
     "-113413047": {
@@ -6098,6 +6118,11 @@
         "shortname": "tunalight",
         "name": "Tuna Can Lamp",
         "description": "A makeshift wall light. Still smells faintly of fish."
+    },
+    "-1716340729": {
+        "shortname": "tunalight.skull",
+        "name": "Skull Wall Lamp",
+        "description": "Turn your enemies into something useful with this tasteful lamp."
     },
     "-1569700847": {
         "shortname": "twitch.headset",
