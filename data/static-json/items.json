@@ -5859,6 +5859,11 @@
         "name": "Small Oil Refinery",
         "description": "A small refinery which can produce Low Grade Fuel from Crude Oil."
     },
+    "-158718378": {
+        "shortname": "small_ramp",
+        "name": "Small Ramp",
+        "description": "Deployable wooden ramp cobbled together from recycled doors, probably sturdy enough. Unfolds for boarding enemy vessels."
+    },
     "-2058362263": {
         "shortname": "smallcandles",
         "name": "Small Candle Set",
@@ -5873,11 +5878,6 @@
         "shortname": "smallwaterbottle",
         "name": "Small Water Bottle",
         "description": "A Small Water Bottle. Left click to drink, right click to fill from water sources, or to pour out."
-    },
-    "-158718378": {
-        "shortname": "small_ramp",
-        "name": "Small Ramp",
-        "description": "Deployable wooden ramp cobbled together from recycled doors, probably sturdy enough. Unfolds for boarding enemy vessels."
     },
     "-695978112": {
         "shortname": "smart.alarm",
@@ -5999,11 +5999,6 @@
         "name": "Stones",
         "description": "Harvested from rocks using tools, basic building material."
     },
-    "-1049172752": {
-        "shortname": "storageadaptor",
-        "name": "Storage Adaptor",
-        "description": "Attach to a storage container to allow industrial input/output connections."
-    },
     "-258457936": {
         "shortname": "storage_barrel_a",
         "name": "Unused Storage Barrel Vertical",
@@ -6013,6 +6008,11 @@
         "shortname": "storage_barrel_c",
         "name": "Storage Barrel Horizontal",
         "description": "Keep your things in this wooden barrel. Stores up to 48 items. Cannot be locked."
+    },
+    "-1049172752": {
+        "shortname": "storageadaptor",
+        "name": "Storage Adaptor",
+        "description": "Attach to a storage container to allow industrial input/output connections."
     },
     "-1671551935": {
         "shortname": "submarine.torpedo.straight",

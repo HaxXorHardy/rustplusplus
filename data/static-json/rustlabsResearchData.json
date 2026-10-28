@@ -612,7 +612,7 @@
     }
   },
   "1143376304": {
-    "researchTable": null,
+    "researchTable": 30,
     "workbench": {
       "type": "1524187186",
       "scrap": 30,
@@ -1448,7 +1448,7 @@
     "workbench": null
   },
   "-1814195745": {
-    "researchTable": null,
+    "researchTable": 15,
     "workbench": {
       "type": "1524187186",
       "scrap": 15,

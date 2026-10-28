@@ -1773,6 +1773,82 @@
       ]
     }
   },
+  "139776459": {
+    "recycler": {
+      "efficiency": "0.5",
+      "yield": [
+        {
+          "id": "69511070",
+          "probability": 1,
+          "quantity": 12
+        },
+        {
+          "id": "-946369541",
+          "probability": 1,
+          "quantity": 10
+        },
+        {
+          "id": "69511070",
+          "probability": 0.5,
+          "quantity": 1
+        }
+      ]
+    },
+    "shredder": {
+      "efficiency": null,
+      "yield": []
+    },
+    "safe-zone-recycler": {
+      "efficiency": "0.4",
+      "yield": [
+        {
+          "id": "69511070",
+          "probability": 1,
+          "quantity": 10
+        },
+        {
+          "id": "-946369541",
+          "probability": 1,
+          "quantity": 8
+        }
+      ]
+    },
+    "red-power-plant-recycler": {
+      "efficiency": "0.75",
+      "yield": [
+        {
+          "id": "69511070",
+          "probability": 1,
+          "quantity": 18
+        },
+        {
+          "id": "-946369541",
+          "probability": 1,
+          "quantity": 15
+        },
+        {
+          "id": "69511070",
+          "probability": 0.75,
+          "quantity": 1
+        }
+      ]
+    },
+    "charged-green-recycler": {
+      "efficiency": "0.6",
+      "yield": [
+        {
+          "id": "69511070",
+          "probability": 1,
+          "quantity": 15
+        },
+        {
+          "id": "-946369541",
+          "probability": 1,
+          "quantity": 12
+        }
+      ]
+    }
+  },
   "140006625": {
     "recycler": {
       "efficiency": "0.5",
@@ -13392,6 +13468,52 @@
       ]
     }
   },
+  "1174330346": {
+    "recycler": {
+      "efficiency": "0.5",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 10
+        }
+      ]
+    },
+    "shredder": {
+      "efficiency": null,
+      "yield": []
+    },
+    "safe-zone-recycler": {
+      "efficiency": "0.4",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 8
+        }
+      ]
+    },
+    "red-power-plant-recycler": {
+      "efficiency": "0.75",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 15
+        }
+      ]
+    },
+    "charged-green-recycler": {
+      "efficiency": "0.6",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 12
+        }
+      ]
+    }
+  },
   "1174484438": {
     "recycler": {
       "efficiency": "0.5",
@@ -24383,6 +24505,92 @@
           "id": "838308300",
           "probability": 0.2,
           "quantity": 1
+        }
+      ]
+    }
+  },
+  "1930628359": {
+    "recycler": {
+      "efficiency": "0.5",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 7
+        },
+        {
+          "id": "1719978075",
+          "probability": 1,
+          "quantity": 37
+        },
+        {
+          "id": "-858312878",
+          "probability": 0.5,
+          "quantity": 1
+        },
+        {
+          "id": "1719978075",
+          "probability": 0.5,
+          "quantity": 1
+        }
+      ]
+    },
+    "shredder": {
+      "efficiency": null,
+      "yield": []
+    },
+    "safe-zone-recycler": {
+      "efficiency": "0.4",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 6
+        },
+        {
+          "id": "1719978075",
+          "probability": 1,
+          "quantity": 30
+        }
+      ]
+    },
+    "red-power-plant-recycler": {
+      "efficiency": "0.75",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 11
+        },
+        {
+          "id": "1719978075",
+          "probability": 1,
+          "quantity": 56
+        },
+        {
+          "id": "-858312878",
+          "probability": 0.25,
+          "quantity": 1
+        },
+        {
+          "id": "1719978075",
+          "probability": 0.25,
+          "quantity": 1
+        }
+      ]
+    },
+    "charged-green-recycler": {
+      "efficiency": "0.6",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 9
+        },
+        {
+          "id": "1719978075",
+          "probability": 1,
+          "quantity": 45
         }
       ]
     }
@@ -56445,6 +56653,57 @@
       "yield": [
         {
           "id": "1719978075",
+          "probability": 1,
+          "quantity": 30
+        }
+      ]
+    }
+  },
+  "-570638754": {
+    "recycler": {
+      "efficiency": "0.5",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 25
+        }
+      ]
+    },
+    "shredder": {
+      "efficiency": null,
+      "yield": []
+    },
+    "safe-zone-recycler": {
+      "efficiency": "0.4",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 20
+        }
+      ]
+    },
+    "red-power-plant-recycler": {
+      "efficiency": "0.75",
+      "yield": [
+        {
+          "id": "-858312878",
+          "probability": 1,
+          "quantity": 37
+        },
+        {
+          "id": "-858312878",
+          "probability": 0.5,
+          "quantity": 1
+        }
+      ]
+    },
+    "charged-green-recycler": {
+      "efficiency": "0.6",
+      "yield": [
+        {
+          "id": "-858312878",
           "probability": 1,
           "quantity": 30
         }
