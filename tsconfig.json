@@ -5,7 +5,7 @@
     "moduleResolution": "node16",                        /* Specify how TypeScript looks up a file from a given module specifier. Replaces the deprecated 'node'/'node10' resolver. */
     "resolveJsonModule": true,                           /* Enable importing .json files. */
     "allowJs": true,                                     /* Allow JavaScript files to be a part of your program. Use the 'checkJS' option to get errors from these files. */
-    "checkJs": false,                                    /* Enable error reporting in type-checked JavaScript files. */
+    "checkJs": false,                                    /* Enable error reporting in type-checked JavaScript files. See tsconfig.checkjs.json for the staged JS type-check. */
     "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables 'allowSyntheticDefaultImports' for type compatibility. */
     "forceConsistentCasingInFileNames": true,            /* Ensure that casing is correct in imports. */
     "strict": true,                                      /* Enable all strict type-checking options. */
@@ -13,3 +13,4 @@
     "outDir": "./dist",                                  /* Redirect output structure to the directory. */
   }
 }
+

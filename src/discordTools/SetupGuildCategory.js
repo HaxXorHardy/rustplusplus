@@ -26,14 +26,14 @@ module.exports = async (client, guild) => {
     const instance = client.getInstance(guild.id);
     const perms = PermissionHandler.getPermissionsReset(client, guild, false);
 
-    let category = undefined;
+    let category = null;
     if (instance.channelId.category !== null) {
         category = DiscordTools.getCategoryById(guild.id, instance.channelId.category);
         if (category && !botHasChannelPermissions(guild, category)) {
-            category = undefined;
+            category = null;
         }
     }
-    if (category === undefined) {
+    if (category === null) {
         category = await DiscordTools.addCategory(guild.id, 'rustplusplus', perms);
         if (!category) {
             return undefined;

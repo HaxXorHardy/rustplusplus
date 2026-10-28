@@ -1,0 +1,25 @@
+{
+  /* Staged JavaScript type-check. checkJs is enabled only for the modules listed in 'include'; add
+     files here as they gain JSDoc annotations. `npm test` runs this config, so the surface that is
+     type-checked can only grow. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "noEmit": true,
+    /* The checked modules do not carry full JSDoc annotations yet, so implicit any is tolerated while
+       real type mismatches are still reported. Remove this once the files are annotated. */
+    "noImplicitAny": false
+  },
+  "include": [
+    "src/util/utils.js",
+    "src/util/timer.js",
+    "src/util/atomicWriteFile.js",
+    "src/util/responseUtils.js",
+    "src/util/formatLogValue.js",
+    "src/util/trackerInputParser.js",
+    "src/util/fcmPersistentIds.js",
+    "src/util/RuntimeDataStorage.js",
+    "src/util/getRuntimeDataStorage.js",
+    "src/structures/clientRegistry.js"
+  ]
+}

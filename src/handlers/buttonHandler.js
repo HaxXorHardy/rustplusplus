@@ -26,6 +26,14 @@ const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordModals = require('../discordTools/discordModals.js');
 
+/* Notification buttons share one handler: the customId prefix selects which channel flag is toggled.
+   Adding a channel means adding one entry here, not another copy of the toggle block. */
+const NOTIFICATION_BUTTON_PREFIXES = {
+    DiscordNotification: 'discord',
+    InGameNotification: 'inGame',
+    VoiceNotification: 'voice',
+};
+
 module.exports = async (client, interaction) => {
     const instance = client.getInstance(interaction.guildId);
     const guildId = interaction.guildId;
@@ -42,56 +50,22 @@ module.exports = async (client, interaction) => {
         return;
     }
 
-    if (interaction.customId.startsWith('DiscordNotification')) {
-        const ids = JSON.parse(interaction.customId.replace('DiscordNotification', ''));
+    const notificationPrefix = Object.keys(NOTIFICATION_BUTTON_PREFIXES)
+        .find(prefix => interaction.customId.startsWith(prefix));
+
+    if (notificationPrefix) {
+        const field = NOTIFICATION_BUTTON_PREFIXES[notificationPrefix];
+        const ids = JSON.parse(interaction.customId.replace(notificationPrefix, ''));
         const setting = instance.notificationSettings[ids.setting];
 
-        setting.discord = !setting.discord;
+        setting[field] = !setting[field];
         client.setInstance(guildId, instance);
 
-        if (rustplus) rustplus.notificationSettings[ids.setting].discord = setting.discord;
+        if (rustplus) rustplus.notificationSettings[ids.setting][field] = setting[field];
 
         client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
             id: `${verifyId}`,
-            value: `${setting.discord}`
-        }));
-
-        await client.interactionUpdate(interaction, {
-            components: [DiscordButtons.getNotificationButtons(
-                guildId, ids.setting, setting.discord, setting.inGame, setting.voice)]
-        });
-    }
-    else if (interaction.customId.startsWith('InGameNotification')) {
-        const ids = JSON.parse(interaction.customId.replace('InGameNotification', ''));
-        const setting = instance.notificationSettings[ids.setting];
-
-        setting.inGame = !setting.inGame;
-        client.setInstance(guildId, instance);
-
-        if (rustplus) rustplus.notificationSettings[ids.setting].inGame = setting.inGame;
-
-        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
-            id: `${verifyId}`,
-            value: `${setting.inGame}`
-        }));
-
-        await client.interactionUpdate(interaction, {
-            components: [DiscordButtons.getNotificationButtons(
-                guildId, ids.setting, setting.discord, setting.inGame, setting.voice)]
-        });
-    }
-    else if (interaction.customId.startsWith('VoiceNotification')) {
-        const ids = JSON.parse(interaction.customId.replace('VoiceNotification', ''));
-        const setting = instance.notificationSettings[ids.setting];
-
-        setting.voice = !setting.voice;
-        client.setInstance(guildId, instance);
-
-        if (rustplus) rustplus.notificationSettings[ids.setting].voice = setting.voice;
-
-        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
-            id: `${verifyId}`,
-            value: `${setting.voice}`
+            value: `${setting[field]}`
         }));
 
         await client.interactionUpdate(interaction, {

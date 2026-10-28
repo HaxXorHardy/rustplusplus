@@ -31,7 +31,7 @@ module.exports = {
             Client.client.log(Client.client.intlGet(null, 'errorCap'),
                 Client.client.intlGet(null, 'couldNotFindGuild', { guildId: guildId }), 'error');
         }
-        return undefined;
+        return null;
     },
 
     getRole: function (guildId, roleId) {
@@ -46,7 +46,7 @@ module.exports = {
                     Client.client.intlGet(null, 'couldNotFindRole', { roleId: roleId }), 'error');
             }
         }
-        return undefined;
+        return null;
     },
 
     getUserById: async function (guildId, userId) {
@@ -63,14 +63,14 @@ module.exports = {
                     Client.client.intlGet(null, 'couldNotFindUser', { userId: userId }), 'error');
             }
         }
-        return undefined;
+        return null;
     },
 
     getTextChannelById: function (guildId, channelId) {
         const guild = module.exports.getGuild(guildId);
 
         if (guild) {
-            let channel = undefined;
+            let channel = null;
             try {
                 channel = guild.channels.cache.get(channelId);
             }
@@ -83,14 +83,14 @@ module.exports = {
                 return channel;
             }
         }
-        return undefined;
+        return null;
     },
 
     getTextChannelByName: function (guildId, name) {
         const guild = module.exports.getGuild(guildId);
 
         if (guild) {
-            let channel = undefined;
+            let channel = null;
             try {
                 channel = guild.channels.cache.find(c => c.name === name);
             }
@@ -103,14 +103,14 @@ module.exports = {
                 return channel;
             }
         }
-        return undefined;
+        return null;
     },
 
     getCategoryById: function (guildId, categoryId) {
         const guild = module.exports.getGuild(guildId);
 
         if (guild) {
-            let category = undefined;
+            let category = null;
             try {
                 category = guild.channels.cache.get(categoryId);
             }
@@ -123,14 +123,14 @@ module.exports = {
                 return category;
             }
         }
-        return undefined;
+        return null;
     },
 
     getCategoryByName: function (guildId, name) {
         const guild = module.exports.getGuild(guildId);
 
         if (guild) {
-            let category = undefined;
+            let category = null;
             try {
                 category = guild.channels.cache.find(c => c.name === name);
             }
@@ -143,7 +143,7 @@ module.exports = {
                 return category;
             }
         }
-        return undefined;
+        return null;
     },
 
     getMessageById: async function (guildId, channelId, messageId) {
@@ -164,7 +164,7 @@ module.exports = {
                 }
             }
         }
-        return undefined;
+        return null;
     },
 
     deleteMessageById: async function (guildId, channelId, messageId) {
@@ -204,7 +204,7 @@ module.exports = {
                     Client.client.intlGet(null, 'couldNotCreateCategory', { name: name }), 'error');
             }
         }
-        return undefined;
+        return null;
     },
 
     removeCategory: async function (guildId, categoryId) {
@@ -246,7 +246,7 @@ module.exports = {
                     Client.client.intlGet(null, 'couldNotCreateTextChannel', { name: name }), 'error');
             }
         }
-        return undefined;
+        return null;
     },
 
     removeTextChannel: async function (guildId, channelId) {

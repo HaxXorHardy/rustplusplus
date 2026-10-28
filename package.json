@@ -8,7 +8,7 @@
         "build:static-db": "node scripts/buildStaticFilesDb.js",
         "update:static-data": "node scripts/updateStaticData.js",
         "preinstall": "npx npm-force-resolutions",
-        "test": "tsc --noEmit -p ."
+        "test": "tsc --noEmit -p . && tsc -p tsconfig.checkjs.json && node --test \"test/**/*.test.js\""
     },
     "repository": {
         "type": "git",

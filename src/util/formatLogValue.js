@@ -39,6 +39,11 @@ function safeGet(value, key) {
     }
 }
 
+/* Narrow an unknown caught value to a printable message. */
+function errorMessage(error) {
+    return (error instanceof Error) ? error.message : String(error);
+}
+
 function redactText(value, secrets) {
     let text;
     try {
@@ -190,7 +195,7 @@ function sanitizeValue(value, state, depth) {
     }
     catch (e) {
         state.seen.delete(value);
-        return `[Uninspectable object: ${redactText(e && e.message ? e.message : e, state.secrets)}]`;
+        return `[Uninspectable object: ${redactText(errorMessage(e), state.secrets)}]`;
     }
 
     const keys = Object.keys(descriptors);
@@ -225,7 +230,7 @@ function formatAny(value, state, depth = 0) {
         });
     }
     catch (e) {
-        return `[Uninspectable value: ${redactText(e && e.message ? e.message : e, state.secrets)}]`;
+        return `[Uninspectable value: ${redactText(errorMessage(e), state.secrets)}]`;
     }
 }
 

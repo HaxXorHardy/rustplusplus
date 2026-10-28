@@ -27,7 +27,7 @@ try {
     ({ DatabaseSync } = require('node:sqlite'));
 }
 catch (e) {
-    sqliteUnavailableReason = e.message;
+    sqliteUnavailableReason = (e instanceof Error) ? e.message : String(e);
 }
 
 const SQLITE_SCHEMA_VERSION = '2';
@@ -220,7 +220,8 @@ class RustlabsStaticStorage {
             }
             catch (rollbackError) {
                 /* Never mask the original failure, but keep the rollback problem visible in the logs. */
-                console.warn(`[static-db] Rollback failed: ${rollbackError.message}`);
+                const reason = (rollbackError instanceof Error) ? rollbackError.message : String(rollbackError);
+                console.warn(`[static-db] Rollback failed: ${reason}`);
             }
             throw e;
         }
@@ -244,6 +245,16 @@ class RustlabsStaticStorage {
         }
     }
 
+    /* Statements are only available while the database is open; using a closed storage is a
+       programming error, so say so instead of failing with a property access on null. */
+    getStatements() {
+        if (this.statements === null) {
+            throw new Error('Static data storage is closed.');
+        }
+
+        return this.statements;
+    }
+
     isUsingSqlite() {
         return true;
     }
@@ -252,7 +263,7 @@ class RustlabsStaticStorage {
         const config = this.getConfig(dataset);
         const normalizedGroup = this.normalizeGroup(config, group);
 
-        return this.statements.getKeys
+        return this.getStatements().getKeys
             .all(dataset, normalizedGroup)
             .map(row => row.data_key);
     }
@@ -262,7 +273,7 @@ class RustlabsStaticStorage {
         const normalizedGroup = this.normalizeGroup(config, group);
         const normalizedKey = this.normalizeKey(key);
 
-        return this.statements.hasEntry
+        return this.getStatements().hasEntry
             .get(dataset, normalizedGroup, normalizedKey) !== undefined;
     }
 
@@ -271,7 +282,7 @@ class RustlabsStaticStorage {
         const normalizedGroup = this.normalizeGroup(config, group);
         const normalizedKey = this.normalizeKey(key);
 
-        const row = this.statements.getEntry
+        const row = this.getStatements().getEntry
             .get(dataset, normalizedGroup, normalizedKey);
         if (row === undefined) return null;
         return JSON.parse(row.json_value);
@@ -286,7 +297,7 @@ class RustlabsStaticStorage {
             return this.datasetCache.get(cacheKey);
         }
 
-        const rows = this.statements.getDatasetEntries.all(dataset, normalizedGroup);
+        const rows = this.getStatements().getDatasetEntries.all(dataset, normalizedGroup);
         const objectData = {};
         for (const row of rows) {
             objectData[row.data_key] = JSON.parse(row.json_value);

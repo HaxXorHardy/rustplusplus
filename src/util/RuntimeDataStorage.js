@@ -27,7 +27,7 @@ try {
     ({ DatabaseSync } = require('node:sqlite'));
 }
 catch (e) {
-    sqliteUnavailableReason = e.message;
+    sqliteUnavailableReason = (e instanceof Error) ? e.message : String(e);
 }
 
 const DATABASE_FILE_NAME = 'runtimeData.sqlite';
@@ -64,8 +64,18 @@ class RuntimeDataStorage {
         }
     }
 
+    /* Statements are only available while the database is open; using a closed storage is a
+       programming error, so say so instead of failing with a property access on null. */
+    getStatements() {
+        if (this.statements === null) {
+            throw new Error('Runtime data storage is closed.');
+        }
+
+        return this.statements;
+    }
+
     getServerState(guildId, serverId, stateKey) {
-        const row = this.statements.getServerState.get(
+        const row = this.getStatements().getServerState.get(
             this.normalize(guildId),
             this.normalize(serverId),
             this.normalize(stateKey)
@@ -81,7 +91,7 @@ class RuntimeDataStorage {
     }
 
     setServerState(guildId, serverId, stateKey, value) {
-        this.statements.upsertServerState.run(
+        this.getStatements().upsertServerState.run(
             this.normalize(guildId),
             this.normalize(serverId),
             this.normalize(stateKey),
@@ -91,7 +101,7 @@ class RuntimeDataStorage {
     }
 
     deleteServerState(guildId, serverId, stateKey) {
-        this.statements.deleteServerState.run(
+        this.getStatements().deleteServerState.run(
             this.normalize(guildId),
             this.normalize(serverId),
             this.normalize(stateKey)

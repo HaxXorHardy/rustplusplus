@@ -24,11 +24,14 @@ const Fs = require('fs');
     Write a file so that a crash can never leave a half-written result behind: the data goes to a
     temporary file, is flushed to disk, and only then replaces the target through an atomic rename.
     Any failure removes the temporary file and rethrows the original error.
+    @param {string} targetPath
+    @param {string} data
+    @param {BufferEncoding} [encoding]
 */
-module.exports = function atomicWriteFile(targetPath, data, encoding = 'utf8') {
+module.exports = function atomicWriteFile(targetPath, data, encoding = /** @type {BufferEncoding} */ ('utf8')) {
     const tempPath = `${targetPath}.tmp`;
 
-    Fs.writeFileSync(tempPath, data, encoding);
+    Fs.writeFileSync(tempPath, data, { encoding });
 
     try {
         const fd = Fs.openSync(tempPath, 'r+');

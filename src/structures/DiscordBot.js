@@ -29,6 +29,12 @@ const Config = require('../../config');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordTools = require('../discordTools/discordTools');
 const LoadCommandModules = require('../discordTools/loadCommandModules.js');
+const RegisterSlashCommands = require('../discordTools/RegisterSlashCommands.js');
+const SetupGuildCategory = require('../discordTools/SetupGuildCategory.js');
+const SetupGuildChannels = require('../discordTools/SetupGuildChannels.js');
+const SetupSettingsMenu = require('../discordTools/SetupSettingsMenu.js');
+const FcmListener = require('../util/FcmListener.js');
+const FcmListenerLite = require('../util/FcmListenerLite.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Items = require('./Items');
 const Logger = require('./Logger.js');
@@ -219,10 +225,10 @@ class DiscordBot extends Discord.Client {
         const instance = this.getInstance(guild.id);
         const firstTime = instance.firstTime;
 
-        await require('../discordTools/RegisterSlashCommands')(this, guild);
+        await RegisterSlashCommands(this, guild);
 
-        let category = await require('../discordTools/SetupGuildCategory')(this, guild);
-        await require('../discordTools/SetupGuildChannels')(this, guild, category);
+        let category = await SetupGuildCategory(this, guild);
+        await SetupGuildChannels(this, guild, category);
         if (firstTime) {
             const perms = PermissionHandler.getPermissionsRemoved(this, guild);
             try {
@@ -236,15 +242,15 @@ class DiscordBot extends Discord.Client {
             await PermissionHandler.resetPermissionsAllChannels(this, guild);
         }
 
-        require('../util/FcmListener')(this, guild);
+        FcmListener(this, guild);
         const credentials = InstanceUtils.readCredentialsFile(guild.id);
         for (const steamId of Object.keys(credentials)) {
             if (steamId !== credentials.hoster && steamId !== 'hoster') {
-                require('../util/FcmListenerLite')(this, guild, steamId);
+                FcmListenerLite(this, guild, steamId);
             }
         }
 
-        await require('../discordTools/SetupSettingsMenu')(this, guild);
+        await SetupSettingsMenu(this, guild);
 
         if (firstTime) await PermissionHandler.resetPermissionsAllChannels(this, guild);
 

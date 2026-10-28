@@ -23,6 +23,16 @@ const Builder = require('@discordjs/builders');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
+const RemoveGuildChannels = require('../discordTools/RemoveGuildChannels.js');
+const SetupGuildCategory = require('../discordTools/SetupGuildCategory.js');
+const SetupGuildChannels = require('../discordTools/SetupGuildChannels.js');
+const SetupServerList = require('../discordTools/SetupServerList.js');
+const SetupSettingsMenu = require('../discordTools/SetupSettingsMenu.js');
+const SetupSwitches = require('../discordTools/SetupSwitches.js');
+const SetupSwitchGroups = require('../discordTools/SetupSwitchGroups.js');
+const SetupAlarms = require('../discordTools/SetupAlarms.js');
+const SetupStorageMonitors = require('../discordTools/SetupStorageMonitors.js');
+const SetupTrackers = require('../discordTools/SetupTrackers.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 
 /* Catches that must not abort a reset: the category may be missing or the bot may lack Manage Roles.
@@ -91,10 +101,10 @@ module.exports = {
 
         switch (interaction.options.getSubcommand()) {
             case 'discord': {
-                await require('../discordTools/RemoveGuildChannels')(client, guild);
+                await RemoveGuildChannels(client, guild);
 
-                const category = await require('../discordTools/SetupGuildCategory')(client, guild);
-                await require('../discordTools/SetupGuildChannels')(client, guild, category);
+                const category = await SetupGuildCategory(client, guild);
+                await SetupGuildChannels(client, guild, category);
 
                 await setCategoryPermissions(client, category,
                     PermissionHandler.getPermissionsRemoved(client, guild));
@@ -110,17 +120,17 @@ module.exports = {
                     await DiscordMessages.sendUpdateMapInformationMessage(rustplus);
                 }
 
-                await require('../discordTools/SetupServerList')(client, guild);
-                await require('../discordTools/SetupSettingsMenu')(client, guild, true);
+                await SetupServerList(client, guild);
+                await SetupSettingsMenu(client, guild, true);
 
                 if (rustplus && rustplus.isOperational) {
-                    await require('../discordTools/SetupSwitches')(client, rustplus);
-                    await require('../discordTools/SetupSwitchGroups')(client, rustplus);
-                    await require('../discordTools/SetupAlarms')(client, rustplus);
-                    await require('../discordTools/SetupStorageMonitors')(client, rustplus);
+                    await SetupSwitches(client, rustplus);
+                    await SetupSwitchGroups(client, rustplus);
+                    await SetupAlarms(client, rustplus);
+                    await SetupStorageMonitors(client, rustplus);
                 }
 
-                await require('../discordTools/SetupTrackers')(client, guild);
+                await SetupTrackers(client, guild);
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
 
@@ -148,7 +158,7 @@ module.exports = {
             case 'servers': {
                 await resetCategoryPermissions(client, guild, instance);
 
-                await require('../discordTools/SetupServerList')(client, guild);
+                await SetupServerList(client, guild);
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
 
@@ -161,7 +171,7 @@ module.exports = {
             case 'settings': {
                 await resetCategoryPermissions(client, guild, instance);
 
-                await require('../discordTools/SetupSettingsMenu')(client, guild, true);
+                await SetupSettingsMenu(client, guild, true);
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
 
@@ -179,8 +189,8 @@ module.exports = {
 
                 const rustplus = client.rustplusInstances[guild.id];
                 if (rustplus && rustplus.isOperational) {
-                    await require('../discordTools/SetupSwitches')(client, rustplus);
-                    await require('../discordTools/SetupSwitchGroups')(client, rustplus);
+                    await SetupSwitches(client, rustplus);
+                    await SetupSwitchGroups(client, rustplus);
                 }
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
@@ -194,7 +204,7 @@ module.exports = {
             case 'alarms': {
                 const rustplus = client.rustplusInstances[guild.id];
                 if (rustplus && rustplus.isOperational) {
-                    await require('../discordTools/SetupAlarms')(client, rustplus);
+                    await SetupAlarms(client, rustplus);
                 }
 
                 client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'slashCommandValueChange', {
@@ -210,7 +220,7 @@ module.exports = {
 
                 const rustplus = client.rustplusInstances[guild.id];
                 if (rustplus && rustplus.isOperational) {
-                    await require('../discordTools/SetupStorageMonitors')(client, rustplus);
+                    await SetupStorageMonitors(client, rustplus);
                 }
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
@@ -224,7 +234,7 @@ module.exports = {
             case 'trackers': {
                 await resetCategoryPermissions(client, guild, instance);
 
-                await require('../discordTools/SetupTrackers')(client, guild);
+                await SetupTrackers(client, guild);
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
 
