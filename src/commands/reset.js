@@ -26,6 +26,24 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 
+/* Catches that must not abort a reset: the category may be missing or the bot may lack Manage Roles.
+   Log the failure instead of swallowing it. */
+async function setCategoryPermissions(client, category, permissions) {
+	if (!category) return;
+
+	try {
+		await category.permissionOverwrites.set(permissions);
+	}
+	catch (e) {
+		client.log(client.intlGet(null, 'warningCap'), e, 'warning');
+	}
+}
+
+async function resetCategoryPermissions(client, guild, instance) {
+	const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
+	await setCategoryPermissions(client, category, PermissionHandler.getPermissionsRemoved(client, guild));
+}
+
 module.exports = {
 	name: 'reset',
 
@@ -84,13 +102,8 @@ module.exports = {
 				const category = await require('../discordTools/SetupGuildCategory')(client, guild);
 				await require('../discordTools/SetupGuildChannels')(client, guild, category);
 
-				const perms = PermissionHandler.getPermissionsRemoved(client, guild);
-				try {
-					await category.permissionOverwrites.set(perms);
-				}
-				catch (e) {
-					/* Ignore */
-				}
+				await setCategoryPermissions(client, category,
+					PermissionHandler.getPermissionsRemoved(client, guild));
 
 				await DiscordTools.clearTextChannel(guild.id, instance.channelId.information, 100);
 				await DiscordTools.clearTextChannel(guild.id, instance.channelId.switches, 100);
@@ -139,14 +152,7 @@ module.exports = {
 			} break;
 
 			case 'servers': {
-				const perms = PermissionHandler.getPermissionsRemoved(client, guild);
-				try {
-					const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
-					await category.permissionOverwrites.set(perms);
-				}
-				catch (e) {
-					/* Ignore */
-				}
+				await resetCategoryPermissions(client, guild, instance);
 
 				await require('../discordTools/SetupServerList')(client, guild);
 
@@ -159,14 +165,7 @@ module.exports = {
 			} break;
 
 			case 'settings': {
-				const perms = PermissionHandler.getPermissionsRemoved(client, guild);
-				try {
-					const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
-					await category.permissionOverwrites.set(perms);
-				}
-				catch (e) {
-					/* Ignore */
-				}
+				await resetCategoryPermissions(client, guild, instance);
 
 				await require('../discordTools/SetupSettingsMenu')(client, guild, true);
 
@@ -182,14 +181,7 @@ module.exports = {
 				await DiscordTools.clearTextChannel(guild.id, instance.channelId.switches, 100);
 				await DiscordTools.clearTextChannel(guild.id, instance.channelId.switchGroups, 100);
 
-				const perms = PermissionHandler.getPermissionsRemoved(client, guild);
-				try {
-					const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
-					await category.permissionOverwrites.set(perms);
-				}
-				catch (e) {
-					/* Ignore */
-				}
+				await resetCategoryPermissions(client, guild, instance);
 
 				const rustplus = client.rustplusInstances[guild.id];
 				if (rustplus && rustplus.isOperational) {
@@ -220,14 +212,7 @@ module.exports = {
 			case 'storagemonitors': {
 				await DiscordTools.clearTextChannel(guild.id, instance.channelId.storageMonitors, 100);
 
-				const perms = PermissionHandler.getPermissionsRemoved(client, guild);
-				try {
-					const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
-					await category.permissionOverwrites.set(perms);
-				}
-				catch (e) {
-					/* Ignore */
-				}
+				await resetCategoryPermissions(client, guild, instance);
 
 				const rustplus = client.rustplusInstances[guild.id];
 				if (rustplus && rustplus.isOperational) {
@@ -243,14 +228,7 @@ module.exports = {
 			} break;
 
 			case 'trackers': {
-				const perms = PermissionHandler.getPermissionsRemoved(client, guild);
-				try {
-					const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
-					await category.permissionOverwrites.set(perms);
-				}
-				catch (e) {
-					/* Ignore */
-				}
+				await resetCategoryPermissions(client, guild, instance);
 
 				await require('../discordTools/SetupTrackers')(client, guild);
 

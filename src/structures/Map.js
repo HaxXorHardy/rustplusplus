@@ -340,6 +340,7 @@ class Map {
             return;
         }
 
+        let skippedMonuments = 0;
         for (let monument of this.monuments) {
             let x = monument.x * ((this.width - 2 * this.oceanMargin) / this.rustplus.info.mapSize) + this.oceanMargin;
             let n = this.height - 2 * this.oceanMargin;
@@ -372,8 +373,14 @@ class Map {
                 }
             }
             catch (e) {
-                /* Ignore */
+                /* A single bad monument must not abort the whole map render. */
+                skippedMonuments += 1;
             }
+        }
+
+        if (skippedMonuments > 0) {
+            this.rustplus.log(Client.client.intlGet(null, 'warningCap'),
+                `Skipped ${skippedMonuments} monument(s) that could not be drawn on the map.`);
         }
     }
 
@@ -387,6 +394,7 @@ class Map {
         let mapMarkers = await this.rustplus.getMapMarkersAsync();
         if (!(await this.rustplus.isResponseValid(mapMarkers))) return;
 
+        let skippedMarkers = 0;
         for (let marker of mapMarkers.mapMarkers.markers) {
             let x = marker.x * ((this.width - 2 * this.oceanMargin) / this.rustplus.info.mapSize) + this.oceanMargin;
             let n = this.height - 2 * this.oceanMargin;
@@ -410,8 +418,14 @@ class Map {
                 );
             }
             catch (e) {
-                /* Ignore */
+                /* A single bad marker must not abort the whole map render. */
+                skippedMarkers += 1;
             }
+        }
+
+        if (skippedMarkers > 0) {
+            this.rustplus.log(Client.client.intlGet(null, 'warningCap'),
+                `Skipped ${skippedMarkers} marker(s) that could not be drawn on the map.`);
         }
     }
 

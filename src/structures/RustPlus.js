@@ -1129,7 +1129,7 @@ class RustPlus extends RustPlusLib {
         if (strings.length === 0) {
             if (this.mapMarkers.timeSinceCargoShipWasOut === null) {
                 if (isInfoChannel) {
-                    return Client.client.intlGet(this.guildId, 'notActive');;
+                    return Client.client.intlGet(this.guildId, 'notActive');
                 }
                 else {
                     return Client.client.intlGet(this.guildId, 'cargoNotCurrentlyOnMap');

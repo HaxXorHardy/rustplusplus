@@ -231,7 +231,7 @@ class DiscordBot extends Discord.Client {
                 await category.permissionOverwrites.set(perms);
             }
             catch (e) {
-                /* Ignore */
+                this.log(this.intlGet(null, 'warningCap'), e, 'warning');
             }
         }
         else {

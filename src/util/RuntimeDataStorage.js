@@ -22,11 +22,12 @@ const Fs = require('fs');
 const Path = require('path');
 
 let DatabaseSync = null;
+let sqliteUnavailableReason = 'node:sqlite could not be loaded';
 try {
     ({ DatabaseSync } = require('node:sqlite'));
 }
 catch (e) {
-    /* node:sqlite unavailable in this runtime. */
+    sqliteUnavailableReason = e.message;
 }
 
 const DATABASE_FILE_NAME = 'runtimeData.sqlite';
@@ -42,7 +43,8 @@ class RuntimeDataStorage {
 
         if (DatabaseSync === null) {
             throw new Error(
-                'node:sqlite is unavailable. Runtime data persistence requires Node.js 22+ in this build.'
+                'node:sqlite is unavailable. Runtime data persistence requires Node.js 22+ in this build. ' +
+                `Reason: ${sqliteUnavailableReason}`
             );
         }
 

@@ -22,11 +22,12 @@ const Fs = require('fs');
 const Path = require('path');
 
 let DatabaseSync = null;
+let sqliteUnavailableReason = 'node:sqlite could not be loaded';
 try {
     ({ DatabaseSync } = require('node:sqlite'));
 }
 catch (e) {
-    /* node:sqlite unavailable in this runtime. */
+    sqliteUnavailableReason = e.message;
 }
 
 const SQLITE_SCHEMA_VERSION = '2';
@@ -123,7 +124,10 @@ class RustlabsStaticStorage {
 
     static buildDatabaseFromJsonFiles(options = {}) {
         if (DatabaseSync === null) {
-            throw new Error('node:sqlite is unavailable. Use Node.js 22+ to build the static database.');
+            throw new Error(
+                'node:sqlite is unavailable. Use Node.js 22+ to build the static database. ' +
+                `Reason: ${sqliteUnavailableReason}`
+            );
         }
 
         const dataPath = options.dataPath ?? RustlabsStaticStorage.getDefaultDataPath();
@@ -220,7 +224,8 @@ class RustlabsStaticStorage {
                 db.exec('ROLLBACK');
             }
             catch (rollbackError) {
-                /* Ignore rollback errors and throw original exception. */
+                /* Never mask the original failure, but keep the rollback problem visible in the logs. */
+                console.warn(`[static-db] Rollback failed: ${rollbackError.message}`);
             }
             throw e;
         }

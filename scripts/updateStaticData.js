@@ -294,7 +294,7 @@ function stepUpdateItems(options) {
         Fs.rmSync(TEMP_ITEMS_JSON_PATH, { force: true });
     }
     catch (e) {
-        /* keep the intermediate file if it cannot be removed. */
+        warn(`Could not remove the intermediate file ${TEMP_ITEMS_JSON_PATH}: ${e.message}`);
     }
 }
 
