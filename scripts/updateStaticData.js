@@ -4,11 +4,14 @@
  *  One-shot updater for the static game data used by the bot.
  *
  *  Steps:
- *    1. Copy the Rust item meta .json files (from the game installation) into
- *       data/items and regenerate data/static-json/items.json (scripts/process_items.js).
- *    2. Scrape the RustLabs wiki (scripts/process_rustlabs.js) and copy the resulting
+ *    1. With --download: fetch the Rust item meta .json files from the Rust dedicated
+ *       server (DepotDownloader, scripts/downloadRustItems.js) into .cache/rust-server.
+ *    2. Copy the item meta .json files (downloaded server files or a local game
+ *       installation) into data/items and regenerate data/static-json/items.json
+ *       (scripts/process_items.js).
+ *    3. Scrape the RustLabs wiki (scripts/process_rustlabs.js) and copy the resulting
  *       rustlabs*.json files into data/static-json.
- *    3. Rebuild data/staticData.sqlite (scripts/buildStaticFilesDb.js).
+ *    4. Rebuild data/staticData.sqlite (scripts/buildStaticFilesDb.js).
  *
  *  Usage:
  *      node scripts/updateStaticData.js [options]
@@ -19,6 +22,8 @@ const { spawnSync } = require('child_process');
 const Fs = require('fs');
 const Path = require('path');
 
+const { countItemMetaFiles, getItemMetaDirectory } = require('./downloadRustItems.js');
+
 const PROJECT_ROOT = Path.resolve(__dirname, '..');
 const SCRIPTS_DIRECTORY = __dirname;
 const DATA_DIRECTORY = Path.join(PROJECT_ROOT, 'data');
@@ -28,6 +33,8 @@ const RUSTLABS_OUTPUT_DIRECTORY = Path.join(SCRIPTS_DIRECTORY, 'rustlabs');
 const ITEMS_JSON_FILENAME = 'items.json';
 const TEMP_ITEMS_JSON_PATH = Path.join(SCRIPTS_DIRECTORY, ITEMS_JSON_FILENAME);
 const ITEMS_JSON_PATH = Path.join(STATIC_JSON_DIRECTORY, ITEMS_JSON_FILENAME);
+const DOWNLOAD_ITEMS_SCRIPT = Path.join(SCRIPTS_DIRECTORY, 'downloadRustItems.js');
+const DEFAULT_DOWNLOAD_DIRECTORY = Path.join(PROJECT_ROOT, '.cache', 'rust-server');
 
 const RUSTLABS_DATASETS = [
     'rustlabsBuildingBlocks',
@@ -54,6 +61,9 @@ function parseArgs(argv) {
     const options = {
         gameDirectory: null,
         itemsSourceDirectory: ITEMS_SOURCE_DIRECTORY,
+        download: false,
+        downloadDirectory: DEFAULT_DOWNLOAD_DIRECTORY,
+        depotDownloaderPath: null,
         sleepMs: null,
         headless: null,
         allowEmpty: false,
@@ -120,6 +130,31 @@ function parseArgs(argv) {
             continue;
         }
 
+        if (arg === '--download') {
+            options.download = true;
+            continue;
+        }
+        if (arg === '--download-dir') {
+            i += 1;
+            if (i >= argv.length) throw new Error('Missing value for --download-dir');
+            options.downloadDirectory = resolvePath(argv[i]);
+            continue;
+        }
+        if (arg.startsWith('--download-dir=')) {
+            options.downloadDirectory = resolvePath(arg.split('=').slice(1).join('='));
+            continue;
+        }
+        if (arg === '--depot-downloader') {
+            i += 1;
+            if (i >= argv.length) throw new Error('Missing value for --depot-downloader');
+            options.depotDownloaderPath = resolvePath(argv[i]);
+            continue;
+        }
+        if (arg.startsWith('--depot-downloader=')) {
+            options.depotDownloaderPath = resolvePath(arg.split('=').slice(1).join('='));
+            continue;
+        }
+
         if (arg === '--sleep') {
             i += 1;
             if (i >= argv.length) throw new Error('Missing value for --sleep');
@@ -180,19 +215,22 @@ function printHelp() {
     console.log('Options:');
     console.log('  --game-dir <dir>   Rust game "Bundles/items" directory (also via RPP_RUST_ITEMS_DIR).');
     console.log('  --items-dir <dir>  Local directory used as item source. Default: data/items');
+    console.log('  --download         Download the item meta files from the Rust dedicated server.');
+    console.log('  --download-dir <dir>  Where downloaded server files are stored. Default: .cache/rust-server');
+    console.log('  --depot-downloader <path>  DepotDownloader executable (also via RPP_DEPOTDOWNLOADER_PATH).');
     console.log('  --sleep <ms>       Delay between RustLabs pages (RPP_RUSTLABS_SLEEP_MS).');
     console.log('  --headless         Run the RustLabs browser without a visible window.');
     console.log('  --visible          Run the RustLabs browser with a visible window.');
     console.log('  --allow-empty      Allow a RustLabs dataset to be overwritten with an empty result.');
-    console.log('  --skip-items       Skip step 1 (item meta -> items.json).');
-    console.log('  --skip-rustlabs    Skip step 2 (RustLabs scrape).');
-    console.log('  --skip-db          Skip step 3 (rebuild staticData.sqlite).');
+    console.log('  --skip-items       Skip steps 1 and 2 (depot download + item meta -> items.json).');
+    console.log('  --skip-rustlabs    Skip step 3 (RustLabs scrape).');
+    console.log('  --skip-db          Skip step 4 (rebuild staticData.sqlite).');
     console.log('  --quiet            Only print warnings and errors.');
     console.log('  --help, -h         Show this help message.');
     console.log('');
     console.log('Examples:');
     console.log('  node scripts/updateStaticData.js');
-    console.log('  node scripts/updateStaticData.js --sleep 300 --headless');
+    console.log('  node scripts/updateStaticData.js --download --sleep 300 --headless');
     console.log('  node scripts/updateStaticData.js --skip-rustlabs');
 }
 
@@ -286,9 +324,15 @@ function stepUpdateItems(options) {
         throw new Error('process_items.js did not produce items.json');
     }
 
+    const generatedEntries = countJsonEntries(TEMP_ITEMS_JSON_PATH);
+    if (generatedEntries === 0) {
+        Fs.rmSync(TEMP_ITEMS_JSON_PATH, { force: true });
+        throw new Error('process_items.js produced an empty items.json; the existing file is kept.');
+    }
+
     Fs.mkdirSync(STATIC_JSON_DIRECTORY, { recursive: true });
     Fs.copyFileSync(TEMP_ITEMS_JSON_PATH, ITEMS_JSON_PATH);
-    log(`data/static-json/items.json updated (${countJsonEntries(ITEMS_JSON_PATH)} entries).`);
+    log(`data/static-json/items.json updated (${generatedEntries} entries).`);
 
     try {
         Fs.rmSync(TEMP_ITEMS_JSON_PATH, { force: true });
@@ -296,6 +340,28 @@ function stepUpdateItems(options) {
     catch (e) {
         /* keep the intermediate file if it cannot be removed. */
     }
+}
+
+function stepDownloadItems(options) {
+    log('Running scripts/downloadRustItems.js ...');
+
+    const args = ['--dir', options.downloadDirectory];
+    if (options.depotDownloaderPath !== null) args.push('--depot-downloader', options.depotDownloaderPath);
+    if (QUIET) args.push('--quiet');
+
+    const status = runNodeScript(DOWNLOAD_ITEMS_SCRIPT, args);
+    if (status !== 0) {
+        throw new Error('downloadRustItems.js failed');
+    }
+
+    const itemMetaDirectory = getItemMetaDirectory(options.downloadDirectory);
+    const fileCount = countItemMetaFiles(itemMetaDirectory);
+    if (fileCount === 0) {
+        throw new Error(`No item meta files found in ${itemMetaDirectory}`);
+    }
+
+    log(`Downloaded ${fileCount} item meta file(s) from the Rust dedicated server.`);
+    options.gameDirectory = itemMetaDirectory;
 }
 
 function syncRustlabsDatasets(options) {
@@ -377,7 +443,13 @@ function main() {
 
     QUIET = options.quiet;
 
+    const runDownloadStep = options.download && !options.skipItems && options.gameDirectory === null;
+    if (options.download && !options.skipItems && options.gameDirectory !== null) {
+        log(`Skipping the depot download because an item directory was provided: ${options.gameDirectory}`);
+    }
+
     const steps = [];
+    if (runDownloadStep) steps.push('download');
     if (!options.skipItems) steps.push('items');
     if (!options.skipRustlabs) steps.push('rustlabs');
     if (!options.skipDatabase) steps.push('database');
@@ -388,6 +460,18 @@ function main() {
     const warnings = [];
     const total = steps.length;
     let index = 0;
+
+    if (runDownloadStep) {
+        index += 1;
+        section(index, total, 'Rust dedicated server item meta -> .cache/rust-server');
+        try {
+            stepDownloadItems(options);
+        }
+        catch (e) {
+            console.error(`[update-static] Item download failed: ${e.message}`);
+            process.exit(1);
+        }
+    }
 
     if (!options.skipItems) {
         index += 1;
