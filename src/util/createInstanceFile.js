@@ -25,6 +25,14 @@ const Path = require('path');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Constants = require('./constants.js');
 
+require('./types.js');
+
+/**
+ * Create instances/<guildId>.json for a guild that the bot has not seen before.
+ * @param {*} client The bot instance.
+ * @param {*} guild The Discord guild.
+ * @returns {Instance|undefined} The created instance, or undefined when it already existed.
+ */
 module.exports = (client, guild) => {
     let instance = null;
     if (!Fs.existsSync(Path.join(__dirname, '..', '..', 'instances', `${guild.id}.json`))) {

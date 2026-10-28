@@ -27,6 +27,21 @@ Please note we have a code of conduct, please follow it in all your interactions
 * Always use === instead of == - but obj == null is allowed to check null || undefined
 * Look at other code in the repository if you are unsure
 
+## Error Handling
+
+Pick the failure mode by what the caller can do with it, not by what is convenient at the call site:
+
+* **Lookup helpers return `null`** when the thing is simply absent (`DiscordTools.getCategoryById`,
+  `RuntimeDataStorage.getServerState`). Never return `undefined` for "absent" - callers cannot tell it
+  apart from "forgot to return".
+* **Throw** for programmer or configuration errors that the caller cannot recover from
+  (`RuntimeDataStorage` without `node:sqlite`, using a closed storage).
+* **Log and continue** only for optional side effects where the main operation still succeeds, and log
+  at `warning` level with the error object so the failure is visible
+  (`DiscordBot.requireAdminPrivileges`, the permission-overwrite helpers).
+* **Never** swallow an error silently and never call `process.exit()` outside the bootstrap: a failing
+  per-guild operation must not take the whole bot down.
+
 ## Code of Conduct
 
 ### Our Pledge

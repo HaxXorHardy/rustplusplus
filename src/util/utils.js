@@ -43,11 +43,14 @@ module.exports = {
                 htmlReservedSymbols = getStaticFilesStorage().getDatasetObject('htmlReservedSymbols');
             }
             catch (e) {
+                /* Fallback for a stale or partially rebuilt database: data/static-json is the source of
+                   truth (see docs/static_data.md), the SQLite file is a generated artifact. */
                 const fallbackJsonPath = Path.join(
                     RustlabsStaticStorage.getDefaultJsonSourcePath(),
                     'htmlReservedSymbols.json'
                 );
                 if (!Fs.existsSync(fallbackJsonPath)) throw e;
+                console.warn(`Static dataset 'htmlReservedSymbols' unavailable, using ${fallbackJsonPath}.`);
                 htmlReservedSymbols = JSON.parse(Fs.readFileSync(fallbackJsonPath, 'utf8'));
             }
         }

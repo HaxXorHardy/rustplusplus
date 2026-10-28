@@ -11,6 +11,7 @@
     "noImplicitAny": false
   },
   "include": [
+    "src/util/types.js",
     "src/util/utils.js",
     "src/util/timer.js",
     "src/util/atomicWriteFile.js",
