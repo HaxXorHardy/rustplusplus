@@ -17,3 +17,4 @@ scripts/rustlabs
 rustlabs-run.out.log
 rustlabs-run.err.log
 rustlabs-finalize.log
+scorecard.png
