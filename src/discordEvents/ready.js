@@ -30,8 +30,8 @@ module.exports = {
     once: true,
     async execute(client) {
         for (const guild of client.guilds.cache) {
-            require('../util/CreateInstanceFile')(client, guild[1]);
-            require('../util/CreateCredentialsFile')(client, guild[1]);
+            require('../util/createInstanceFile')(client, guild[1]);
+            require('../util/createCredentialsFile')(client, guild[1]);
             client.fcmListenersLite[guild[0]] = new Object();
         }
 

@@ -20,7 +20,7 @@
 
 const Axios = require('axios');
 
-const Client = require('../../index.ts');
+const Client = require('./clientRegistry.js');
 const Config = require('../../config');
 const getStaticFilesStorage = require('../util/getStaticFilesStorage');
 const Utils = require = require('../util/utils.js');

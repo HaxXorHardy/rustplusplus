@@ -20,7 +20,6 @@
 
 const Discord = require('discord.js');
 
-const Config = require('../../config');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
@@ -35,8 +34,7 @@ module.exports = async (client, interaction) => {
     const verifyId = Math.floor(100000 + Math.random() * 900000);
     client.logInteraction(interaction, verifyId, 'userButton');
 
-    if (instance.blacklist['discordIds'].includes(interaction.user.id) &&
-        !interaction.member.permissions.has(Discord.PermissionsBitField.Flags.Administrator)) {
+    if (!client.isAllowedUser(interaction)) {
         client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userPartOfBlacklist', {
             id: `${verifyId}`,
             user: `${interaction.user.username} (${interaction.user.id})`
@@ -668,7 +666,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('ServerDelete', ''));
         const server = instance.serverList[ids.serverId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -780,7 +778,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('SmartSwitchDelete', ''));
         const server = instance.serverList[ids.serverId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -833,7 +831,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('SmartAlarmDelete', ''));
         const server = instance.serverList[ids.serverId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -915,7 +913,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('StorageMonitorToolCupboardDelete', ''));
         const server = instance.serverList[ids.serverId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -972,7 +970,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('StorageMonitorContainerDelete', ''));
         const server = instance.serverList[ids.serverId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -989,7 +987,7 @@ module.exports = async (client, interaction) => {
         client.setInstance(guildId, instance);
     }
     else if (interaction.customId === 'RecycleDelete') {
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -1054,7 +1052,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('GroupDelete', ''));
         const server = instance.serverList[ids.serverId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }
@@ -1149,7 +1147,7 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace('TrackerDelete', ''));
         const tracker = instance.trackers[ids.trackerId];
 
-        if (Config.discord.needAdminPrivileges && !client.isAdministrator(interaction)) {
+        if (!client.hasAdminPrivileges(interaction)) {
             interaction.deferUpdate();
             return;
         }

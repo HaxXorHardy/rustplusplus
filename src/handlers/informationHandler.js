@@ -18,7 +18,7 @@
 
 */
 
-const Client = require('../../index.ts');
+const Client = require('../structures/clientRegistry.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 

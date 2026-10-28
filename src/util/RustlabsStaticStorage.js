@@ -113,11 +113,6 @@ class RustlabsStaticStorage {
         return Path.join(dataPath, SQLITE_DATABASE_FILE);
     }
 
-    /* Backward compatible alias used in earlier refactor. */
-    static getDefaultStaticFilesPath() {
-        return RustlabsStaticStorage.getDefaultJsonSourcePath();
-    }
-
     static getDatasetConfig() {
         return DATASET_CONFIG;
     }

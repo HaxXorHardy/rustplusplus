@@ -33,23 +33,8 @@ module.exports = {
 
     getArgs: function (str, n = 0) {
         const args = this.parseArgs(str);
-        if (isNaN(n)) n = 0;
-        if (n < 1) return args;
-        const newArgs = [];
-
-        let remain = str;
-        let counter = 1;
-        for (const arg of args) {
-            if (counter === n) {
-                newArgs.push(remain);
-                break;
-            }
-            remain = remain.slice(arg.length).trim();
-            newArgs.push(arg);
-            counter += 1;
-        }
-
-        return newArgs;
+        if (isNaN(n) || n < 1 || args.length <= n) return args;
+        return [...args.slice(0, n - 1), args.slice(n - 1).join(' ')];
     },
 
     decodeHtml: function (str) {

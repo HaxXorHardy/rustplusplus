@@ -18,8 +18,6 @@
 
 */
 
-const _ = require('lodash');
-
 module.exports = {
     handler: function (rustplus, client, time) {
         /* Check time changes */
@@ -93,14 +91,14 @@ module.exports = {
                     rustplus.time.timeTillNight[id] += highestValue;
                 }
 
-                rustplus.time.timeTillNight = _.merge(rustplus.startTimeObject, rustplus.time.timeTillNight);
+                rustplus.time.timeTillNight = Object.assign(rustplus.startTimeObject, rustplus.time.timeTillNight);
             }
             else {
                 for (const id in rustplus.time.timeTillDay) {
                     rustplus.time.timeTillDay[id] += highestValue;
                 }
 
-                rustplus.time.timeTillDay = _.merge(rustplus.startTimeObject, rustplus.time.timeTillDay);
+                rustplus.time.timeTillDay = Object.assign(rustplus.startTimeObject, rustplus.time.timeTillDay);
             }
 
             rustplus.time.timeTillActive = true;

@@ -26,7 +26,7 @@ const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 module.exports = {
     name: 'market',
 
-    getData(client, guildId) {
+    getSlashCommandDefinition(client, guildId) {
         return new Builder.SlashCommandBuilder()
             .setName('market')
             .setDescription(client.intlGet(guildId, 'commandsMarketDesc'))

@@ -26,7 +26,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 module.exports = {
     name: 'cctv',
 
-    getData(client, guildId) {
+    getSlashCommandDefinition(client, guildId) {
         return new Builder.SlashCommandBuilder()
             .setName('cctv')
             .setDescription(client.intlGet(guildId, 'commandsCctvDesc'))

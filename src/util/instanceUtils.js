@@ -21,7 +21,8 @@
 const Fs = require('fs');
 const Path = require('path');
 
-const Client = require('../../index.ts');
+const AtomicWriteFile = require('./atomicWriteFile.js');
+const Client = require('../structures/clientRegistry.js');
 
 module.exports = {
     getSmartDevice: function (guildId, entityId) {
@@ -48,32 +49,18 @@ module.exports = {
         if (Fs.existsSync(tempPath)) {
             try {
                 Fs.unlinkSync(tempPath);
-            } catch (e) {
+            }
+            catch (e) {
                 console.warn(`Failed to remove stale temporary file: ${tempPath}`, e);
             }
         }
 
-        // Fahren Sie mit dem normalen Lesen fort
         return JSON.parse(Fs.readFileSync(targetPath, 'utf8'));
     },
 
     writeInstanceFile: function (guildId, instance) {
         const targetPath = Path.join(__dirname, '..', '..', 'instances', `${guildId}.json`);
-        const tempPath = targetPath + '.tmp';
-        
-        const data = JSON.stringify(instance, null, 2);
-
-        Fs.writeFileSync(tempPath, data, 'utf8');
-        try {
-            const fd = Fs.openSync(tempPath, 'r+');
-            Fs.fsyncSync(fd);
-            Fs.closeSync(fd);
-        } catch (error) {
-            console.error(`Failed to sync file data: ${tempPath}:`, error);
-            Fs.unlinkSync(tempPath); 
-            throw error;
-        }
-        Fs.renameSync(tempPath, targetPath);
+        AtomicWriteFile(targetPath, JSON.stringify(instance, null, 2));
     },
 
     readCredentialsFile: function (guildId) {
@@ -83,6 +70,6 @@ module.exports = {
 
     writeCredentialsFile: function (guildId, credentials) {
         const path = Path.join(__dirname, '..', '..', 'credentials', `${guildId}.json`);
-        Fs.writeFileSync(path, JSON.stringify(credentials, null, 2));
+        AtomicWriteFile(path, JSON.stringify(credentials, null, 2));
     },
 }

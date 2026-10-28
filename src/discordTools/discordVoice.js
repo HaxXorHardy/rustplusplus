@@ -20,7 +20,7 @@
 */
 const { getVoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 const getStaticFilesStorage = require('../util/getStaticFilesStorage');
-const Client = require('../../index.ts');
+const Client = require('../structures/clientRegistry.js');
 
 const Actors = getStaticFilesStorage().getDatasetObject('actors');
 

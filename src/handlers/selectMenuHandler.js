@@ -33,8 +33,7 @@ module.exports = async (client, interaction) => {
     const verifyId = Math.floor(100000 + Math.random() * 900000);
     client.logInteraction(interaction, verifyId, 'userSelectMenu');
 
-    if (instance.blacklist['discordIds'].includes(interaction.user.id) &&
-        !interaction.member.permissions.has(Discord.PermissionsBitField.Flags.Administrator)) {
+    if (!client.isAllowedUser(interaction)) {
         client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userPartOfBlacklist', {
             id: `${verifyId}`,
             user: `${interaction.user.username} (${interaction.user.id})`
