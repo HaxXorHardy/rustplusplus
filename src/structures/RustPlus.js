@@ -23,7 +23,7 @@ const Path = require('path');
 const RustPlusLib = require('@liamcottle/rustplus.js');
 const Translate = require('translate');
 
-const Client = require('../../index.ts');
+const Client = require('./clientRegistry.js');
 const Constants = require('../util/constants.js');
 const Decay = require('../util/decay.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds');
@@ -35,7 +35,7 @@ const InstanceUtils = require('../util/instanceUtils.js');
 const Languages = require('../util/languages.js');
 const Logger = require('./Logger.js');
 const Map = require('../util/map.js');
-const getRuntimeDataStorage = require('../util/getRuntimeDataStorage');
+const getRuntimeDataStorage = require('../util/storage/getRuntimeDataStorage.js');
 const RustPlusLite = require('../structures/RustPlusLite');
 const TeamHandler = require('../handlers/teamHandler.js');
 const Timer = require('../util/timer.js');
@@ -1129,7 +1129,7 @@ class RustPlus extends RustPlusLib {
         if (strings.length === 0) {
             if (this.mapMarkers.timeSinceCargoShipWasOut === null) {
                 if (isInfoChannel) {
-                    return Client.client.intlGet(this.guildId, 'notActive');;
+                    return Client.client.intlGet(this.guildId, 'notActive');
                 }
                 else {
                     return Client.client.intlGet(this.guildId, 'cargoNotCurrentlyOnMap');

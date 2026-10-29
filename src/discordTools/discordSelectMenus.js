@@ -22,7 +22,7 @@ const Discord = require('discord.js');
 const Fs = require('fs');
 const Path = require('path');
 
-const Client = require('../../index.ts');
+const Client = require('../structures/clientRegistry.js');
 const Constants = require('../util/constants.js');
 const Languages = require('../util/languages.js');
 const { CHANNELS, normalizeChannel } = require('../util/inGameChat.js');

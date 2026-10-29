@@ -22,7 +22,7 @@ const Discord = require('discord.js');
 const Path = require('path');
 
 const Constants = require('../util/constants.js');
-const Client = require('../../index.ts');
+const Client = require('../structures/clientRegistry.js');
 const DiscordButtons = require('./discordButtons.js');
 const DiscordEmbeds = require('./discordEmbeds.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');

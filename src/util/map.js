@@ -19,7 +19,7 @@
 
 */
 
-const Client = require('../../index.ts');
+const Client = require('../structures/clientRegistry.js');
 
 const GRID_DIAMETER = 146.28571;
 const MARGIN = 1;

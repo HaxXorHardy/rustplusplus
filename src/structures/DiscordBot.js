@@ -28,6 +28,13 @@ const Cctv = require('./Cctv');
 const Config = require('../../config');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordTools = require('../discordTools/discordTools');
+const LoadCommandModules = require('../discordTools/loadCommandModules.js');
+const RegisterSlashCommands = require('../discordTools/RegisterSlashCommands.js');
+const SetupGuildCategory = require('../discordTools/SetupGuildCategory.js');
+const SetupGuildChannels = require('../discordTools/SetupGuildChannels.js');
+const SetupSettingsMenu = require('../discordTools/SetupSettingsMenu.js');
+const FcmListener = require('../util/fcm/FcmListener.js');
+const FcmListenerLite = require('../util/fcm/FcmListenerLite.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Items = require('./Items');
 const Logger = require('./Logger.js');
@@ -81,10 +88,7 @@ class DiscordBot extends Discord.Client {
     }
 
     loadDiscordCommands() {
-        const commandFiles = Fs.readdirSync(Path.join(__dirname, '..', 'commands'))
-            .filter(file => file.endsWith('.js'));
-        for (const file of commandFiles) {
-            const command = require(`../commands/${file}`);
+        for (const command of LoadCommandModules()) {
             this.commands.set(command.name, command);
         }
     }
@@ -221,32 +225,32 @@ class DiscordBot extends Discord.Client {
         const instance = this.getInstance(guild.id);
         const firstTime = instance.firstTime;
 
-        await require('../discordTools/RegisterSlashCommands')(this, guild);
+        await RegisterSlashCommands(this, guild);
 
-        let category = await require('../discordTools/SetupGuildCategory')(this, guild);
-        await require('../discordTools/SetupGuildChannels')(this, guild, category);
+        let category = await SetupGuildCategory(this, guild);
+        await SetupGuildChannels(this, guild, category);
         if (firstTime) {
             const perms = PermissionHandler.getPermissionsRemoved(this, guild);
             try {
                 await category.permissionOverwrites.set(perms);
             }
             catch (e) {
-                /* Ignore */
+                this.log(this.intlGet(null, 'warningCap'), e, 'warning');
             }
         }
         else {
             await PermissionHandler.resetPermissionsAllChannels(this, guild);
         }
 
-        require('../util/FcmListener')(this, guild);
+        FcmListener(this, guild);
         const credentials = InstanceUtils.readCredentialsFile(guild.id);
         for (const steamId of Object.keys(credentials)) {
             if (steamId !== credentials.hoster && steamId !== 'hoster') {
-                require('../util/FcmListenerLite')(this, guild, steamId);
+                FcmListenerLite(this, guild, steamId);
             }
         }
 
-        await require('../discordTools/SetupSettingsMenu')(this, guild);
+        await SetupSettingsMenu(this, guild);
 
         if (firstTime) await PermissionHandler.resetPermissionsAllChannels(this, guild);
 
@@ -542,8 +546,7 @@ class DiscordBot extends Discord.Client {
     async validatePermissions(interaction) {
         const instance = this.getInstance(interaction.guildId);
 
-        if (instance.blacklist['discordIds'].includes(interaction.user.id) &&
-            !interaction.member.permissions.has(Discord.PermissionsBitField.Flags.Administrator)) {
+        if (!this.isAllowedUser(interaction)) {
             return false;
         }
 
@@ -563,6 +566,38 @@ class DiscordBot extends Discord.Client {
 
     isAdministrator(interaction) {
         return interaction.member.permissions.has(Discord.PermissionFlagsBits.Administrator);
+    }
+
+    /* Blacklisted users keep read access but may not trigger actions, unless they are administrators. */
+    isBlacklisted(interaction) {
+        return this.getInstance(interaction.guildId).blacklist['discordIds'].includes(interaction.user.id);
+    }
+
+    isAllowedUser(interaction) {
+        return !this.isBlacklisted(interaction) || this.isAdministrator(interaction);
+    }
+
+    /* Single enforcement point for RPP_NEED_ADMIN_PRIVILEGES. Callers that need to answer the user
+       should use requireAdminPrivileges; component handlers that only need to stop processing can
+       use this predicate directly. */
+    hasAdminPrivileges(interaction) {
+        return !Config.discord.needAdminPrivileges || this.isAdministrator(interaction);
+    }
+
+    /* Returns false after telling the caller they are not allowed to run this action. */
+    async requireAdminPrivileges(interaction) {
+        if (this.hasAdminPrivileges(interaction)) return true;
+
+        const str = this.intlGet(interaction.guildId, 'missingPermission');
+        const embed = DiscordEmbeds.getActionInfoEmbed(1, str);
+        if (interaction.deferred || interaction.replied) {
+            await this.interactionEditReply(interaction, embed);
+        }
+        else {
+            await this.interactionReply(interaction, embed);
+        }
+        this.log(this.intlGet(null, 'warningCap'), str);
+        return false;
     }
 }
 

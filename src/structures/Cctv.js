@@ -19,7 +19,7 @@
 
 */
 
-const getStaticFilesStorage = require('../util/getStaticFilesStorage');
+const getStaticFilesStorage = require('../util/storage/getStaticFilesStorage.js');
 
 class Cctv {
     constructor() {

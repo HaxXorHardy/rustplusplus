@@ -47,24 +47,24 @@ async function addTextChannel(name, idName, client, guild, parent, permissionWri
     const instance = client.getInstance(guild.id);
     const perms = PermissionHandler.getPermissionsReset(client, guild, permissionWrite);
 
-    let channel = undefined;
+    let channel = null;
     if (instance.channelId[idName] !== null) {
         channel = DiscordTools.getTextChannelById(guild.id, instance.channelId[idName]);
         if (channel && !botCanUseTextChannel(guild, channel)) {
             instance.channelId[idName] = null;
             client.setInstance(guild.id, instance);
-            channel = undefined;
+            channel = null;
         }
     }
-    if (channel === undefined) {
+    if (channel === null) {
         /* Reuse an already existing channel of this bot instead of creating a duplicate one. */
-        channel = getTextChannelsByName(guild, parent.id, name)[0];
+        channel = getTextChannelsByName(guild, parent.id, name)[0] ?? null;
         if (channel) {
             instance.channelId[idName] = channel.id;
             client.setInstance(guild.id, instance);
         }
     }
-    if (channel === undefined) {
+    if (channel === null) {
         channel = await DiscordTools.addTextChannel(guild.id, name, parent.id, perms);
         if (!channel) {
             return;

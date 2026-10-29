@@ -18,7 +18,7 @@
 
 */
 
-const getRuntimeDataStorage = require('./getRuntimeDataStorage');
+const getRuntimeDataStorage = require('../storage/getRuntimeDataStorage.js');
 
 /* Namespace used to store the fcm state inside the runtime data storage. */
 const STATE_NAMESPACE = 'fcm';
@@ -28,6 +28,16 @@ const STATE_NAMESPACE = 'fcm';
    enough to recognize a redelivered notification. */
 const MAX_PROCESSED_PERSISTENT_IDS = 100;
 
+/* Runtime persistence is optional: when it is unavailable the bot keeps working, but the processed
+   notification ids only live in memory. Report that once instead of hiding the failure silently. */
+let persistenceUnavailableReported = false;
+
+function reportPersistenceUnavailable(error) {
+    if (persistenceUnavailableReported) return;
+    persistenceUnavailableReported = true;
+    console.warn(`FCM notification ids will not be remembered across restarts: ${error.message}`);
+}
+
 function readProcessed(guildId, key) {
     try {
         const stored = getRuntimeDataStorage().getServerState(guildId, STATE_NAMESPACE, key);
@@ -36,7 +46,7 @@ function readProcessed(guildId, key) {
         }
     }
     catch (e) {
-        /* Runtime persistence is unavailable (e.g. node:sqlite missing). */
+        reportPersistenceUnavailable(e);
     }
 
     return [];
@@ -88,7 +98,7 @@ module.exports = {
             getRuntimeDataStorage().setServerState(guildId, STATE_NAMESPACE, key, processed);
         }
         catch (e) {
-            /* Runtime persistence is unavailable. */
+            reportPersistenceUnavailable(e);
         }
     }
 };

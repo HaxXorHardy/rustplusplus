@@ -21,8 +21,8 @@
 const Fs = require('fs');
 const Path = require('path');
 
-const RustlabsStaticStorage = require('./RustlabsStaticStorage');
-const getStaticFilesStorage = require('./getStaticFilesStorage');
+const RustlabsStaticStorage = require('./storage/RustlabsStaticStorage.js');
+const getStaticFilesStorage = require('./storage/getStaticFilesStorage.js');
 
 let htmlReservedSymbols = null;
 
@@ -33,23 +33,8 @@ module.exports = {
 
     getArgs: function (str, n = 0) {
         const args = this.parseArgs(str);
-        if (isNaN(n)) n = 0;
-        if (n < 1) return args;
-        const newArgs = [];
-
-        let remain = str;
-        let counter = 1;
-        for (const arg of args) {
-            if (counter === n) {
-                newArgs.push(remain);
-                break;
-            }
-            remain = remain.slice(arg.length).trim();
-            newArgs.push(arg);
-            counter += 1;
-        }
-
-        return newArgs;
+        if (isNaN(n) || n < 1 || args.length <= n) return args;
+        return [...args.slice(0, n - 1), args.slice(n - 1).join(' ')];
     },
 
     decodeHtml: function (str) {
@@ -58,11 +43,14 @@ module.exports = {
                 htmlReservedSymbols = getStaticFilesStorage().getDatasetObject('htmlReservedSymbols');
             }
             catch (e) {
+                /* Fallback for a stale or partially rebuilt database: data/static-json is the source of
+                   truth (see docs/static_data.md), the SQLite file is a generated artifact. */
                 const fallbackJsonPath = Path.join(
                     RustlabsStaticStorage.getDefaultJsonSourcePath(),
                     'htmlReservedSymbols.json'
                 );
                 if (!Fs.existsSync(fallbackJsonPath)) throw e;
+                console.warn(`Static dataset 'htmlReservedSymbols' unavailable, using ${fallbackJsonPath}.`);
                 htmlReservedSymbols = JSON.parse(Fs.readFileSync(fallbackJsonPath, 'utf8'));
             }
         }

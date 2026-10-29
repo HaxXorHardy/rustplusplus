@@ -20,9 +20,9 @@
 
 const Axios = require('axios');
 
-const Client = require('../../index.ts');
+const Client = require('./clientRegistry.js');
 const Config = require('../../config');
-const getStaticFilesStorage = require('../util/getStaticFilesStorage');
+const getStaticFilesStorage = require('../util/storage/getStaticFilesStorage.js');
 const Utils = require = require('../util/utils.js');
 
 const randomUsernamesData = getStaticFilesStorage().getDatasetObject('RandomUsernames');

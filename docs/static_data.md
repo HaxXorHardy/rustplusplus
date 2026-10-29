@@ -3,7 +3,20 @@
 The bot ships with a set of static game data files (items, crafting recipes, recycle yields,
 durability, decay, despawn, ...). They are stored as JSON in [`data/static-json`](../data/static-json)
 and are compiled into a single SQLite database `data/staticData.sqlite`, which is what the bot reads
-at runtime (`src/util/RustlabsStaticStorage.js`, `src/structures/RustLabs.js`).
+at runtime (`src/util/storage/RustlabsStaticStorage.js`, `src/structures/RustLabs.js`).
+
+## Source of truth
+
+* **`data/static-json/*.json` is canonical.** It is what the update pipeline writes and what a human
+  can inspect, diff and fix by hand.
+* **`data/staticData.sqlite` is a generated artifact.** It is rebuilt from the JSON files by
+  `npm run build:static-db` and must never be edited directly.
+* The runtime reads the database and, if a dataset cannot be read from it, falls back to the matching
+  JSON file (`src/util/utils.js`, `decodeHtml`). That fallback exists so a stale or partially rebuilt
+  database cannot take the bot down; it is not a second source of truth.
+
+When you change game data, change the JSON (or rerun the pipeline) and rebuild the database - do not
+patch the SQLite file.
 
 Normally you do not have to touch this - the repository already contains up-to-date files. This page
 is for maintainers who want to refresh the data after a Rust update.

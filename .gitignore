@@ -1,5 +1,6 @@
 node_modules
 .env
+.desloppify/
 .cache/
 instances
 credentials
@@ -17,3 +18,8 @@ scripts/rustlabs
 rustlabs-run.out.log
 rustlabs-run.err.log
 rustlabs-finalize.log
+scorecard.png
+
+# local-only quality tooling (not part of the repo)
+scripts/quality-review.ps1
+scripts/review.cmd

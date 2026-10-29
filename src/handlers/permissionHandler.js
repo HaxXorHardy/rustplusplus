@@ -22,6 +22,17 @@ const Discord = require('discord.js');
 
 const DiscordTools = require('../discordTools/discordTools.js');
 
+/* Permission overwrites can legitimately fail (missing Manage Roles, deleted channel, rate limit).
+   That must not abort a reset, but it should not disappear silently either. */
+async function setPermissionOverwrites(client, target, permissions) {
+    try {
+        await target.permissionOverwrites.set(permissions);
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'warningCap'), e, 'warning');
+    }
+}
+
 module.exports = {
     getPermissionsReset: function (client, guild, permissionWrite = false) {
         const instance = client.getInstance(guild.id);
@@ -119,29 +130,19 @@ module.exports = {
 
         if (instance.channelId.category === null) return;
 
-        const category = await DiscordTools.getCategoryById(guild.id, instance.channelId.category);
+        const category = DiscordTools.getCategoryById(guild.id, instance.channelId.category);
         if (category) {
             const perms = module.exports.getPermissionsReset(client, guild);
-            try {
-                await category.permissionOverwrites.set(perms);
-            }
-            catch (e) {
-                /* Ignore */
-            }
+            await setPermissionOverwrites(client, category, perms);
         }
 
         for (const [name, id] of Object.entries(instance.channelId)) {
-            const writePerm = (name !== 'commands' && name !== 'teamchat') ? false : true;
+            const writePerm = (name === 'commands' || name === 'teamchat');
 
             const channel = DiscordTools.getTextChannelById(guild.id, id);
             if (channel) {
                 const perms = module.exports.getPermissionsReset(client, guild, writePerm);
-                try {
-                    await channel.permissionOverwrites.set(perms);
-                }
-                catch (e) {
-                    /* Ignore */
-                }
+                await setPermissionOverwrites(client, channel, perms);
             }
         }
     },

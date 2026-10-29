@@ -9,7 +9,7 @@
         "download:rust-items": "node scripts/downloadRustItems.js",
         "update:static-data": "node scripts/updateStaticData.js",
         "preinstall": "npx npm-force-resolutions",
-        "test": "tsc --noEmit -p ."
+        "test": "tsc --noEmit -p . && tsc -p tsconfig.checkjs.json && node --test \"test/**/*.test.js\""
     },
     "repository": {
         "type": "git",
@@ -35,8 +35,6 @@
         "ffmpeg-static": "^5.1.0",
         "gm": "^1.25.0",
         "jimp": "^0.22.7",
-        "libsodium-wrappers": "^0.7.11",
-        "lodash": "^4.17.21",
         "translate": "^1.4.1",
         "ts-node": "^10.9.2",
         "typescript": "^5.8.3",

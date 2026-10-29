@@ -22,11 +22,12 @@ const Fs = require('fs');
 const Path = require('path');
 
 let DatabaseSync = null;
+let sqliteUnavailableReason = 'node:sqlite could not be loaded';
 try {
     ({ DatabaseSync } = require('node:sqlite'));
 }
 catch (e) {
-    /* node:sqlite unavailable in this runtime. */
+    sqliteUnavailableReason = (e instanceof Error) ? e.message : String(e);
 }
 
 const DATABASE_FILE_NAME = 'runtimeData.sqlite';
@@ -34,7 +35,7 @@ const TABLE_NAME = 'runtime_server_state';
 
 class RuntimeDataStorage {
     constructor(options = {}) {
-        this.dataPath = options.dataPath ?? Path.join(__dirname, '..', '..', 'data');
+        this.dataPath = options.dataPath ?? Path.join(__dirname, '..', '..', '..', 'data');
         this.databasePath = options.databasePath ?? Path.join(this.dataPath, DATABASE_FILE_NAME);
 
         this.db = null;
@@ -42,7 +43,8 @@ class RuntimeDataStorage {
 
         if (DatabaseSync === null) {
             throw new Error(
-                'node:sqlite is unavailable. Runtime data persistence requires Node.js 22+ in this build.'
+                'node:sqlite is unavailable. Runtime data persistence requires Node.js 22+ in this build. ' +
+                `Reason: ${sqliteUnavailableReason}`
             );
         }
 
@@ -62,8 +64,18 @@ class RuntimeDataStorage {
         }
     }
 
+    /* Statements are only available while the database is open; using a closed storage is a
+       programming error, so say so instead of failing with a property access on null. */
+    getStatements() {
+        if (this.statements === null) {
+            throw new Error('Runtime data storage is closed.');
+        }
+
+        return this.statements;
+    }
+
     getServerState(guildId, serverId, stateKey) {
-        const row = this.statements.getServerState.get(
+        const row = this.getStatements().getServerState.get(
             this.normalize(guildId),
             this.normalize(serverId),
             this.normalize(stateKey)
@@ -79,7 +91,7 @@ class RuntimeDataStorage {
     }
 
     setServerState(guildId, serverId, stateKey, value) {
-        this.statements.upsertServerState.run(
+        this.getStatements().upsertServerState.run(
             this.normalize(guildId),
             this.normalize(serverId),
             this.normalize(stateKey),
@@ -89,7 +101,7 @@ class RuntimeDataStorage {
     }
 
     deleteServerState(guildId, serverId, stateKey) {
-        this.statements.deleteServerState.run(
+        this.getStatements().deleteServerState.run(
             this.normalize(guildId),
             this.normalize(serverId),
             this.normalize(stateKey)

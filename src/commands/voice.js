@@ -27,7 +27,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 module.exports = {
     name: 'voice',
 
-    getData(client, guildId) {
+    getSlashCommandDefinition(client, guildId) {
         return new Builder.SlashCommandBuilder()
             .setName('voice')
             .setDescription(client.intlGet(guildId, 'commandsVoiceDesc'))

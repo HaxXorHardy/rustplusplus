@@ -28,7 +28,7 @@ const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js'
 module.exports = {
     name: 'switch',
 
-    getData(client, guildId) {
+    getSlashCommandDefinition(client, guildId) {
         return new Builder.SlashCommandBuilder()
             .setName('switch')
             .setDescription(client.intlGet(guildId, 'commandsSwitchDesc'))

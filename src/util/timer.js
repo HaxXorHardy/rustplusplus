@@ -20,10 +20,10 @@
 
 module.exports = {
     timer: function (callback, delay, ...args) {
-        let id, started, remaining = delay, running = false;
+        let id, started = 0, remaining = delay, running = false;
 
         this.start = function () {
-            started = new Date();
+            started = Date.now();
             if (remaining > 0) {
                 id = setTimeout(callback, remaining, args);
                 running = true;
@@ -44,7 +44,7 @@ module.exports = {
         this.pause = function () {
             running = false;
             clearTimeout(id);
-            remaining -= new Date() - started;
+            remaining -= Date.now() - started;
         }
 
         this.restart = function () {
@@ -65,7 +65,7 @@ module.exports = {
 
         this.isFinished = function () {
             /* If exceeded initial delay value */
-            if ((new Date() - started) > delay) {
+            if ((Date.now() - started) > delay) {
                 running = false;
                 return true;
             }
@@ -156,13 +156,13 @@ module.exports = {
     },
 
     convertDecimalToHoursMinutes: function (time) {
-        let hours = Math.floor(time);
-        let minutes = Math.floor((time - hours) * 60);
+        const hours = Math.floor(time);
+        const minutes = Math.floor((time - hours) * 60);
 
-        hours = (hours < 10) ? `0${hours}`.toString() : hours.toString();
-        minutes = (minutes < 10) ? `0${minutes}`.toString() : minutes.toString();
+        const paddedHours = (hours < 10) ? `0${hours}` : `${hours}`;
+        const paddedMinutes = (minutes < 10) ? `0${minutes}` : `${minutes}`;
 
-        return `${hours}:${minutes}`;
+        return `${paddedHours}:${paddedMinutes}`;
     },
 
     getSecondsFromStringTime: function (str) {
