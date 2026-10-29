@@ -3,6 +3,11 @@ name: Update static game data
 on:
   workflow_dispatch:
     inputs:
+      items:
+        description: "Refresh the item metadata from the Rust dedicated server"
+        required: false
+        default: true
+        type: boolean
       rustlabs:
         description: "Refresh the RustLabs wiki data (has to get past Cloudflare)"
         required: false
@@ -54,6 +59,23 @@ jobs:
       - name: Install scraper dependency
         run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core
 
+      # scripts/downloadRustItems.js pulls only Bundles/items/*.json from depot 258554 (~0.5 MB)
+      # out of the ~5 GB Rust dedicated server depot. That depot is downloadable anonymously,
+      # so this needs no Steam credentials. The version is pinned for reproducible runs.
+      - name: Install DepotDownloader
+        if: github.event_name == 'schedule' || inputs.items
+        env:
+          DEPOT_DOWNLOADER_VERSION: DepotDownloader_3.4.0
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/depotdownloader
+          curl -fsSL \
+            "https://github.com/SteamRE/DepotDownloader/releases/download/${DEPOT_DOWNLOADER_VERSION}/DepotDownloader-linux-x64.zip" \
+            -o "${RUNNER_TEMP}/depotdownloader.zip"
+          unzip -q -o "${RUNNER_TEMP}/depotdownloader.zip" -d .cache/depotdownloader
+          chmod +x .cache/depotdownloader/DepotDownloader
+          echo "RPP_DEPOTDOWNLOADER_PATH=${GITHUB_WORKSPACE}/.cache/depotdownloader/DepotDownloader" >> "${GITHUB_ENV}"
+
       - name: Locate browser
         id: browser
         run: |
@@ -67,6 +89,7 @@ jobs:
 
       - name: Update static data
         env:
+          INPUT_ITEMS: ${{ github.event_name == 'schedule' && 'true' || inputs.items }}
           INPUT_RUSTLABS: ${{ github.event_name == 'schedule' && 'true' || inputs.rustlabs }}
           INPUT_HEADLESS: ${{ github.event_name == 'schedule' && 'true' || inputs.headless }}
           INPUT_SLEEP_MS: ${{ inputs.sleep_ms || '1500' }}
@@ -75,8 +98,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The runner has no Rust installation, so the item metadata step cannot run here.
-          args=(--skip-items)
+          args=()
+
+          if [ "${INPUT_ITEMS:-true}" = "true" ]; then
+            # Download the item meta files from the Rust dedicated server and regenerate items.json.
+            args+=(--download)
+          else
+            args+=(--skip-items)
+          fi
 
           if [ "${INPUT_RUSTLABS:-}" != "true" ]; then
             args+=(--skip-rustlabs)
