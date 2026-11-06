@@ -327,6 +327,7 @@
     "createGroupCap": "CREATE GROUP",
     "createTrackerCap": "CREATE TRACKER",
     "credentialsAddedSuccessfully": "FCM přihlašovací údaje byly úspěšně přidány pro steamId: {steamId}!",
+    "credentialsUpdatedSuccessfully": "FCM přihlašovací údaje pro steamId: {steamId} byly úspěšně aktualizovány!",
     "credentialsAlreadyRegistered": "FCM přihlašovací údaje pro steamId: {steamId} jsou již zaregistrovány!",
     "credentialsCannotStartLiteAlreadyHoster": "Nelze spustit FCM Listener Lite pro steamId: {steamId}. Již je hostitelem.",
     "credentialsDoNotExist": "FCM přihlašovací údaje pro steamId: {steamId} neexistují.",

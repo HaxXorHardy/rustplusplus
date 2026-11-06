@@ -327,23 +327,30 @@ async function setupNotificationSettings(client, guildId, channel) {
                 `resources/images/settings/notification_settings_logo_${instance.generalSettings.language}.png`))]
     });
 
-    for (const setting in instance.notificationSettings) {
+    /*
+        The template defines the supported settings, its order is also used for the settings channel. Entries
+        that are not part of the template are leftovers of older versions and have no translation.
+    */
+    for (const setting of Object.keys(client.readNotificationSettingsTemplate())) {
+        const notificationSetting = instance.notificationSettings[setting];
+        if (!notificationSetting) continue;
+
         await client.messageSend(channel, {
             embeds: [DiscordEmbeds.getEmbed({
                 color: Constants.COLOR_SETTINGS,
                 title: client.intlGet(guildId, setting),
-                thumbnail: `attachment://${instance.notificationSettings[setting].image}`
+                thumbnail: `attachment://${notificationSetting.image}`
             })],
             components: [
                 DiscordButtons.getNotificationButtons(
                     guildId, setting,
-                    instance.notificationSettings[setting].discord,
-                    instance.notificationSettings[setting].inGame,
-                    instance.notificationSettings[setting].voice)],
+                    notificationSetting.discord,
+                    notificationSetting.inGame,
+                    notificationSetting.voice)],
             files: [
                 new Discord.AttachmentBuilder(
                     Path.join(__dirname, '..',
-                        `resources/images/events/${instance.notificationSettings[setting].image}`))]
+                        `resources/images/events/${notificationSetting.image}`))]
         });
     }
 }

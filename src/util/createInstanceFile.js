@@ -127,6 +127,17 @@ module.exports = (client, guild) => {
                     }
                 }
             }
+
+            /*
+                Settings of events that are no longer supported were removed from the template, but they stay in
+                the instance file. Drop them, otherwise the settings channel keeps posting titles without a
+                translation (the setting name is used as translation id).
+            */
+            for (const key of Object.keys(instance.notificationSettings)) {
+                if (!notificationSettings.hasOwnProperty(key)) {
+                    delete instance.notificationSettings[key];
+                }
+            }
         }
 
         if (!instance.hasOwnProperty('channelId')) {
