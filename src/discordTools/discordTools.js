@@ -147,6 +147,9 @@ module.exports = {
     },
 
     getMessageById: async function (guildId, channelId, messageId) {
+        /* A missing id is a normal state, for example right after the channels were recreated. */
+        if (!channelId || !messageId) return null;
+
         const guild = module.exports.getGuild(guildId);
 
         if (guild) {
@@ -208,7 +211,13 @@ module.exports = {
     },
 
     removeCategory: async function (guildId, categoryId) {
+        /* Nothing left to remove when the id was already cleared. */
+        if (!categoryId) return true;
+
         const category = module.exports.getCategoryById(guildId, categoryId);
+
+        /* Or when the category is gone already. */
+        if (!category) return true;
 
         try {
             await category.delete();
@@ -250,7 +259,13 @@ module.exports = {
     },
 
     removeTextChannel: async function (guildId, channelId) {
+        /* Nothing left to remove when the id was already cleared. */
+        if (!channelId) return true;
+
         const channel = module.exports.getTextChannelById(guildId, channelId);
+
+        /* Or when the channel is gone already. */
+        if (!channel) return true;
 
         try {
             await channel.delete();

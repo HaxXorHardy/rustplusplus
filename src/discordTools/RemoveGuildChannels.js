@@ -20,6 +20,32 @@
 
 const DiscordTools = require('../discordTools/discordTools.js');
 
+/*
+    The messages lived in the removed channels and are gone with them. Clear the ids so the setup code
+    creates new messages instead of trying to edit messages that no longer exist.
+*/
+function clearMessageIds(instance) {
+    for (const messageType in instance.informationMessageId) {
+        instance.informationMessageId[messageType] = null;
+    }
+
+    for (const serverId in instance.serverList) {
+        const server = instance.serverList[serverId];
+
+        server.messageId = null;
+        for (const switchId in server.switches) server.switches[switchId].messageId = null;
+        for (const alarmId in server.alarms) server.alarms[alarmId].messageId = null;
+        for (const storageMonitorId in server.storageMonitors) {
+            server.storageMonitors[storageMonitorId].messageId = null;
+        }
+        for (const groupId in server.switchGroups) server.switchGroups[groupId].messageId = null;
+    }
+
+    for (const trackerId in instance.trackers) {
+        instance.trackers[trackerId].messageId = null;
+    }
+}
+
 module.exports = async (client, guild) => {
     const instance = client.getInstance(guild.id);
 
@@ -36,6 +62,8 @@ module.exports = async (client, guild) => {
 
     await DiscordTools.removeCategory(guild.id, categoryId);
     instance.channelId['category'] = null;
+
+    clearMessageIds(instance);
 
     client.setInstance(guild.id, instance);
 };

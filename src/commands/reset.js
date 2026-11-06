@@ -53,6 +53,26 @@ async function resetCategoryPermissions(client, guild, instance) {
     await setCategoryPermissions(client, category, PermissionHandler.getPermissionsRemoved(client, guild));
 }
 
+/*
+    /reset discord removes the channel the command was used in, which also removes the ephemeral reply.
+    Post the result in the activity channel in that case so the user still sees it.
+*/
+async function sendResetResult(client, interaction, str) {
+    const content = DiscordEmbeds.getActionInfoEmbed(0, str);
+
+    if (DiscordTools.getTextChannelById(interaction.guildId, interaction.channelId)) {
+        await client.interactionEditReply(interaction, content);
+        return;
+    }
+
+    const instance = client.getInstance(interaction.guildId);
+    const channel = DiscordTools.getTextChannelById(interaction.guildId, instance.channelId.activity);
+
+    if (!channel) return;
+
+    await client.messageSend(channel, { embeds: content.embeds });
+}
+
 module.exports = {
     name: 'reset',
 
@@ -141,6 +161,12 @@ module.exports = {
             } break;
 
             case 'information': {
+                /* The information messages are removed below, their ids are dead. */
+                for (const messageType in instance.informationMessageId) {
+                    instance.informationMessageId[messageType] = null;
+                }
+                client.setInstance(guild.id, instance);
+
                 await DiscordTools.clearTextChannel(guild.id, instance.channelId.information, 100);
 
                 const rustplus = client.rustplusInstances[guild.id];
@@ -249,7 +275,7 @@ module.exports = {
         }
 
         const str = client.intlGet(interaction.guildId, 'resetSuccess');
-        await client.interactionEditReply(interaction, DiscordEmbeds.getActionInfoEmbed(0, str));
+        await sendResetResult(client, interaction, str);
         client.log(client.intlGet(null, 'infoCap'), str);
     },
 };
