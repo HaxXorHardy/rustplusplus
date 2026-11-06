@@ -129,10 +129,11 @@ module.exports = {
                 await setCategoryPermissions(client, category,
                     PermissionHandler.getPermissionsRemoved(client, guild));
 
-                await DiscordTools.clearTextChannel(guild.id, instance.channelId.information, 100);
-                await DiscordTools.clearTextChannel(guild.id, instance.channelId.switches, 100);
-                await DiscordTools.clearTextChannel(guild.id, instance.channelId.switchGroups, 100);
-                await DiscordTools.clearTextChannel(guild.id, instance.channelId.storageMonitors, 100);
+                /*
+                    The channels were created from scratch above and are empty, so there is nothing to clear.
+                    Clearing them anyway would delete the messages the polling handlers post in the meantime,
+                    which leaves their stored message ids dangling.
+                */
 
                 const rustplus = client.rustplusInstances[guild.id];
                 if (rustplus && rustplus.isOperational) {
