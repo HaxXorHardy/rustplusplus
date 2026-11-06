@@ -191,9 +191,11 @@ function canSendInGameMessage(rustplus, client, channel, message) {
 
     if (channel === CHANNELS.CLAN) {
         if (!rustplus.isInClan()) {
-            debugLog(rustplus, client, `In-game ${dropped} dropped (the paired account is not in a clan).`);
+            warnClanChatUnavailable(rustplus, client);
             return false;
         }
+
+        rustplus.inGameChatChannelUnavailable = false;
         return true;
     }
 
@@ -203,6 +205,21 @@ function canSendInGameMessage(rustplus, client, channel, message) {
     }
 
     return true;
+}
+
+/*
+    Writing to the clan chat requires a known clan of the paired account. This is a configuration problem, so it
+    is logged as a warning (once, not for every single message) instead of being swallowed in debug mode.
+*/
+function warnClanChatUnavailable(rustplus, client) {
+    if (rustplus.inGameChatChannelUnavailable) return;
+
+    rustplus.inGameChatChannelUnavailable = true;
+
+    rustplus.log(client.intlGet(rustplus.guildId, 'errorCap'),
+        'No in-game messages are sent: the In-Game Chat Channel setting is set to the clan chat, but the paired ' +
+        'steam account is not in a clan (or the clan info could not be read). Join a clan with the paired ' +
+        'account or switch the setting back to the team chat.', 'warn');
 }
 
 /* Dropped messages are only logged in debug mode to keep the log of a normal run clean. */

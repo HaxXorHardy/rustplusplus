@@ -20,7 +20,7 @@
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const { CHANNELS, getConfiguredChannel } = require('../util/inGameChat.js');
-const { isResponseFailure } = require('../util/responseUtils.js');
+const { isResponseFailure, describeResponse } = require('../util/responseUtils.js');
 
 module.exports = {
     /*
@@ -43,18 +43,28 @@ module.exports = {
         clan chat can be used at all. Called on every connect and whenever the clan membership changes.
     */
     updateClanInfo: async function (rustplus, client) {
-        rustplus.clanInfo = parseClanInfo(await rustplus.getClanInfoAsync());
+        const response = await rustplus.getClanInfoAsync();
+        rustplus.clanInfo = parseClanInfo(response);
 
         if (getConfiguredChannel(rustplus.generalSettings) !== CHANNELS.CLAN) {
             return rustplus.clanInfo;
         }
 
-        if (rustplus.clanInfo === null) {
+        if (isResponseFailure(response)) {
+            rustplus.log(client.intlGet(rustplus.guildId, 'errorCap'),
+                'The in-game chat channel is set to the clan chat, but the clan info could not be read: ' +
+                `${describeResponse(response)}. No in-game messages are written until the clan is known.`,
+                'warn');
+        }
+        else if (rustplus.clanInfo === null) {
             rustplus.log(client.intlGet(rustplus.guildId, 'errorCap'),
                 'The in-game chat channel is set to the clan chat, but the paired steam account is not in a clan.',
                 'warn');
         }
         else {
+            /* The clan is known, in-game messages can be written to the clan chat again. */
+            rustplus.inGameChatChannelUnavailable = false;
+
             rustplus.log(client.intlGet(rustplus.guildId, 'infoCap'),
                 `In-game messages are written to the clan chat (clan "${rustplus.clanInfo.name}", ` +
                 `${rustplus.clanInfo.memberCount}/${rustplus.clanInfo.maxMemberCount} members).`);

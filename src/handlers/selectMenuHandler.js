@@ -20,10 +20,11 @@
 
 const Discord = require('discord.js');
 
+const ClanChatHandler = require('./clanChatHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordSelectMenus = require('../discordTools/discordSelectMenus.js');
 const DiscordTools = require('../discordTools/discordTools.js');
-const { normalizeChannel } = require('../util/inGameChat.js');
+const { CHANNELS, normalizeChannel } = require('../util/inGameChat.js');
 
 module.exports = async (client, interaction) => {
     const instance = client.getInstance(interaction.guildId);
@@ -127,6 +128,20 @@ module.exports = async (client, interaction) => {
             components: [DiscordSelectMenus.getInGameChatChannelSelectMenu(guildId,
                 instance.generalSettings.inGameChatChannel)]
         });
+
+        /*
+            Writing to the clan chat requires the clan of the paired account, so refresh it (after the
+            interaction was answered) and report it when the clan chat cannot be used. Otherwise the In-Game
+            messages would be dropped silently.
+        */
+        if (rustplus && instance.generalSettings.inGameChatChannel === CHANNELS.CLAN) {
+            try {
+                await ClanChatHandler.updateClanInfo(rustplus, client);
+            }
+            catch (e) {
+                client.log(client.intlGet(null, 'errorCap'), `Could not fetch the clan info: ${e}`, 'error');
+            }
+        }
     }
     else if (interaction.customId === 'VoiceGender') {
         instance.generalSettings.voiceGender = interaction.values[0];

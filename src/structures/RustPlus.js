@@ -115,6 +115,7 @@ class RustPlus extends RustPlusLib {
         this.time = null;           /* Stores the Time structure. */
         this.team = null;           /* Stores the Team structure. */
         this.clanInfo = null;       /* Stores the clan of the paired account, null when not fetched (yet). */
+        this.inGameChatChannelUnavailable = false;  /* Set once a missing clan chat was reported to the log. */
         this.mapMarkers = null;     /* Stores the MapMarkers structure. */
 
         this.loadRustPlusEvents();
