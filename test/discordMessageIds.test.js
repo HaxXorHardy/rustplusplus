@@ -24,6 +24,7 @@ const Test = require('node:test');
 const Client = require('../src/structures/clientRegistry.js');
 const DiscordMessages = require('../src/discordTools/discordMessages.js');
 const DiscordTools = require('../src/discordTools/discordTools.js');
+const InstanceUtils = require('../src/util/instanceUtils.js');
 const RemoveGuildChannels = require('../src/discordTools/RemoveGuildChannels.js');
 
 /* Message ids become stale when the channels are recreated by /reset, the message helpers have to
@@ -41,6 +42,26 @@ function fakeClient(overrides = {}) {
 
 function fakeChannel(id) {
     return { id: id };
+}
+
+/* An instance with every kind of tracked message id set. */
+function fakeInstance() {
+    return {
+        channelId: { category: null, information: null, servers: null },
+        informationMessageId: {
+            map: '1', server: '2', event: '3', team: '4', battlemetricsPlayers: '5', monument: '6'
+        },
+        serverList: {
+            serverId: {
+                messageId: '7',
+                switches: { entityId: { messageId: '8' } },
+                alarms: { entityId: { messageId: '9' } },
+                storageMonitors: { entityId: { messageId: '10' } },
+                switchGroups: { groupId: { messageId: '11' } }
+            }
+        },
+        trackers: { trackerId: { messageId: '12' } }
+    };
 }
 
 Test.describe('DiscordTools lookups with cleared ids', () => {
@@ -113,26 +134,35 @@ Test.describe('DiscordMessages.sendMessage', () => {
     });
 });
 
-Test.describe('RemoveGuildChannels', () => {
-    function fakeInstance() {
-        return {
-            channelId: { category: null, information: null, servers: null },
-            informationMessageId: {
-                map: '1', server: '2', event: '3', team: '4', battlemetricsPlayers: '5', monument: '6'
-            },
-            serverList: {
-                serverId: {
-                    messageId: '7',
-                    switches: { entityId: { messageId: '8' } },
-                    alarms: { entityId: { messageId: '9' } },
-                    storageMonitors: { entityId: { messageId: '10' } },
-                    switchGroups: { groupId: { messageId: '11' } }
-                }
-            },
-            trackers: { trackerId: { messageId: '12' } }
-        };
-    }
+Test.describe('Instance message id helpers', () => {
+    Test.it('clearInformationMessageIds drops only the information section ids', () => {
+        const instance = fakeInstance();
 
+        InstanceUtils.clearInformationMessageIds(instance);
+
+        Assert.deepStrictEqual(Object.values(instance.informationMessageId), [null, null, null, null, null, null]);
+        Assert.strictEqual(instance.serverList.serverId.messageId, '7');
+        Assert.strictEqual(instance.trackers.trackerId.messageId, '12');
+    });
+
+    Test.it('clearEntityMessageIds drops the server, device and tracker ids', () => {
+        const instance = fakeInstance();
+
+        InstanceUtils.clearEntityMessageIds(instance);
+
+        const server = instance.serverList.serverId;
+        Assert.strictEqual(server.messageId, null);
+        Assert.strictEqual(server.switches.entityId.messageId, null);
+        Assert.strictEqual(server.alarms.entityId.messageId, null);
+        Assert.strictEqual(server.storageMonitors.entityId.messageId, null);
+        Assert.strictEqual(server.switchGroups.groupId.messageId, null);
+        Assert.strictEqual(instance.trackers.trackerId.messageId, null);
+
+        Assert.strictEqual(instance.informationMessageId.map, '1');
+    });
+});
+
+Test.describe('RemoveGuildChannels', () => {
     Test.it('clears the ids of the messages that lived in the removed channels', async () => {
         const instance = fakeInstance();
         const client = {
@@ -148,14 +178,7 @@ Test.describe('RemoveGuildChannels', () => {
         Assert.strictEqual(instance.channelId.category, null);
         Assert.strictEqual(instance.channelId.information, null);
         Assert.strictEqual(instance.channelId.servers, null);
-
-        const server = instance.serverList.serverId;
-        Assert.strictEqual(server.messageId, null);
-        Assert.strictEqual(server.switches.entityId.messageId, null);
-        Assert.strictEqual(server.alarms.entityId.messageId, null);
-        Assert.strictEqual(server.storageMonitors.entityId.messageId, null);
-        Assert.strictEqual(server.switchGroups.groupId.messageId, null);
-
+        Assert.strictEqual(instance.serverList.serverId.messageId, null);
         Assert.strictEqual(instance.trackers.trackerId.messageId, null);
     });
 });

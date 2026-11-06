@@ -318,21 +318,12 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
     },
 
+    /* Posted when the map is ready (rustplusEvents/connected.js) and as part of the information cycle. */
     sendInformationMapMessage: async function (guildId) {
-        const instance = Client.client.getInstance(guildId);
-
-        const content = {
+        await sendInformationMessage(guildId, 'map', {
             files: [new Discord.AttachmentBuilder(
                 Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))]
-        }
-
-        const message = await module.exports.sendMessage(guildId, content, instance.informationMessageId.map,
-            instance.channelId.information);
-
-        if (message) {
-            instance.informationMessageId.map = message.id;
-            Client.client.setInstance(guildId, instance);
-        }
+        });
     },
 
     sendDiscordEventMessage: async function (guildId, serverId, text, image, color) {
@@ -434,112 +425,48 @@ module.exports = {
     },
 
     sendUpdateMapInformationMessage: async function (rustplus) {
-        const instance = Client.client.getInstance(rustplus.guildId);
-
-        const content = {
+        await sendInformationMessage(rustplus.guildId, 'map', {
             files: [new Discord.AttachmentBuilder(
                 Path.join(__dirname, '..', '..', `maps/${rustplus.guildId}_map_full.png`))]
-        }
-
-        const message = await module.exports.sendMessage(rustplus.guildId, content,
-            instance.informationMessageId.map, instance.channelId.information);
-
-        if (message && message.id !== instance.informationMessageId.map) {
-            instance.informationMessageId.map = message.id;
-            Client.client.setInstance(rustplus.guildId, instance);
-        }
+        });
     },
 
     sendUpdateServerInformationMessage: async function (rustplus) {
-        const instance = Client.client.getInstance(rustplus.guildId);
-
-        const content = {
+        await sendInformationMessage(rustplus.guildId, 'server', {
             embeds: [DiscordEmbeds.getUpdateServerInformationEmbed(rustplus)],
             files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', 'resources/images/server_info_logo.png')
-            )]
-        }
-
-        const message = await module.exports.sendMessage(rustplus.guildId, content,
-            instance.informationMessageId.server, instance.channelId.information);
-
-        if (message && message.id !== instance.informationMessageId.server) {
-            instance.informationMessageId.server = message.id;
-            Client.client.setInstance(rustplus.guildId, instance);
-        }
+                Path.join(__dirname, '..', 'resources/images/server_info_logo.png'))]
+        });
     },
 
     sendUpdateEventInformationMessage: async function (rustplus) {
-        const instance = Client.client.getInstance(rustplus.guildId);
-
-        const content = {
+        await sendInformationMessage(rustplus.guildId, 'event', {
             embeds: [DiscordEmbeds.getUpdateEventInformationEmbed(rustplus)],
             files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', 'resources/images/event_info_logo.png')
-            )]
-        }
-
-        const message = await module.exports.sendMessage(rustplus.guildId, content,
-            instance.informationMessageId.event, instance.channelId.information);
-
-        if (message && message.id !== instance.informationMessageId.event) {
-            instance.informationMessageId.event = message.id;
-            Client.client.setInstance(rustplus.guildId, instance);
-        }
+                Path.join(__dirname, '..', 'resources/images/event_info_logo.png'))]
+        });
     },
 
     sendUpdateMonumentInformationMessage: async function (rustplus) {
-        const instance = Client.client.getInstance(rustplus.guildId);
-
-        const content = {
+        await sendInformationMessage(rustplus.guildId, 'monument', {
             embeds: [DiscordEmbeds.getUpdateMonumentInformationEmbed(rustplus)],
             files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', 'resources/images/monument_info_logo.png')
-            )]
-        }
-
-        const message = await module.exports.sendMessage(rustplus.guildId, content,
-            instance.informationMessageId.monument, instance.channelId.information);
-
-        if (message && message.id !== instance.informationMessageId.monument) {
-            instance.informationMessageId.monument = message.id;
-            Client.client.setInstance(rustplus.guildId, instance);
-        }
+                Path.join(__dirname, '..', 'resources/images/monument_info_logo.png'))]
+        });
     },
 
     sendUpdateTeamInformationMessage: async function (rustplus) {
-        const instance = Client.client.getInstance(rustplus.guildId);
-
-        const content = {
+        await sendInformationMessage(rustplus.guildId, 'team', {
             embeds: [DiscordEmbeds.getUpdateTeamInformationEmbed(rustplus)],
             files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', 'resources/images/team_info_logo.png')
-            )]
-        }
-
-        const message = await module.exports.sendMessage(rustplus.guildId, content,
-            instance.informationMessageId.team, instance.channelId.information);
-
-        if (message && message.id !== instance.informationMessageId.team) {
-            instance.informationMessageId.team = message.id;
-            Client.client.setInstance(rustplus.guildId, instance);
-        }
+                Path.join(__dirname, '..', 'resources/images/team_info_logo.png'))]
+        });
     },
 
     sendUpdateBattlemetricsOnlinePlayersInformationMessage: async function (rustplus, battlemetricsId) {
-        const instance = Client.client.getInstance(rustplus.guildId);
-
-        const content = {
+        await sendInformationMessage(rustplus.guildId, 'battlemetricsPlayers', {
             embeds: [DiscordEmbeds.getUpdateBattlemetricsOnlinePlayersInformationEmbed(rustplus, battlemetricsId)]
-        }
-
-        const message = await module.exports.sendMessage(rustplus.guildId, content,
-            instance.informationMessageId.battlemetricsPlayers, instance.channelId.information);
-
-        if (message && message.id !== instance.informationMessageId.battlemetricsPlayers) {
-            instance.informationMessageId.battlemetricsPlayers = message.id;
-            Client.client.setInstance(rustplus.guildId, instance);
-        }
+        });
     },
 
     /*
@@ -755,6 +682,23 @@ module.exports = {
 
         await Client.client.interactionEditReply(interaction, content);
     },
+}
+
+/*
+    Sends (or edits) one of the messages of the information channel and stores its id in the instance. A message
+    that does not exist anymore is posted again by sendMessage, the id of the section is then replaced.
+*/
+async function sendInformationMessage(guildId, messageType, content) {
+    const instance = Client.client.getInstance(guildId);
+    const previousId = instance.informationMessageId[messageType];
+
+    const message = await module.exports.sendMessage(guildId, content, previousId,
+        instance.channelId.information);
+
+    if (!message || message.id === previousId) return;
+
+    instance.informationMessageId[messageType] = message.id;
+    Client.client.setInstance(guildId, instance);
 }
 
 /*

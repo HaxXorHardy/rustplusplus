@@ -327,11 +327,13 @@ async function setupNotificationSettings(client, guildId, channel) {
                 `resources/images/settings/notification_settings_logo_${instance.generalSettings.language}.png`))]
     });
 
+    const notificationSettings = client.readNotificationSettingsTemplate();
+
     /*
         The template defines the supported settings, its order is also used for the settings channel. Entries
         that are not part of the template are leftovers of older versions and have no translation.
     */
-    for (const setting of Object.keys(client.readNotificationSettingsTemplate())) {
+    for (const setting of Object.keys(notificationSettings)) {
         const notificationSetting = instance.notificationSettings[setting];
         if (!notificationSetting) continue;
 

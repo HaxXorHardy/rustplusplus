@@ -33,6 +33,7 @@ const SetupSwitchGroups = require('../discordTools/SetupSwitchGroups.js');
 const SetupAlarms = require('../discordTools/SetupAlarms.js');
 const SetupStorageMonitors = require('../discordTools/SetupStorageMonitors.js');
 const SetupTrackers = require('../discordTools/SetupTrackers.js');
+const InstanceUtils = require('../util/instanceUtils.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 
 /* Catches that must not abort a reset: the category may be missing or the bot may lack Manage Roles.
@@ -54,8 +55,8 @@ async function resetCategoryPermissions(client, guild, instance) {
 }
 
 /*
-    /reset discord removes the channel the command was used in, which also removes the ephemeral reply.
-    Post the result in the activity channel in that case so the user still sees it.
+    Reports the result of a reset. /reset discord removes the channel the command was used in, which also removes
+    the ephemeral reply, so the result is posted in the activity channel in that case.
 */
 async function sendResetResult(client, interaction, str) {
     const content = DiscordEmbeds.getActionInfoEmbed(0, str);
@@ -123,17 +124,16 @@ module.exports = {
             case 'discord': {
                 await RemoveGuildChannels(client, guild);
 
+                /*
+                    The channels are created from scratch here, so they are empty and are not cleared afterwards.
+                    Clearing would delete the messages the polling handlers post into them in the meantime, which
+                    leaves the stored message ids dangling.
+                */
                 const category = await SetupGuildCategory(client, guild);
                 await SetupGuildChannels(client, guild, category);
 
                 await setCategoryPermissions(client, category,
                     PermissionHandler.getPermissionsRemoved(client, guild));
-
-                /*
-                    The channels were created from scratch above and are empty, so there is nothing to clear.
-                    Clearing them anyway would delete the messages the polling handlers post in the meantime,
-                    which leaves their stored message ids dangling.
-                */
 
                 const rustplus = client.rustplusInstances[guild.id];
                 if (rustplus && rustplus.isOperational) {
@@ -163,9 +163,7 @@ module.exports = {
 
             case 'information': {
                 /* The information messages are removed below, their ids are dead. */
-                for (const messageType in instance.informationMessageId) {
-                    instance.informationMessageId[messageType] = null;
-                }
+                InstanceUtils.clearInformationMessageIds(instance);
                 client.setInstance(guild.id, instance);
 
                 await DiscordTools.clearTextChannel(guild.id, instance.channelId.information, 100);

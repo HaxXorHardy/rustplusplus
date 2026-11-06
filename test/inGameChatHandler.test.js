@@ -81,8 +81,8 @@ Test.describe('In-Game chat channel selection', () => {
     Test.it('sends a queued message through the clan chat request', async () => {
         const calls = [];
         const rustplus = fakeRustplus({ inClan: true });
-        rustplus.sendClanMessageAsync = async (message) => calls.push(['clan', message]);
-        rustplus.sendTeamMessageAsync = async (message) => calls.push(['team', message]);
+        rustplus.sendClanMessageAsync = async (message) => { calls.push(['clan', message]); return {}; };
+        rustplus.sendTeamMessageAsync = async (message) => { calls.push(['team', message]); return {}; };
 
         await InGameChatHandler.sendQueuedInGameMessage(
             rustplus, fakeClient(), { text: 'hello', chatChannel: CHANNELS.CLAN });
@@ -93,8 +93,8 @@ Test.describe('In-Game chat channel selection', () => {
     Test.it('sends a queued message through the team chat request', async () => {
         const calls = [];
         const rustplus = fakeRustplus({ inClan: true });
-        rustplus.sendClanMessageAsync = async (message) => calls.push(['clan', message]);
-        rustplus.sendTeamMessageAsync = async (message) => calls.push(['team', message]);
+        rustplus.sendClanMessageAsync = async (message) => { calls.push(['clan', message]); return {}; };
+        rustplus.sendTeamMessageAsync = async (message) => { calls.push(['team', message]); return {}; };
 
         await InGameChatHandler.sendQueuedInGameMessage(
             rustplus, fakeClient(), { text: 'hello', chatChannel: CHANNELS.TEAM });
