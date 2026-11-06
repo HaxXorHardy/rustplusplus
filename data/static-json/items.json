@@ -82,7 +82,7 @@
     "54265286": {
         "shortname": "pie.crocodile",
         "name": "Crocodile Pie",
-        "description": "A pie made from crocodile meat, may cause a reptile dysfunction. Boosts hunger, health and hydration. Gives better night vision, including tree markings and ore hotspots, for a short time."
+        "description": "A pie made from crocodile meat, may cause a reptile dysfunction. Causes most animals to fear the player and keep their distance."
     },
     "54436981": {
         "shortname": "electric.fairylights",
@@ -1635,7 +1635,7 @@
         "description": "A spooky Halloween Wreath for the doors in your base. Part of the Spooky Decor Bundle."
     },
     "1174484438": {
-        "shortname": "mini fridge",
+        "shortname": "minifridge",
         "name": "Mini Fridge",
         "description": "Ideal for preserving food and keeping items cool."
     },
@@ -2932,7 +2932,7 @@
     "1930628359": {
         "shortname": "alien.costume",
         "name": "Alien Costume",
-        "description": "An inflatable alien costume. Acting as a replacement for wooden pants, you can equip this item to look as silly as possible. Three varieties."
+        "description": "An inflatable alien costume. Acting as a replacement for bone armor, you can equip this item to look as silly as possible. Three varieties."
     },
     "1931713481": {
         "shortname": "black.raspberries",
@@ -3194,6 +3194,11 @@
         "name": "Gold Mirror Standing",
         "description": "A standing gold mirror"
     },
+    "2125127001": {
+        "shortname": "smg.uzi",
+        "name": "Uzi",
+        "description": "A compact, fast-firing machine pistol. Hold [+firemode] to extend the stock for better control."
+    },
     "2126889441": {
         "shortname": "santabeard",
         "name": "Santa Beard",
@@ -3265,9 +3270,9 @@
         "description": "Vertical Abyss container taken from the depths of the ocean"
     },
     "-1896395719": {
-        "shortname": "advancedblueprintfragment",
-        "name": "Advanced Blueprint Fragment",
-        "description": "Precision schematics with complex information, multiple fragments are necessary for crafting a Tier 3 Workbench."
+        "shortname": "blueprintbook",
+        "name": "Blueprint Book",
+        "description": "A bound collection of precise schematics, used to research Workbench Level 3 items on the tech tree."
     },
     "-1498613415": {
         "shortname": "advancedcoolingtea",
@@ -3510,9 +3515,9 @@
         "description": "Base single shelves"
     },
     "-143481979": {
-        "shortname": "basicblueprintfragment",
-        "name": "Basic Blueprint Fragment",
-        "description": "Damaged diagrams containing partial information to constuct a Tier 2 Workbench for advanced crafting. Several fragments are needed.\n\n20 Basic Fragments can be pieced together to make an Advanced Fragment."
+        "shortname": "blueprintfragment",
+        "name": "Blueprint Fragment",
+        "description": "Damaged diagrams containing partial information, used to research Workbench Level 1 items on the tech tree.\n\n10 Blueprint Fragments can be pieced together to make a Blueprint Page."
     },
     "-1274093662": {
         "shortname": "bathtub.planter",
@@ -3603,6 +3608,11 @@
         "shortname": "blueprintbase",
         "name": "Blueprint",
         "description": "Blueprint"
+    },
+    "-1716287874": {
+        "shortname": "blueprintpage",
+        "name": "Blueprint Page",
+        "description": "A partially restored schematic page, used to research Workbench Level 2 items on the tech tree."
     },
     "-880412831": {
         "shortname": "blunderbuss",
@@ -3788,6 +3798,11 @@
         "shortname": "clothing.mod.armorinsert_wood",
         "name": "Wooden Armor Insert",
         "description": "Wood insert for crafted clothes and armor, provides some extra protection from bullets and melee."
+    },
+    "-593892104": {
+        "shortname": "clothing.mod.armorinsert_wool",
+        "name": "Wool Armor Insert",
+        "description": "Wool insert for clothing and armour. Adds cold, melee and projectile protection."
     },
     "-582467439": {
         "shortname": "cocoknight.armor.helmet",
@@ -5224,6 +5239,11 @@
         "name": "Rich Beef Pie",
         "description": "A pie made of beef, enriched with cream. Increases the maximum amount of food that can be eaten, up to double the normal amount. High calorie consumption increases chance of recovering from injuries."
     },
+    "-1540865198": {
+        "shortname": "pie.crocodile.rich",
+        "name": "Rich Crocodile Pie",
+        "description": "A crocodile pie enriched with cream, may cause a reptile dysfunction. Causes most animals to fear the player and keep their distance for longer."
+    },
     "-1785248332": {
         "shortname": "pie.fish",
         "name": "Fish Pie",
@@ -5648,6 +5668,11 @@
         "shortname": "seed.yellow.berry",
         "name": "Yellow Berry Seed",
         "description": "These yellow berry seeds can be planted in the ground and grown to collect additional food.\n\n\nPlanting these seeds in a planter, and then watering them with large quantities of water yields significantly more berries and faster growth."
+    },
+    "-1953695556": {
+        "shortname": "shears",
+        "name": "Shears",
+        "description": "Used to shear wool from sheep. More effective than other weapons and will never hurt a sheep."
     },
     "-1994909036": {
         "shortname": "sheetmetal",
@@ -6477,7 +6502,7 @@
     "-180862419": {
         "shortname": "workbench.upgrade.prototype",
         "name": "Prototype Workbench Upgrade",
-        "description": "Allows unlocking any tech tree item regardless of progression. Cost is doubled and there is a 25% chance of failure that still consumes resources."
+        "description": "Allows unlocking any tech tree item regardless of progression. Each attempt has a 25% chance to succeed, and a failed attempt still consumes resources."
     },
     "-286541059": {
         "shortname": "workbench.upgrade.recyclebin",
@@ -6487,7 +6512,7 @@
     "-160105346": {
         "shortname": "workbench.upgrade.salvage",
         "name": "Salvage Workbench Upgrade",
-        "description": "Reduces the scrap cost of all tech tree unlocks at this bench by 20%."
+        "description": "Each blueprint spent on tech tree unlocks at this bench has a 20% chance to not be consumed."
     },
     "-1536343135": {
         "shortname": "workbench.upgrade.surplus",
