@@ -40,8 +40,15 @@ module.exports = async (client, guild) => {
     const hoster = credentials.hoster;
 
     if (Object.keys(credentials).length === 1) {
-        client.log(client.intlGet(null, 'warningCap'),
+        /*
+            FCM is optional since the login and the notification history provide the servers and devices
+            (util/rustplusHistory.js), so this is not an error anymore.
+        */
+        client.log(client.intlGet(null, 'infoCap'),
             client.intlGet(null, 'credentialsNotRegisteredForGuild', { id: guild.id }));
+        client.log(client.intlGet(null, 'infoCap'),
+            'FCM credentials are not required for the Rust+ connection - servers and paired devices are read from ' +
+            'the account state and its notification history.');
         return;
     }
 

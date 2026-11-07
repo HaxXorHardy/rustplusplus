@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam frågar om den här enheten får auktoriseras. Bekräfta inloggningen i Steam-appen och tryck sedan på **Bekräftat**.",
     "credentialsLoginEmailConfirmGuard": "Steam har skickat en inloggningslänk till din e-post. Öppna länken och tryck sedan på **Bekräftat**.",
     "credentialsLoginSuccess": "Inloggad som {steamId}. Token giltig till {expires}. Uppdaterade server-id:n: {servers}.",
+    "credentialsLoginConnected": "Servern \"{server}\" är ansluten, enheterna ställs in.",
     "credentialsLoginFailed": "Inloggningen misslyckades: {error}",
     "credentialsLoginExpired": "Inloggningssessionen har gått ut. Använd /credentials login igen.",
     "currencySign": "Valutatecken",

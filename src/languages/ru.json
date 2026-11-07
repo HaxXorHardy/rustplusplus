@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam спрашивает, можно ли авторизовать это устройство. Подтвердите вход в приложении Steam и нажмите **Подтверждено**.",
     "credentialsLoginEmailConfirmGuard": "Steam отправил ссылку для входа на вашу почту. Откройте ссылку, затем нажмите **Подтверждено**.",
     "credentialsLoginSuccess": "Вы вошли как {steamId}. Токен действителен до {expires}. Обновлено ID серверов: {servers}.",
+    "credentialsLoginConnected": "Сервер \"{server}\" подключён, устройства настраиваются.",
     "credentialsLoginFailed": "Ошибка входа: {error}",
     "credentialsLoginExpired": "Сеанс входа истёк. Используйте /credentials login снова.",
     "currencySign": "Валютный знак",

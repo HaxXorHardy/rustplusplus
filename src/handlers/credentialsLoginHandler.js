@@ -21,6 +21,7 @@
 const Constants = require('../util/constants.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
+const DiscordMessages = require('../discordTools/discordMessages.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusLogin = require('../util/rustplusLogin.js');
@@ -234,7 +235,33 @@ async function complete(client, interaction, flow) {
             `Rust+ login: ${applied.servers} server(s), ${applied.created} newly created, ` +
             `${applied.devices + paired.devices} device(s) adopted.`);
 
-        restartActiveServer(client, guildId);
+        /* Post the server messages, otherwise the new servers are invisible in Discord. */
+        const serverIds = Object.keys(instance.serverList);
+        for (const serverId of serverIds) {
+            await DiscordMessages.sendServerMessage(guildId, serverId, null);
+        }
+
+        /*
+            The devices get their Discord messages when the server connects. With a single server it is activated
+            right here, with several the user picks one in the servers channel.
+        */
+        let activated = null;
+
+        if (instance.activeServer === null && serverIds.length === 1) {
+            const serverId = serverIds[0];
+            const server = instance.serverList[serverId];
+
+            instance.activeServer = serverId;
+            client.setInstance(guildId, instance);
+
+            client.createRustplusInstance(guildId, server.serverIp, server.appPort, server.steamId,
+                server.playerToken);
+
+            activated = serverId;
+        }
+        else {
+            restartActiveServer(client, guildId);
+        }
 
         const expires = RustPlusTransport.getAuthTokenExpiry(auth.token);
 
@@ -242,7 +269,9 @@ async function complete(client, interaction, flow) {
             steamId: `${auth.steamId}`,
             servers: `${applied.servers}`,
             expires: expires === null ? '?' : `<t:${expires}:f>`
-        }));
+        }) + (activated === null ? '' : `\n\n${client.intlGet(guildId, 'credentialsLoginConnected', {
+            server: `${instance.serverList[activated].title}`
+        })}`));
     }
     catch (e) {
         return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginFailed', {

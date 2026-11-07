@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam demande si cet appareil peut être autorisé. Confirmez la connexion dans l'application Steam, puis cliquez sur **Confirmé**.",
     "credentialsLoginEmailConfirmGuard": "Steam a envoyé un lien de connexion à votre e-mail. Ouvrez le lien, puis cliquez sur **Confirmé**.",
     "credentialsLoginSuccess": "Connecté en tant que {steamId}. Jeton valable jusqu'au {expires}. Ids des serveurs mis à jour : {servers}.",
+    "credentialsLoginConnected": "Le serveur \"{server}\" est connecté, les appareils sont en cours de configuration.",
     "credentialsLoginFailed": "Échec de la connexion : {error}",
     "credentialsLoginExpired": "La session de connexion a expiré. Utilisez /credentials login à nouveau.",
     "currencySign": "Symbôle de devise",

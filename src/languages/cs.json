@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam se ptá, zda smí být toto zařízení autorizováno. Potvrďte přihlášení v aplikaci Steam a poté stiskněte **Potvrzeno**.",
     "credentialsLoginEmailConfirmGuard": "Steam poslal přihlašovací odkaz na váš e-mail. Otevřete odkaz a poté stiskněte **Potvrzeno**.",
     "credentialsLoginSuccess": "Přihlášen jako {steamId}. Token platný do {expires}. Aktualizované ID serverů: {servers}.",
+    "credentialsLoginConnected": "Server \"{server}\" je připojen, zařízení se nastavují.",
     "credentialsLoginFailed": "Přihlášení selhalo: {error}",
     "credentialsLoginExpired": "Přihlašovací relace vypršela. Použijte /credentials login znovu.",
     "currencySign": "Currency Sign",

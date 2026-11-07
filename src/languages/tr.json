@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam bu cihazın yetkilendirilmesine izin verilsin mi diye soruyor. Steam uygulamasında girişi onaylayın ve ardından **Onaylandı** düğmesine basın.",
     "credentialsLoginEmailConfirmGuard": "Steam e-postanıza bir giriş bağlantısı gönderdi. Bağlantıyı açın ve ardından **Onaylandı** düğmesine basın.",
     "credentialsLoginSuccess": "{steamId} olarak giriş yapıldı. Token {expires} tarihine kadar geçerli. Güncellenen sunucu kimlikleri: {servers}.",
+    "credentialsLoginConnected": "\"{server}\" sunucusuna bağlanıldı, cihazlar ayarlanıyor.",
     "credentialsLoginFailed": "Giriş başarısız: {error}",
     "credentialsLoginExpired": "Giriş oturumu sona erdi. /credentials login komutunu tekrar kullanın.",
     "currencySign": "Para birimi işareti",

@@ -360,6 +360,7 @@
     "credentialsLoginConfirmGuard": "Steam asks whether this device may be authorized. Confirm the login in the Steam mobile app, then press **Confirmed**.",
     "credentialsLoginEmailConfirmGuard": "Steam sent a login link to your e-mail. Open the link, then press **Confirmed**.",
     "credentialsLoginSuccess": "Logged in as {steamId}. Token valid until {expires}. Server ids updated: {servers}.",
+    "credentialsLoginConnected": "Server \"{server}\" is connected, its devices are set up.",
     "credentialsLoginFailed": "Login failed: {error}",
     "credentialsLoginExpired": "The login session expired. Use /credentials login again.",
     "currencySign": "Currency Sign",

@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam pyta, czy to urządzenie może zostać autoryzowane. Potwierdź logowanie w aplikacji Steam, a następnie naciśnij **Potwierdzono**.",
     "credentialsLoginEmailConfirmGuard": "Steam wysłał link logowania na twój e-mail. Otwórz link, a następnie naciśnij **Potwierdzono**.",
     "credentialsLoginSuccess": "Zalogowano jako {steamId}. Token ważny do {expires}. Zaktualizowane identyfikatory serwerów: {servers}.",
+    "credentialsLoginConnected": "Serwer \"{server}\" jest połączony, urządzenia są konfigurowane.",
     "credentialsLoginFailed": "Logowanie nie powiodło się: {error}",
     "credentialsLoginExpired": "Sesja logowania wygasła. Użyj ponownie /credentials login.",
     "currencySign": "Currency Sign",

@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam chiede se questo dispositivo può essere autorizzato. Conferma l'accesso nell'app Steam, poi premi **Confermato**.",
     "credentialsLoginEmailConfirmGuard": "Steam ha inviato un link di accesso alla tua e-mail. Apri il link, poi premi **Confermato**.",
     "credentialsLoginSuccess": "Accesso effettuato come {steamId}. Token valido fino a {expires}. Id dei server aggiornati: {servers}.",
+    "credentialsLoginConnected": "Il server \"{server}\" è connesso, i dispositivi vengono configurati.",
     "credentialsLoginFailed": "Accesso non riuscito: {error}",
     "credentialsLoginExpired": "La sessione di accesso è scaduta. Usa di nuovo /credentials login.",
     "currencySign": "Simbolo di Valuta",

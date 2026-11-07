@@ -359,6 +359,7 @@
     "credentialsLoginConfirmGuard": "Steam fragt, ob dieses Gerät autorisiert werden darf. Bestätige den Login in der Steam-App und drücke danach **Bestätigt**.",
     "credentialsLoginEmailConfirmGuard": "Steam hat einen Login-Link an deine E-Mail geschickt. Öffne den Link und drücke danach **Bestätigt**.",
     "credentialsLoginSuccess": "Eingeloggt als {steamId}. Token gültig bis {expires}. Server-Ids aktualisiert: {servers}.",
+    "credentialsLoginConnected": "Server \"{server}\" ist verbunden, die Geräte werden eingerichtet.",
     "credentialsLoginFailed": "Login fehlgeschlagen: {error}",
     "credentialsLoginExpired": "Die Login-Sitzung ist abgelaufen. Nutze /credentials login erneut.",
     "currencySign": "Währungszeichen",
