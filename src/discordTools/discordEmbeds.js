@@ -1090,6 +1090,7 @@ module.exports = {
     getCredentialsShowEmbed: async function (guildId) {
         const credentials = InstanceUtils.readCredentialsFile(guildId);
         const now = Math.floor(Date.now() / 1000);
+        const entries = Object.keys(credentials).filter((key) => key !== 'hoster');
         let names = '';
         let steamIds = '';
         let hoster = '';
@@ -1119,7 +1120,7 @@ module.exports = {
         if (hoster === '') hoster = Client.client.intlGet(guildId, 'empty');
         if (expires === '') expires = Client.client.intlGet(guildId, 'empty');
 
-        return module.exports.getEmbed({
+        const options = {
             color: Constants.COLOR_DEFAULT,
             title: Client.client.intlGet(guildId, 'fcmCredentials'),
             fields: [
@@ -1127,7 +1128,14 @@ module.exports = {
                 { name: 'SteamID', value: steamIds, inline: true },
                 { name: Client.client.intlGet(guildId, 'hoster'), value: hoster, inline: true },
                 { name: Client.client.intlGet(guildId, 'credentialsExpires'), value: expires, inline: true }]
-        });
+        };
+
+        /* Without credentials the fields only say "empty", explain what is missing and what is still needed. */
+        if (entries.length === 0) {
+            options.description = Client.client.intlGet(guildId, 'credentialsShowEmptyHint');
+        }
+
+        return module.exports.getEmbed(options);
     },
 
     getCredentialsExpiryEmbed: function (guildId, steamId, expireDate, expired) {

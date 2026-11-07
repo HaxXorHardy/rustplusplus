@@ -863,5 +863,6 @@
     "wipeDetected": "Wipe detetado!",
     "yield": "Rendimento",
     "youAreAlreadyLeader": "Você já é o líder.",
-    "youAreNotPairedWithServer": "O comando Líder não funciona porque você não está emparelhado com o servidor."
+    "youAreNotPairedWithServer": "O comando Líder não funciona porque você não está emparelhado com o servidor.",
+    "credentialsShowEmptyHint": "Não há credenciais FCM guardadas. Só são necessárias para as notificações de emparelhamento e as notificações FCM (alarmes, eventos de equipa) - a ligação ao Rust+ usa \"/credentials login\". Adicione-as com \"/credentials add\"."
 }

@@ -863,5 +863,6 @@
     "wipeDetected": "Wipe erkannt!",
     "yield": "Ertrag",
     "youAreAlreadyLeader": "Du bist bereits Anführer.",
-    "youAreNotPairedWithServer": "Anführer-Befehl funktioniert nicht, weil du nicht mit dem Server gekoppelt bist."
+    "youAreNotPairedWithServer": "Anführer-Befehl funktioniert nicht, weil du nicht mit dem Server gekoppelt bist.",
+    "credentialsShowEmptyHint": "Es sind keine FCM-Credentials gespeichert. Sie werden nur für Pairing-Benachrichtigungen und die FCM-Meldungen (Alarme, Team-Ereignisse) gebraucht - die Rust+-Verbindung selbst läuft über \"/credentials login\". Hinzufügen mit \"/credentials add\"."
 }

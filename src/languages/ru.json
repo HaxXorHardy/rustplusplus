@@ -863,5 +863,6 @@
     "wipeDetected": "Обнаружен Wipe!",
     "yield": "Урожай",
     "youAreAlreadyLeader": "Вы уже лидер.",
-    "youAreNotPairedWithServer": "Команда лидера не работает, потому что вы не подключены к серверу."
+    "youAreNotPairedWithServer": "Команда лидера не работает, потому что вы не подключены к серверу.",
+    "credentialsShowEmptyHint": "Данные FCM не сохранены. Они нужны только для уведомлений о сопряжении и уведомлений FCM (тревоги, события команды) - для подключения к Rust+ используется \"/credentials login\". Добавьте их через \"/credentials add\"."
 }

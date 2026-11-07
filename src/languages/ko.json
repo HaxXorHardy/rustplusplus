@@ -863,5 +863,6 @@
     "wipeDetected": "서버 초기화가 감지되었습니다!",
     "yield": "Yield",
     "youAreAlreadyLeader": "당신은 이미 팀 리더 입니다.",
-    "youAreNotPairedWithServer": "서버와 페어링되지 않았기 때문에 리더 명령어가 작동하지 않습니다."
+    "youAreNotPairedWithServer": "서버와 페어링되지 않았기 때문에 리더 명령어가 작동하지 않습니다.",
+    "credentialsShowEmptyHint": "저장된 FCM 자격 증명이 없습니다. FCM 자격 증명은 페어링 알림과 FCM 알림(경보, 팀 이벤트)에만 필요합니다. Rust+ 연결은 \"/credentials login\"을 사용합니다. \"/credentials add\"로 추가하세요."
 }

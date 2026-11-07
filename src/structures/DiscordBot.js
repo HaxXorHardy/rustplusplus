@@ -274,10 +274,24 @@ class DiscordBot extends Discord.Client {
         for (const [steamId, content] of Object.entries(credentials)) {
             if (steamId === 'hoster') continue;
 
+            /* Credential files of older versions have no owner, they cannot be matched with the members. */
+            if (!content || !content.discord_user_id) {
+                this.log(this.intlGet(null, 'warningCap'),
+                    `FCM credentials of ${steamId} have no Discord user stored, removing them.`);
+                steamIdRemoveCredentials.push(steamId);
+                continue;
+            }
+
             if (!(memberIds.includes(content.discord_user_id))) {
+                this.log(this.intlGet(null, 'warningCap'),
+                    `FCM credentials of ${steamId} belong to ${content.discord_user_id}, who is not a member of ` +
+                    `${guild.name} anymore - removing them.`);
                 steamIdRemoveCredentials.push(steamId);
             }
         }
+
+        /* Leave the file alone when nothing has to be removed, so its timestamp stays meaningful. */
+        if (steamIdRemoveCredentials.length === 0) return;
 
         for (const steamId of steamIdRemoveCredentials) {
             if (steamId === credentials.hoster) {
@@ -288,10 +302,10 @@ class DiscordBot extends Discord.Client {
                 credentials.hoster = null;
             }
             else {
-                if (this.fcmListenersLite[guild.id][steamId]) {
+                if (this.fcmListenersLite[guild.id] && this.fcmListenersLite[guild.id][steamId]) {
                     this.fcmListenersLite[guild.id][steamId].destroy();
                 }
-                delete this.fcmListenersLite[guild.id][steamId];
+                if (this.fcmListenersLite[guild.id]) delete this.fcmListenersLite[guild.id][steamId];
             }
 
             delete credentials[steamId];

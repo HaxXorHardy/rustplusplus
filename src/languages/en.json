@@ -863,5 +863,6 @@
     "wipeDetected": "Wipe detected!",
     "yield": "Yield",
     "youAreAlreadyLeader": "You are already leader.",
-    "youAreNotPairedWithServer": "Leader command does not work because you're not paired with the server."
+    "youAreNotPairedWithServer": "Leader command does not work because you're not paired with the server.",
+    "credentialsShowEmptyHint": "No FCM credentials are stored. They are only needed for pairing notifications and the FCM notifications (alarms, team events) - the Rust+ connection itself uses \"/credentials login\". Add them with \"/credentials add\"."
 }
