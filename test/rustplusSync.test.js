@@ -276,3 +276,43 @@ Test.describe('RustPlusSync.applySyncServers (keepCredentials)', () => {
         Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].guid, SERVER_ID);
     });
 });
+
+Test.describe('RustPlusSync deleted devices', () => {
+    function data(devices) {
+        return [{ id: SERVER_ID, name: "Captain's Quarters", playerToken: 42, devices: devices }];
+    }
+
+    Test.it('does not adopt a device that was removed in Discord', () => {
+        const instance = { serverList: {}, deletedDevices: { [SERVER_ID]: { [SWITCH_ID]: Date.now() } } };
+
+        RustPlusSync.applySyncServers(instance, STEAM_ID,
+            data([{ id: `${SWITCH_ID}`, type: 1, name: 'Switch' }]), intlGet);
+
+        const server = instance.serverList[`relay-${SERVER_ID}`];
+        Assert.deepStrictEqual(Object.keys(server.switches), []);
+    });
+
+    Test.it('adopts a device that is not marked', () => {
+        const instance = { serverList: {}, deletedDevices: { [SERVER_ID]: {} } };
+
+        RustPlusSync.applySyncServers(instance, STEAM_ID,
+            data([{ id: `${SWITCH_ID}`, type: 1, name: 'Switch' }]), intlGet);
+
+        const server = instance.serverList[`relay-${SERVER_ID}`];
+        Assert.deepStrictEqual(Object.keys(server.switches), [`${SWITCH_ID}`]);
+    });
+
+    Test.it('marks and clears a removal', () => {
+        const instance = { serverList: {} };
+
+        Assert.strictEqual(RustPlusSync.markDeviceDeleted(instance, { guid: SERVER_ID }, '42'), true);
+        Assert.ok(RustPlusSync.getDeletedDevices(instance, SERVER_ID)['42'] > 0);
+
+        Assert.strictEqual(RustPlusSync.clearDeletedDevice(instance, SERVER_ID, '42'), true);
+        Assert.strictEqual(RustPlusSync.getDeletedDevices(instance, SERVER_ID)['42'], undefined);
+
+        /* Without a pairing id there is nothing a later adoption could be matched against. */
+        Assert.strictEqual(RustPlusSync.markDeviceDeleted(instance, {}, '42'), false);
+        Assert.deepStrictEqual(Object.keys(RustPlusSync.getDeletedDevices(instance, null)), []);
+    });
+});

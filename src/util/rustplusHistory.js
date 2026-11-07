@@ -164,6 +164,22 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
             if (!Number.isFinite(pairedAt) || pairedAt <= deletedAt) continue;
 
             delete instance.deletedServers[entry.serverId];
+
+            /* A new pairing of the server also brings back the devices that were removed in Discord. */
+            if (instance.deletedDevices) delete instance.deletedDevices[entry.serverId];
+        }
+
+        /*
+            A device that was removed in Discord comes back when it was paired again afterwards - the same rule the
+            server markers follow.
+        */
+        if (entry.entityId !== null) {
+            const removedAt = Number(RustPlusSync.getDeletedDevices(instance, entry.serverId)[entry.entityId]);
+            const pairedAt = entry.date ? Date.parse(entry.date) : NaN;
+
+            if (removedAt && Number.isFinite(pairedAt) && pairedAt > removedAt) {
+                RustPlusSync.clearDeletedDevice(instance, entry.serverId, entry.entityId);
+            }
         }
 
         const applied = RustPlusSync.applySyncServers(instance, steamId, [{

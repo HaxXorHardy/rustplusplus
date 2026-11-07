@@ -26,6 +26,7 @@ const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordModals = require('../discordTools/discordModals.js');
+const RustPlusSync = require('../util/rustplusSync.js');
 
 /* Notification buttons share one handler: the customId prefix selects which channel flag is toggled.
    Adding a channel means adding one entry here, not another copy of the toggle block. */
@@ -482,6 +483,7 @@ module.exports = async (client, interaction) => {
         for (const [entityId, content] of Object.entries(server.switches)) {
             if (!content.reachable) {
                 await DiscordTools.deleteMessageById(guildId, instance.channelId.switches, content.messageId);
+                RustPlusSync.markDeviceDeleted(instance, server, entityId);
                 delete server.switches[entityId];
 
                 for (const [groupId, groupContent] of Object.entries(server.switchGroups)) {
@@ -499,6 +501,7 @@ module.exports = async (client, interaction) => {
         for (const [entityId, content] of Object.entries(server.alarms)) {
             if (!content.reachable) {
                 await DiscordTools.deleteMessageById(guildId, instance.channelId.alarms, content.messageId)
+                RustPlusSync.markDeviceDeleted(instance, server, entityId);
                 delete server.alarms[entityId];
             }
         }
@@ -506,6 +509,7 @@ module.exports = async (client, interaction) => {
         for (const [entityId, content] of Object.entries(server.storageMonitors)) {
             if (!content.reachable) {
                 await DiscordTools.deleteMessageById(guildId, instance.channelId.storageMonitors, content.messageId)
+                RustPlusSync.markDeviceDeleted(instance, server, entityId);
                 delete server.storageMonitors[entityId];
             }
         }
@@ -751,6 +755,7 @@ module.exports = async (client, interaction) => {
         await DiscordTools.deleteMessageById(guildId, instance.channelId.switches,
             server.switches[ids.entityId].messageId);
 
+        RustPlusSync.markDeviceDeleted(instance, server, ids.entityId);
         delete server.switches[ids.entityId];
         client.setInstance(guildId, instance);
 
@@ -804,6 +809,7 @@ module.exports = async (client, interaction) => {
         await DiscordTools.deleteMessageById(guildId, instance.channelId.alarms,
             server.alarms[ids.entityId].messageId);
 
+        RustPlusSync.markDeviceDeleted(instance, server, ids.entityId);
         delete server.alarms[ids.entityId];
         client.setInstance(guildId, instance);
     }
@@ -886,6 +892,7 @@ module.exports = async (client, interaction) => {
         await DiscordTools.deleteMessageById(guildId, instance.channelId.storageMonitors,
             server.storageMonitors[ids.entityId].messageId);
 
+        RustPlusSync.markDeviceDeleted(instance, server, ids.entityId);
         delete server.storageMonitors[ids.entityId];
         client.setInstance(guildId, instance);
     }
@@ -943,6 +950,7 @@ module.exports = async (client, interaction) => {
         await DiscordTools.deleteMessageById(guildId, instance.channelId.storageMonitors,
             server.storageMonitors[ids.entityId].messageId);
 
+        RustPlusSync.markDeviceDeleted(instance, server, ids.entityId);
         delete server.storageMonitors[ids.entityId];
         client.setInstance(guildId, instance);
     }

@@ -536,3 +536,56 @@ Test.describe('RustPlusHistory.applyPairingEntries (replay)', () => {
         Assert.strictEqual(instance.serverList['91.229.114.90-28111'].playerToken, 400);
     });
 });
+/*
+    Devices that were removed in Discord must not come back on the next refresh (every five minutes). Only a pairing
+    that happened after the removal brings the device back.
+*/
+Test.describe('RustPlusHistory.applyPairingEntries (removed devices)', () => {
+    const OLD_DATE = '2026-11-07T13:30:29.9105990+00:00';
+
+    function entry(date) {
+        return {
+            notificationId: 7,
+            date: date,
+            serverId: SERVER_ID,
+            title: 'Smart Switch',
+            body: 'Tap to pair with this device.',
+            channel: 1001,
+            data: JSON.stringify({
+                id: SERVER_ID,
+                name: "Captain's Quarters",
+                ip: '91.229.114.90',
+                port: '28111',
+                playerId: STEAM_ID,
+                playerToken: 42,
+                entityId: '116582',
+                entityType: '1',
+                entityName: 'Smart Switch',
+                type: 'entity',
+            }),
+        };
+    }
+
+    Test.it('keeps a device away when the pairing is older than its removal', () => {
+        const instance = { serverList: {}, deletedDevices: { [SERVER_ID]: { '116582': Date.now() } } };
+
+        RustPlusHistory.applyPairingEntries(instance, STEAM_ID,
+            RustPlusHistory.parsePairingEntries([entry(OLD_DATE)]), intlGet);
+
+        const server = instance.serverList['91.229.114.90-28111'];
+        Assert.deepStrictEqual(Object.keys(server.switches), []);
+        Assert.ok(instance.deletedDevices[SERVER_ID]['116582'] > 0);
+    });
+
+    Test.it('brings a device back when it was paired again afterwards', () => {
+        const removedAt = Date.parse('2026-11-07T13:00:00+00:00');
+        const instance = { serverList: {}, deletedDevices: { [SERVER_ID]: { '116582': removedAt } } };
+
+        RustPlusHistory.applyPairingEntries(instance, STEAM_ID,
+            RustPlusHistory.parsePairingEntries([entry('2026-11-07T19:00:00.0000000+00:00')]), intlGet);
+
+        const server = instance.serverList['91.229.114.90-28111'];
+        Assert.deepStrictEqual(Object.keys(server.switches), ['116582']);
+        Assert.strictEqual(instance.deletedDevices[SERVER_ID]['116582'], undefined);
+    });
+});

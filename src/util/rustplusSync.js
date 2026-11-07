@@ -167,12 +167,50 @@ function createServerEntry(data, existing, steamId, options = {}) {
     return entry;
 }
 
+/*
+    Entity ids of a server that were removed in Discord. The account state and the history keep listing them, so the
+    deletion has to be remembered or every refresh would adopt the device again.
+*/
+function getDeletedDevices(instance, serverGuid) {
+    const guid = `${serverGuid === undefined || serverGuid === null ? '' : serverGuid}`;
+    const deleted = (guid !== '' && instance.deletedDevices) ? instance.deletedDevices[guid] : null;
+
+    return (deleted && typeof deleted === 'object') ? deleted : Object.create(null);
+}
+
+/* Marks a device that was removed in Discord, so the account state cannot adopt it again. */
+function markDeviceDeleted(instance, server, entityId) {
+    const guid = (server && server.guid) ? `${server.guid}` : '';
+    if (guid === '') return false;
+
+    if (!instance.deletedDevices) instance.deletedDevices = {};
+    if (!instance.deletedDevices[guid]) instance.deletedDevices[guid] = {};
+
+    instance.deletedDevices[guid][`${entityId}`] = Date.now();
+
+    return true;
+}
+
+/* A pairing that happened after the removal brings the device back. */
+function clearDeletedDevice(instance, serverGuid, entityId) {
+    const deleted = getDeletedDevices(instance, serverGuid);
+    if (!deleted[`${entityId}`]) return false;
+
+    delete deleted[`${entityId}`];
+
+    return true;
+}
+
 /* Adds the paired entities of the account state that the entry does not know yet. */
-function addDevices(server, data, intlGet) {
+function addDevices(server, data, intlGet, deleted = null) {
     let added = 0;
+    const removed = deleted || Object.create(null);
 
     for (const device of data.devices || []) {
         const id = device.id;
+
+        /* A device that was removed in Discord stays removed until it is paired again. */
+        if (removed[id]) continue;
 
         if (device.type === ENTITY_TYPES.SWITCH) {
             if (server.switches[id]) continue;
@@ -275,7 +313,7 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key, op
             (`${existing.guid}` !== `${entry.guid}` ||
                 `${existing.playerToken}` !== `${entry.playerToken}`);
 
-        result.devices += addDevices(entry, data, intlGet);
+        result.devices += addDevices(entry, data, intlGet, getDeletedDevices(instance, entry.guid));
         if (!existing) result.created++;
 
         /* The key of the instance is <ip>-<appPort>, which is the pairing id when no address is known. */
@@ -332,6 +370,9 @@ module.exports = {
     parseSyncPayload: parseSyncPayload,
     createServerEntry: createServerEntry,
     addDevices: addDevices,
+    getDeletedDevices: getDeletedDevices,
+    markDeviceDeleted: markDeviceDeleted,
+    clearDeletedDevice: clearDeletedDevice,
     applySyncServers: applySyncServers,
     ensureServerListLiteEntry: ensureServerListLiteEntry,
     getServerListLiteEntry: getServerListLiteEntry,

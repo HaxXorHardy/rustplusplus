@@ -202,6 +202,8 @@ module.exports = (client, guild) => {
         if (!instance.hasOwnProperty('trackers')) instance.trackers = {};
         /* Servers that were removed in Discord, so the account state cannot adopt them again. */
         if (!instance.hasOwnProperty('deletedServers')) instance.deletedServers = {};
+        /* Devices that were removed in Discord, per server id, so the account state cannot adopt them again. */
+        if (!instance.hasOwnProperty('deletedDevices')) instance.deletedDevices = {};
         if (!instance.hasOwnProperty('marketSubscriptionList')) instance.marketSubscriptionList = {
             all: [],
             buy: [],

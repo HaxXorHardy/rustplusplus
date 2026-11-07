@@ -105,19 +105,6 @@ function restartActiveServer(client, guildId) {
 }
 
 /*
-    Clears the "removed in Discord" mark of the given pairing ids. The mark protects a removed server from being
-    adopted again by the automatic refresh, an explicit login overrides it.
-*/
-function forgetDeletedServers(instance, ids) {
-    if (!instance || !instance.deletedServers) return;
-
-    for (const id of ids || []) {
-        if (!id) continue;
-
-        delete instance.deletedServers[`${id}`];
-    }
-}
-/*
     The login is the only way an account gets into the guild credentials: it stores which Discord user owns which steam
     account. The pairing id lives in the server entry, the account token in credentials/rustplusAuth/<steamId>.json, so
     the FCM fields of older versions are dropped with the entry.
@@ -279,21 +266,24 @@ async function complete(client, interaction, flow) {
         const instance = client.getInstance(guildId);
 
         /*
-            An explicit login adopts what the account knows, including a server that was removed in Discord before:
-            the removal only protects against the automatic adoption, not against the user asking for it.
+            A server that was removed in Discord stays removed, also after a login: the deletion is the decision of the
+            user, only a new pairing in the Rust+ app (a newer pairing notification) brings it back.
         */
-        forgetDeletedServers(instance, (data.servers || []).map((entry) => entry && entry.id));
 
         const applied = RustPlusSync.applySyncServers(instance, auth.steamId, data.servers,
             (key) => client.intlGet(guildId, key));
+
+        if (applied.skipped.length !== 0) {
+            client.log(client.intlGet(null, 'infoCap'),
+                `${applied.skipped.length} server(s) were not adopted again, they were removed in Discord. ` +
+                'Pair them again in the Rust+ app to get them back.');
+        }
 
         /* Devices that were paired in-game but not added in the app are only in the notification history. */
         let paired = { devices: 0 };
         try {
             const history = await RustPlusHistory.fetchHistory(auth.token);
             const entries = RustPlusHistory.parsePairingEntries(history);
-
-            forgetDeletedServers(instance, entries.map((entry) => entry.serverId));
 
             paired = RustPlusHistory.applyPairingEntries(instance, auth.steamId, entries,
                 (key) => client.intlGet(guildId, key));
