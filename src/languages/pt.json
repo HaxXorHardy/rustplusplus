@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "O servidor \"{server}\" está ligado, os dispositivos estão a ser configurados.",
     "credentialsLoginFailed": "Falha no login: {error}",
     "credentialsLoginExpired": "A sessão de login expirou. Use /credentials login novamente.",
+    "credentialsLoginWaiting": "A Steam aceitou as credenciais. À espera que a Steam conclua o login - pode demorar alguns segundos.",
     "currencySign": "Sinal de Moeda",
     "currentCommandDelay": "Atraso atual do comando: {delay} segundos.",
     "currentItemHp": "A vida atual do item.",

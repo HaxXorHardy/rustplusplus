@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "서버 \"{server}\"에 연결되었습니다. 장치를 설정하는 중입니다.",
     "credentialsLoginFailed": "로그인 실패: {error}",
     "credentialsLoginExpired": "로그인 세션이 만료되었습니다. /credentials login을 다시 사용하세요.",
+    "credentialsLoginWaiting": "Steam이 자격 증명을 수락했습니다. Steam이 로그인을 마칠 때까지 기다리는 중입니다. 몇 초 걸릴 수 있습니다.",
     "currencySign": "통화 기호",
     "currentCommandDelay": "명령어 지연시간: {delay}초",
     "currentItemHp": "아이템의 현재 HP입니다.",

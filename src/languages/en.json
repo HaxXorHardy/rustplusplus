@@ -363,6 +363,7 @@
     "credentialsLoginConnected": "Server \"{server}\" is connected, its devices are set up.",
     "credentialsLoginFailed": "Login failed: {error}",
     "credentialsLoginExpired": "The login session expired. Use /credentials login again.",
+    "credentialsLoginWaiting": "Steam accepted the credentials. Waiting for Steam to finish the login - this can take a few seconds.",
     "currencySign": "Currency Sign",
     "currentCommandDelay": "Current Command Delay: {delay} seconds.",
     "currentItemHp": "The current HP of the item.",

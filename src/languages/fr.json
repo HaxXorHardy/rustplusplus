@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "Le serveur \"{server}\" est connecté, les appareils sont en cours de configuration.",
     "credentialsLoginFailed": "Échec de la connexion : {error}",
     "credentialsLoginExpired": "La session de connexion a expiré. Utilisez /credentials login à nouveau.",
+    "credentialsLoginWaiting": "Steam a accepté les identifiants. En attente de la fin de la connexion – cela peut prendre quelques secondes.",
     "currencySign": "Symbôle de devise",
     "currentCommandDelay": "Délai de commande actuel : {delay} secondes.",
     "currentItemHp": "Les HP actuels de l'item.",

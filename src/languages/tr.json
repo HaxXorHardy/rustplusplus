@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "\"{server}\" sunucusuna bağlanıldı, cihazlar ayarlanıyor.",
     "credentialsLoginFailed": "Giriş başarısız: {error}",
     "credentialsLoginExpired": "Giriş oturumu sona erdi. /credentials login komutunu tekrar kullanın.",
+    "credentialsLoginWaiting": "Steam kimlik bilgilerini kabul etti. Steam'in girişi tamamlaması bekleniyor - bu birkaç saniye sürebilir.",
     "currencySign": "Para birimi işareti",
     "currentCommandDelay": "Mevcut Komut Gecikmesi: {delay} saniye.",
     "currentItemHp": "Öğenin mevcut HP değeri.",

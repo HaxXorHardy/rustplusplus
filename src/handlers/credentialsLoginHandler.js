@@ -113,6 +113,8 @@ async function start(client, interaction, accountName, password) {
     let guard = null;
 
     try {
+        client.log(client.intlGet(null, 'infoCap'), 'Rust+ login: starting the Steam login.');
+
         flow = new RustPlusLogin.SteamLogin({
             accountName: accountName,
             password: password,
@@ -123,6 +125,11 @@ async function start(client, interaction, accountName, password) {
         storeFlow(client, interaction.user.id, flow);
 
         guard = await flow.start();
+
+        client.log(client.intlGet(null, 'infoCap'),
+            guard === null ?
+                'Rust+ login: Steam accepted the credentials, waiting for Steam to finish the login.' :
+                `Rust+ login: Steam wants ${[].concat(guard.types).join(', ')}.`);
     }
     catch (e) {
         deleteFlow(client, interaction.user.id);
@@ -131,35 +138,48 @@ async function start(client, interaction, accountName, password) {
         }));
     }
 
-    if (guard === null) return await complete(client, interaction, flow);
+    try {
+        /* Without a guard Steam finishes on its own, tell the user that the bot is waiting for it. */
+        if (guard === null) {
+            await reply(client, interaction, 0, client.intlGet(guildId, 'credentialsLoginWaiting'));
 
-    const types = Array.isArray(guard.types) ? guard.types : [];
-    const wantsConfirmation = types.includes('deviceConfirmation') || types.includes('emailConfirmation');
-    const wantsCode = types.includes('deviceCode') || types.includes('emailCode');
+            return await complete(client, interaction, flow);
+        }
 
-    let description = null;
-    const components = [];
+        const types = Array.isArray(guard.types) ? guard.types : [];
+        const wantsConfirmation = types.includes('deviceConfirmation') || types.includes('emailConfirmation');
+        const wantsCode = types.includes('deviceCode') || types.includes('emailCode');
 
-    if (wantsConfirmation) {
-        /* Steam asks whether this device may be authorized - no code, only the confirmation in the app. */
-        description = types.includes('deviceConfirmation') ?
-            client.intlGet(guildId, 'credentialsLoginConfirmGuard') :
-            client.intlGet(guildId, 'credentialsLoginEmailConfirmGuard');
-        components.push(DiscordButtons.getCredentialsLoginDoneButton(guildId));
+        let description = null;
+        const components = [];
 
-        /* Steam may accept a code as well, keep it reachable for accounts without the app. */
-        if (wantsCode) components.push(DiscordButtons.getCredentialsLoginCodeButton(guildId));
+        if (wantsConfirmation) {
+            /* Steam asks whether this device may be authorized - no code, only the confirmation in the app. */
+            description = types.includes('deviceConfirmation') ?
+                client.intlGet(guildId, 'credentialsLoginConfirmGuard') :
+                client.intlGet(guildId, 'credentialsLoginEmailConfirmGuard');
+            components.push(DiscordButtons.getCredentialsLoginDoneButton(guildId));
+
+            /* Steam may accept a code as well, keep it reachable for accounts without the app. */
+            if (wantsCode) components.push(DiscordButtons.getCredentialsLoginCodeButton(guildId));
+        }
+        else {
+            description = types.includes('emailCode') ?
+                client.intlGet(guildId, 'credentialsLoginEmailGuard', {
+                    domain: guard.detail === null ? 'e-mail' : guard.detail
+                }) :
+                client.intlGet(guildId, 'credentialsLoginDeviceGuard');
+            components.push(DiscordButtons.getCredentialsLoginCodeButton(guildId));
+        }
+
+        return await reply(client, interaction, 0, description, components);
     }
-    else {
-        description = types.includes('emailCode') ?
-            client.intlGet(guildId, 'credentialsLoginEmailGuard', {
-                domain: guard.detail === null ? 'e-mail' : guard.detail
-            }) :
-            client.intlGet(guildId, 'credentialsLoginDeviceGuard');
-        components.push(DiscordButtons.getCredentialsLoginCodeButton(guildId));
+    catch (e) {
+        deleteFlow(client, interaction.user.id);
+        return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginFailed', {
+            error: getErrorMessage(e)
+        }));
     }
-
-    return await reply(client, interaction, 0, description, components);
 }
 
 /* Step 2a: the Steam Guard code from the e-mail or the authenticator. */
@@ -205,6 +225,9 @@ async function complete(client, interaction, flow) {
 
     try {
         const cookies = await flow.wait();
+
+        client.log(client.intlGet(null, 'infoCap'), 'Rust+ login: Steam finished, reading the Rust+ account.');
+
         const auth = await RustPlusLogin.loginToRustPlus(cookies,
             (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
         const data = await RustPlusLogin.fetchSyncData(auth.token);

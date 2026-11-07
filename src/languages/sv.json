@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "Servern \"{server}\" är ansluten, enheterna ställs in.",
     "credentialsLoginFailed": "Inloggningen misslyckades: {error}",
     "credentialsLoginExpired": "Inloggningssessionen har gått ut. Använd /credentials login igen.",
+    "credentialsLoginWaiting": "Steam accepterade inloggningsuppgifterna. Väntar på att Steam slutför inloggningen – det kan ta några sekunder.",
     "currencySign": "Valutatecken",
     "currentCommandDelay": "Aktuell kommandofördröjning: {delay} sekunder.",
     "currentItemHp": "Föremålets nuvarande HP.",

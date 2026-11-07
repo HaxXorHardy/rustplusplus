@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "Server \"{server}\" ist verbunden, die Geräte werden eingerichtet.",
     "credentialsLoginFailed": "Login fehlgeschlagen: {error}",
     "credentialsLoginExpired": "Die Login-Sitzung ist abgelaufen. Nutze /credentials login erneut.",
+    "credentialsLoginWaiting": "Steam hat die Zugangsdaten akzeptiert. Warte, bis Steam den Login abschließt – das kann ein paar Sekunden dauern.",
     "currencySign": "Währungszeichen",
     "currentCommandDelay": "Aktuelle Befehlsverzögerung: {delay} Sekunden.",
     "currentItemHp": "Die aktuellen HP des Gegenstandes.",

@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "Server \"{server}\" je připojen, zařízení se nastavují.",
     "credentialsLoginFailed": "Přihlášení selhalo: {error}",
     "credentialsLoginExpired": "Přihlašovací relace vypršela. Použijte /credentials login znovu.",
+    "credentialsLoginWaiting": "Steam přijal přihlašovací údaje. Čeká se na dokončení přihlášení – může to trvat několik sekund.",
     "currencySign": "Currency Sign",
     "currentCommandDelay": "Aktuální zpoždění příkazů: {delay} sekund.",
     "currentItemHp": "Součastné HP předmětu.",

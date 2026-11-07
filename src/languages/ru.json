@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "Сервер \"{server}\" подключён, устройства настраиваются.",
     "credentialsLoginFailed": "Ошибка входа: {error}",
     "credentialsLoginExpired": "Сеанс входа истёк. Используйте /credentials login снова.",
+    "credentialsLoginWaiting": "Steam принял данные для входа. Ожидание завершения входа — это может занять несколько секунд.",
     "currencySign": "Валютный знак",
     "currentCommandDelay": "Текущая задержка: {delay} секунд.",
     "currentItemHp": "Текущий показатель здоровья предмета.",

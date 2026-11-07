@@ -362,6 +362,7 @@
     "credentialsLoginConnected": "Serwer \"{server}\" jest połączony, urządzenia są konfigurowane.",
     "credentialsLoginFailed": "Logowanie nie powiodło się: {error}",
     "credentialsLoginExpired": "Sesja logowania wygasła. Użyj ponownie /credentials login.",
+    "credentialsLoginWaiting": "Steam zaakceptował dane logowania. Czekam na zakończenie logowania – to może potrwać kilka sekund.",
     "currencySign": "Currency Sign",
     "currentCommandDelay": "Aktualne opóźnienie komendy: {delay} sekund.",
     "currentItemHp": "Aktualne HP przedmiotu.",
