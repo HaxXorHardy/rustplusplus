@@ -207,11 +207,18 @@ module.exports = {
     },
 
     secondsToCompactHours: function (totSeconds) {
+        if (!Number.isFinite(totSeconds) || totSeconds < 0) return '-';
+
         const hours = Math.floor(totSeconds / 3600);
+
+        /* Below an hour the minutes are the only information there is, "0h" would hide it. */
+        if (hours < 1) return `${Math.floor(totSeconds / 60)}m`;
+
         if (hours >= 1000) {
             const thousands = Math.round(hours / 100) / 10;
             return Number.isInteger(thousands) ? `${thousands}k` : `${thousands.toFixed(1)}k`;
         }
+
         return `${hours}h`;
     },
 
