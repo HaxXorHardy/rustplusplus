@@ -221,8 +221,15 @@ async function displaySpecificUser(client, interaction, battlemetricsId, playerI
     description += `__**${onOffString}:**__ ${time !== null ? `[${time[1]}]` : ''}\n`;
 
     const playtimeSeconds = await bmInstance.getTotalTimePlayed(playerId);
+    const serverPlaytimeSeconds = bmInstance.getServerTimePlayed(playerId);
+
     description += `__**${client.intlGet(guildId, 'timePlayed')}:**__ `;
     description += (typeof (playtimeSeconds) === 'number') ? Timer.secondsToCompactHours(playtimeSeconds) : client.intlGet(guildId, 'empty');
+
+    /* The profile total sums every Rust server, the second number is the time on this one. */
+    if (typeof (serverPlaytimeSeconds) === 'number') {
+        description += ` (${Timer.secondsToCompactHours(serverPlaytimeSeconds)} ${client.intlGet(guildId, 'timePlayedOnThisServer')})`;
+    }
     description += '\n';
 
     const embed = DiscordEmbeds.getEmbed({
@@ -340,7 +347,7 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
     /* Time and playtime go in inline code (monospace) so the numbers line up. */
     let playtimeWidth = 2;
     for (const playerId of playerIds) {
-        const playtimeValue = bmInstance.getCachedTimePlayed(playerId);
+        const playtimeValue = bmInstance.getServerTimePlayed(playerId);
         if (typeof (playtimeValue) === 'number') {
             playtimeWidth = Math.max(playtimeWidth, Timer.secondsToCompactHours(playtimeValue).length);
         }
@@ -355,7 +362,7 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
         const timeValue = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
         const time = timeValue !== null ? timeValue[1] : '';
 
-        const playtime = bmInstance.getCachedTimePlayed(playerId);
+        const playtime = bmInstance.getServerTimePlayed(playerId);
         const playtimeStr = (typeof (playtime) === 'number') ?
             Timer.secondsToCompactHours(playtime) : '-';
         const playtimePadded = playtimeStr.padStart(playtimeWidth);

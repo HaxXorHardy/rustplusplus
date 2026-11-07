@@ -95,3 +95,25 @@ Test.describe('BattlemetricsHandler.handler', () => {
         await Assert.doesNotReject(runHandler(fakeInstance(SERVER_ID, serverList)));
     });
 });
+
+/*
+    The lists must show the time on this server, not the profile total that sums every Rust server of the player (a
+    player with 43.7k hours elsewhere showed up with that number in the server overview).
+*/
+Test.describe('Battlemetrics.getServerTimePlayed', () => {
+    const Battlemetrics = require('../src/structures/Battlemetrics.js');
+    const instance = { players: {} };
+
+    Test.it('returns null when the server metadata is missing', () => {
+        Assert.strictEqual(Battlemetrics.prototype.getServerTimePlayed.call(instance, '1'), null);
+
+        instance.players['1'] = { name: 'Someone' };
+        Assert.strictEqual(Battlemetrics.prototype.getServerTimePlayed.call(instance, '1'), null);
+    });
+
+    Test.it('returns the seconds of the server metadata', () => {
+        instance.players['2'] = { name: 'Niko', serverTimePlayed: 12126 };
+
+        Assert.strictEqual(Battlemetrics.prototype.getServerTimePlayed.call(instance, '2'), 12126);
+    });
+});

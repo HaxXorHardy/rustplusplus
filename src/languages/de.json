@@ -870,5 +870,6 @@
     "credentialsShowEmptyHint": "Es ist noch kein Rust+-Login gespeichert. Mit \"/credentials login\" meldest du dich bei Steam an - der Login speichert den Account-Token und übernimmt die Server und gekoppelten Geräte des Accounts.",
     "rustplusCredentials": "Rust+-Zugangsdaten",
     "credentialsNoLogin": "kein Rust+-Login gespeichert",
-    "smartDeviceNotFoundHint": "Der Server kennt dieses Gerät nicht mehr: es wurde zerstört, der Server wurde gewipet oder es gehört zu einer älteren Kopplung. Koppel es im Rust+ App neu, dann übernimmt der Bot es automatisch - oder entferne es mit dem Button unten."
+    "smartDeviceNotFoundHint": "Der Server kennt dieses Gerät nicht mehr: es wurde zerstört, der Server wurde gewipet oder es gehört zu einer älteren Kopplung. Koppel es im Rust+ App neu, dann übernimmt der Bot es automatisch - oder entferne es mit dem Button unten.",
+    "timePlayedOnThisServer": "auf diesem Server"
 }

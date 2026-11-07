@@ -870,5 +870,6 @@
     "credentialsShowEmptyHint": "Brak zapisanych danych FCM. Są potrzebne tylko do powiadomień o parowaniu i powiadomień FCM (alarmy, zdarzenia drużyny) - połączenie z Rust+ używa \"/credentials login\". Dodaj je przez \"/credentials add\".",
     "rustplusCredentials": "Rust+ credentials",
     "credentialsNoLogin": "no Rust+ login stored",
-    "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below."
+    "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below.",
+    "timePlayedOnThisServer": "on this server"
 }

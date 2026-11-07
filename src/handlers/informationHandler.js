@@ -22,16 +22,6 @@ const Client = require('../structures/clientRegistry.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 
-async function warmTeamTimePlayed(rustplus) {
-    const instance = Client.client.getInstance(rustplus.guildId);
-    const server = instance.serverList[rustplus.serverId];
-    if (!server || !server.battlemetricsId) return;
-
-    const bmInstance = Client.client.battlemetricsInstances[server.battlemetricsId];
-    if (!bmInstance || !bmInstance.lastUpdateSuccessful) return;
-
-    await bmInstance.warmTimePlayedCacheByNames(rustplus.team.players.map(e => e.name));
-}
 
 module.exports = {
     handler: async function (rustplus) {
@@ -54,7 +44,6 @@ module.exports = {
                 await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'event');
             }
 
-            await warmTeamTimePlayed(rustplus);
             await DiscordMessages.sendUpdateTeamInformationMessage(rustplus);
             await DiscordMessages.ensureInformationMessageOrder(rustplus);
         }

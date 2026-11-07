@@ -36,6 +36,18 @@ const TIME_PLAYED_GAME = 'rust';
 const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
 const TIME_PLAYED_DEFAULT_LIMIT = 100;
 
+/*
+    The time a player has on this server is part of the metadata of the players included in the server request, in
+    seconds. It is not the same number as the global time played of the profile, which sums every Rust server of the
+    player and is therefore useless for a server overview.
+*/
+function getServerTimeFromMetadata(meta) {
+    const metadata = (meta && Array.isArray(meta.metadata)) ? meta.metadata : [];
+    const entry = metadata.find((e) => e && e.key === 'time');
+
+    return (entry && typeof entry.value === 'number') ? Math.round(entry.value) : null;
+}
+
 class Battlemetrics {
 
     /**
@@ -699,6 +711,9 @@ class Battlemetrics {
                     this.loginPlayers.push(entity.id);
                 }
             }
+            /* The time on this server is part of the player metadata of the server request (seconds). */
+            this.players[entity.id]['serverTimePlayed'] = getServerTimeFromMetadata(entity.meta);
+
             this.onlinePlayers.push(entity.id);
         }
 
@@ -860,6 +875,19 @@ class Battlemetrics {
         }
 
         return this.#formatTime(this.players[playerId]['logoutDate']);
+    }
+
+    /**
+     *  Get the time a player has on this server (in seconds) from the last server update.
+     *  Battlemetrics carries it in the metadata of the server request, so no extra call is needed.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {number|null} The seconds on this server or null when the player is unknown.
+     */
+    getServerTimePlayed(playerId) {
+        const player = this.players[playerId];
+        if (!player || typeof player.serverTimePlayed !== 'number') return null;
+
+        return player.serverTimePlayed;
     }
 
     /**
