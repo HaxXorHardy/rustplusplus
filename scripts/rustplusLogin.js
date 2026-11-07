@@ -26,6 +26,7 @@ const Readline = require('readline');
 
 const RustPlusAuth = require('../src/util/rustplusAuth.js');
 const RustPlusLogin = require('../src/util/rustplusLogin.js');
+const RustPlusSync = require('../src/util/rustplusSync.js');
 const RustPlusTransport = require('../src/util/rustplusTransport.js');
 
 function getOption(name, fallback = null) {
@@ -110,17 +111,26 @@ async function main() {
     console.log('Rust+ login...');
     const auth = await RustPlusLogin.loginToRustPlus(cookies, log);
 
-    console.log('Reading the server list...');
-    const servers = await RustPlusLogin.fetchServerList(auth.token);
-    RustPlusLogin.storeAuth(auth.steamId, auth.token, servers, flow.getRefreshToken());
+    console.log('Reading the account state...');
+    const data = await RustPlusLogin.fetchSyncData(auth.token);
+    RustPlusLogin.storeAuth(auth.steamId, auth.token, data.servers, flow.getRefreshToken());
 
     const expires = RustPlusTransport.getAuthTokenExpiry(auth.token);
 
     console.log('');
     console.log(`steamId: ${auth.steamId}`);
     console.log(`token expires: ${expires === null ? 'unknown' : new Date(expires * 1000).toISOString()}`);
-    console.log(`servers (${servers.length}):`);
-    for (const server of servers) console.log(`  ${server.id}  ${server.name}`);
+    console.log(`servers (${data.servers.length}):`);
+
+    for (const server of data.servers) {
+        console.log(`  ${server.id}  ${server.name}`);
+
+        for (const device of server.devices) {
+            const type = Object.keys(RustPlusSync.ENTITY_TYPES)
+                .find((key) => RustPlusSync.ENTITY_TYPES[key] === device.type) || 'unknown';
+            console.log(`    ${device.id}  ${type}  ${device.name || ''}`);
+        }
+    }
     console.log('');
     console.log(`Stored in credentials/rustplusAuth/${auth.steamId}.json - restart the bot to use it.`);
 }

@@ -547,10 +547,13 @@ class RustPlus extends RustPlusLib {
 
             this.authToken = auth.token;
 
-            /* The renewal also refreshes the server list, keep the pairing ids of the instance up to date. */
+            /* The renewal also refreshes the account state, keep servers, pairing ids and devices up to date. */
             const instance = Client.client.getInstance(this.guildId);
-            if (instance && instance.serverList && RustPlusAuth.applyServerGuids(instance, auth.servers) !== 0) {
-                Client.client.setInstance(this.guildId, instance);
+            if (instance && instance.serverList) {
+                const applied = RustPlusSync.applySyncServers(instance, this.playerId, auth.servers,
+                    (key) => Client.client.intlGet(this.guildId, key));
+
+                if (applied.servers !== 0) Client.client.setInstance(this.guildId, instance);
 
                 const server = instance.serverList[this.serverId];
                 if (server && server.guid) this.serverGuid = server.guid;

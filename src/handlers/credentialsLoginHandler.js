@@ -23,6 +23,7 @@ const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusLogin = require('../util/rustplusLogin.js');
+const RustPlusSync = require('../util/rustplusSync.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
 
 const FLOW_TIMEOUT_MS = 5 * 60 * 1000;
@@ -204,14 +205,20 @@ async function complete(client, interaction, flow) {
         const cookies = await flow.wait();
         const auth = await RustPlusLogin.loginToRustPlus(cookies,
             (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
-        const servers = await RustPlusLogin.fetchServerList(auth.token);
+        const data = await RustPlusLogin.fetchSyncData(auth.token);
 
         /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
-        RustPlusLogin.storeAuth(auth.steamId, auth.token, servers, flow.getRefreshToken());
+        RustPlusLogin.storeAuth(auth.steamId, auth.token, data.servers, flow.getRefreshToken());
 
+        /* Servers and paired devices of the account, FCM credentials are not required for the setup. */
         const instance = client.getInstance(guildId);
-        const matched = RustPlusAuth.applyServerGuids(instance, servers);
+        const applied = RustPlusSync.applySyncServers(instance, auth.steamId, data.servers,
+            (key) => client.intlGet(guildId, key));
         client.setInstance(guildId, instance);
+
+        client.log(client.intlGet(null, 'infoCap'),
+            `Rust+ login: ${applied.servers} server(s), ${applied.created} newly created, ` +
+            `${applied.devices} device(s) adopted.`);
 
         restartActiveServer(client, guildId);
 
@@ -219,7 +226,7 @@ async function complete(client, interaction, flow) {
 
         return await reply(client, interaction, 0, client.intlGet(guildId, 'credentialsLoginSuccess', {
             steamId: `${auth.steamId}`,
-            servers: `${matched}`,
+            servers: `${applied.servers}`,
             expires: expires === null ? '?' : `<t:${expires}:f>`
         }));
     }

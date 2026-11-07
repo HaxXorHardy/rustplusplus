@@ -28,28 +28,6 @@ const RustPlusLogin = require('../src/util/rustplusLogin.js');
 /* Account token with a known expiry (1795255624), the refresh token below is only a marker. */
 const TOKEN = 'eyJzdGVhbUlkIjoiNzY1NjExOTgwMDAwMDAwMDAiLCJleHAiOjE3OTUyNTU2MjR9.c2lnbmF0dXJlLXNpZ25hdHVyZQ==';
 
-Test.describe('RustPlusLogin.parseSyncPayload', () => {
-    Test.it('extracts id, name and player token of every server', () => {
-        const payload = JSON.stringify({
-            currentServerId: 'uuid-1',
-            servers: [
-                { id: 'uuid-1', name: 'Server One', playerToken: 1234, map: '051126' },
-                { id: 'uuid-2', name: 'Server Two', playerToken: 5678 },
-            ],
-        });
-
-        Assert.deepStrictEqual(RustPlusLogin.parseSyncPayload(payload), [
-            { id: 'uuid-1', name: 'Server One', playerToken: 1234 },
-            { id: 'uuid-2', name: 'Server Two', playerToken: 5678 },
-        ]);
-    });
-
-    Test.it('accepts an already parsed payload and empty data', () => {
-        Assert.deepStrictEqual(RustPlusLogin.parseSyncPayload({ servers: [] }), []);
-        Assert.deepStrictEqual(RustPlusLogin.parseSyncPayload(null), []);
-    });
-});
-
 Test.describe('RustPlusLogin.storeAuth', () => {
     const STEAM_ID = '76561198000000001';
 

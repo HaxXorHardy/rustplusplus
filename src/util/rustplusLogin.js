@@ -36,6 +36,7 @@ const SteamSession = require('steam-session');
 
 const RustPlusAuth = require('./rustplusAuth.js');
 const RustPlusLoginPages = require('./rustplusLoginPages.js');
+const RustPlusSync = require('./rustplusSync.js');
 const RustPlusTransport = require('./rustplusTransport.js');
 
 /* The pieces of the browser flow: cookie jar, requests, forms and page parsing. */
@@ -258,20 +259,11 @@ async function loginToRustPlus(steamCookies, log = () => undefined) {
     throw new Error('Rust+ login did not finish (redirect loop).');
 }
 
-/* The sync payload is the persisted app state as a JSON string: { servers: [{ id, name, ... }] } */
-function parseSyncPayload(payload) {
-    const data = (typeof payload === 'string') ? JSON.parse(payload) : payload;
-    const servers = data && Array.isArray(data.servers) ? data.servers : [];
-
-    return servers.map((server) => ({
-        id: server.id,
-        name: server.name,
-        playerToken: server.playerToken,
-    }));
-}
-
-/* Step 3: the server list of the account, including the pairing id (uuid) of every server. */
-async function fetchServerList(token) {
+/*
+    Step 3: the account state of the Rust+ app. It contains the servers (pairing id, player token, name, ...) and
+    the paired entities, see util/rustplusSync.js.
+*/
+async function fetchSyncData(token) {
     const response = await Axios.post(RUSTPLUS_SYNC_URL, { AuthToken: token }, {
         timeout: 30000,
         validateStatus: () => true,
@@ -282,14 +274,14 @@ async function fetchServerList(token) {
         },
     });
 
-    if (response.status === 204) return [];
+    if (response.status === 204) return { currentServerId: null, servers: [] };
     if (response.status !== 200) throw new Error(`Sync request failed with status ${response.status}.`);
 
     try {
-        return parseSyncPayload(response.data.payload);
+        return RustPlusSync.parseSyncPayload(response.data.payload);
     }
     catch (e) {
-        return [];
+        return { currentServerId: null, servers: [] };
     }
 }
 
@@ -339,17 +331,16 @@ async function renewAuth(steamId, log = () => undefined) {
         throw new Error(`The Steam refresh token belongs to ${renewed.steamId}, not ${steamId}.`);
     }
 
-    const servers = await fetchServerList(renewed.token);
+    const servers = await fetchSyncData(renewed.token);
 
     log(`Rust+ token: renewed for ${renewed.steamId}`);
-    return storeAuth(`${steamId}`, renewed.token, servers, session.refreshToken);
+    return storeAuth(`${steamId}`, renewed.token, servers.servers, session.refreshToken);
 }
 
 module.exports = {
     SteamLogin: SteamLogin,
     loginToRustPlus: loginToRustPlus,
-    fetchServerList: fetchServerList,
+    fetchSyncData: fetchSyncData,
     storeAuth: storeAuth,
     renewAuth: renewAuth,
-    parseSyncPayload: parseSyncPayload,
 };

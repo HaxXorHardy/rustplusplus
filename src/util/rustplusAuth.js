@@ -110,27 +110,6 @@ function isTokenExpiringSoon(auth, renewBeforeSeconds, nowSeconds = Math.floor(D
     return (expiresAt - nowSeconds) <= renewBeforeSeconds;
 }
 
-/*
-    Stores the pairing id of every known server of the instance, matched by the server name from the login file.
-    Returns how many servers were matched.
-*/
-function applyServerGuids(instance, servers) {
-    const auth = { servers: Array.isArray(servers) ? servers : [] };
-    let matched = 0;
-
-    for (const serverId in instance.serverList) {
-        const server = instance.serverList[serverId];
-        const guid = resolveServerGuid(auth, server.title);
-
-        if (guid !== null) {
-            server.guid = guid;
-            matched++;
-        }
-    }
-
-    return matched;
-}
-
 module.exports = {
     AUTH_DIR: AUTH_DIR,
     getAuthFilePath: getAuthFilePath,
@@ -140,5 +119,4 @@ module.exports = {
     getTokenExpiry: getTokenExpiry,
     isTokenExpired: isTokenExpired,
     isTokenExpiringSoon: isTokenExpiringSoon,
-    applyServerGuids: applyServerGuids,
 };

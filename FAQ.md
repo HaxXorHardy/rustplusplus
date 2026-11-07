@@ -200,6 +200,25 @@ Notes:
 * Without a token the bot falls back to the direct/proxy transports (`RPP_RUSTPLUS_TRANSPORT`), which Facepunch
   disabled - the log says so.
 
+#### Do I still need FCM credentials?
+
+No, not for the bot to work. `/api/syncData` - which the login already fetches - contains the servers of the
+account **and their paired devices**:
+
+```json
+{ "servers": [ { "id": "<uuid>", "name": "...", "playerToken": 123,
+                 "entityCategories": [ { "entities": [ { "entityId": {...}, "type": 1, "name": "..." } ] } ] } ] }
+```
+
+`/credentials login` therefore writes missing servers and adopts switches, alarms and storage monitors on its own,
+with the names from the Rust+ app (`type` 1 = switch, 2 = alarm, 3 = storage monitor). A server without `ip/port`
+in the account state is keyed `relay-<uuid>`, which is exactly what the authenticated socket needs.
+
+FCM credentials are only needed for
+
+* the push notifications of the app (raid alarm, team login, smart alarm while the bot is not polling), and
+* pairing **new** devices in the moment you pair them (a new `/credentials login` picks them up as well).
+
 #### The token renews itself
 
 1. The login stores the **Steam refresh token** next to the account token (`steamRefreshToken` in

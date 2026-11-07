@@ -79,31 +79,4 @@ Test.describe('RustPlusAuth', () => {
         Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(null, 100, 0), false);
         Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon({ token: 'not-a-token' }, 100, 0), false);
     });
-
-    Test.it('writes the pairing id of every matching server of an instance', () => {
-        const instance = {
-            serverList: {
-                '1234': { title: 'Server One', guid: null },
-                '5678': { title: 'server two', guid: 'old' },
-                '9012': { title: 'Unknown Server', guid: null },
-            },
-        };
-
-        const matched = RustPlusAuth.applyServerGuids(instance, [
-            { id: 'uuid-1', name: 'Server One' },
-            { id: 'uuid-2', name: 'Server Two' },
-        ]);
-
-        Assert.strictEqual(matched, 2);
-        Assert.strictEqual(instance.serverList['1234'].guid, 'uuid-1');
-        Assert.strictEqual(instance.serverList['5678'].guid, 'uuid-2');
-        Assert.strictEqual(instance.serverList['9012'].guid, null);
-    });
-
-    Test.it('matches nothing without a server list', () => {
-        const instance = { serverList: { '1234': { title: 'Server One', guid: null } } };
-
-        Assert.strictEqual(RustPlusAuth.applyServerGuids(instance, []), 0);
-        Assert.strictEqual(instance.serverList['1234'].guid, null);
-    });
 });

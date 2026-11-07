@@ -1,0 +1,265 @@
+/*
+    Copyright (C) 2026
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+    https://github.com/alexemanuelol/rustplusplus
+
+*/
+
+/*
+    The account state of the Rust+ app (`POST /api/syncData`) already contains everything the bot needs to set up a
+    server without the app: the pairing id of the server, the player token and the paired entities (switches,
+    alarms, storage monitors) with their ids and names.
+
+    This module turns that payload into server entries of the instance file, so no FCM credentials are required for
+    the setup. FCM is only needed for the push notifications of the Rust+ app.
+*/
+
+const Constants = require('./constants.js');
+
+/* AppEntityType of rustplus.proto */
+const ENTITY_TYPES = {
+    SWITCH: 1,
+    ALARM: 2,
+    STORAGE_MONITOR: 3,
+};
+
+/* Server key used when the account state has no ip/port for a server (the relay does not need them). */
+const RELAY_SERVER_IP = 'relay';
+
+/* protobuf.js represents 64 bit numbers as { low, high }; entity ids fit in 32 bit today. */
+function toEntityIdString(entityId) {
+    if (entityId === null || entityId === undefined) return null;
+    if (typeof entityId === 'string') return entityId;
+    if (typeof entityId === 'number') return `${entityId}`;
+
+    if (typeof entityId.low !== 'number') return null;
+
+    const value = (BigInt(entityId.high >>> 0) << 32n) | BigInt(entityId.low >>> 0);
+    return value.toString();
+}
+
+/* Cameras of the account state, the Rust+ app lists them for the CCTV codes. */
+function parseCameras(cameras) {
+    if (!Array.isArray(cameras)) return [];
+
+    return cameras
+        .filter((camera) => camera && camera.identifier)
+        .map((camera) => ({ identifier: `${camera.identifier}`, icon: camera.icon ? `${camera.icon}` : null }));
+}
+
+/* Paired entities of the account state, grouped by AppEntityType. */
+function parseDevices(entityCategories) {
+    const devices = [];
+
+    for (const category of Array.isArray(entityCategories) ? entityCategories : []) {
+        for (const entity of Array.isArray(category && category.entities) ? category.entities : []) {
+            const id = toEntityIdString(entity.entityId);
+            if (id === null) continue;
+
+            devices.push({
+                id: id,
+                type: entity.type,
+                name: entity.name ? `${entity.name}` : null,
+                icon: entity.icon ? `${entity.icon}` : null,
+            });
+        }
+    }
+
+    return devices;
+}
+
+/*
+    The persisted app state (a JSON string, or the already parsed object) as servers with their paired entities.
+*/
+function parseSyncPayload(payload) {
+    const data = (typeof payload === 'string') ? JSON.parse(payload) : payload;
+    const servers = data && Array.isArray(data.servers) ? data.servers : [];
+
+    return {
+        currentServerId: (data && data.currentServerId) ? `${data.currentServerId}` : null,
+        servers: servers.map((server) => ({
+            id: server.id ? `${server.id}` : null,
+            name: server.name ? `${server.name}` : null,
+            playerToken: server.playerToken,
+            playerId: toEntityIdString(server.playerId),
+            headerImage: server.headerImage ? `${server.headerImage}` : null,
+            logoImage: server.logoImage ? `${server.logoImage}` : null,
+            url: server.url ? `${server.url}` : null,
+            desc: server.desc ? `${server.desc}` : null,
+            map: server.map ? `${server.map}` : null,
+            mapSize: Number.isFinite(server.mapSize) ? server.mapSize : null,
+            seed: Number.isFinite(server.seed) ? server.seed : null,
+            wipeTime: (server.wipeTime && Number.isFinite(server.wipeTime.unix)) ? server.wipeTime.unix : null,
+            isSubscribed: server.isSubscribed === true,
+            cameras: parseCameras(server.cameras),
+            devices: parseDevices(server.entityCategories),
+        })),
+    };
+}
+/* Defaults of a server entry, the shape the rest of the bot expects (see util/fcm/FcmListener.js). */
+function createServerEntry(data, existing, steamId) {
+    const entry = Object.assign({
+        title: data.name || 'Rust+ server',
+        serverIp: RELAY_SERVER_IP,
+        appPort: data.id,
+        guid: data.id,
+        steamId: steamId ? `${steamId}` : null,
+        playerToken: data.playerToken,
+        description: data.desc || '',
+        img: data.headerImage || Constants.DEFAULT_SERVER_IMG,
+        url: data.url || Constants.DEFAULT_SERVER_URL,
+        notes: {},
+        switches: {},
+        alarms: {},
+        storageMonitors: {},
+        markers: {},
+        switchGroups: {},
+        messageId: null,
+        battlemetricsId: null,
+        connect: null,
+        cargoShipEgressTimeMs: Constants.DEFAULT_CARGO_SHIP_EGRESS_TIME_MS,
+        oilRigLockedCrateUnlockTimeMs: Constants.DEFAULT_OIL_RIG_LOCKED_CRATE_UNLOCK_TIME_MS,
+        deepSeaMinWipeCooldownMs: Constants.DEFAULT_DEEP_SEA_MIN_WIPE_COOLDOWN_MS,
+        deepSeaMaxWipeCooldownMs: Constants.DEFAULT_DEEP_SEA_MAX_WIPE_COOLDOWN_MS,
+        deepSeaWipeDurationMs: Constants.DEFAULT_DEEP_SEA_WIPE_DURATION_MS,
+        timeTillDay: null,
+        timeTillNight: null,
+        customCameraGroups: {},
+    }, existing || {});
+
+    /* The account state decides about the pairing id, the name and the pairing credentials. */
+    if (data.name) entry.title = data.name;
+    entry.guid = data.id;
+    if (data.playerToken !== undefined && data.playerToken !== null) entry.playerToken = data.playerToken;
+    if (!entry.steamId && steamId) entry.steamId = `${steamId}`;
+
+    return entry;
+}
+
+/* Adds the paired entities of the account state that the entry does not know yet. */
+function addDevices(server, data, intlGet) {
+    let added = 0;
+
+    for (const device of data.devices || []) {
+        const id = device.id;
+
+        if (device.type === ENTITY_TYPES.SWITCH) {
+            if (server.switches[id]) continue;
+
+            server.switches[id] = {
+                active: false,
+                reachable: true,
+                name: device.name || intlGet('smartSwitch'),
+                command: id,
+                image: 'smart_switch.png',
+                autoDayNightOnOff: 0,
+                location: null,
+                x: null,
+                y: null,
+                server: server.title,
+                proximity: Constants.PROXIMITY_SETTING_DEFAULT_METERS,
+                messageId: null,
+            };
+            added++;
+        }
+        else if (device.type === ENTITY_TYPES.ALARM) {
+            if (server.alarms[id]) continue;
+
+            server.alarms[id] = {
+                active: false,
+                reachable: true,
+                everyone: false,
+                name: device.name || intlGet('smartAlarm'),
+                message: intlGet('baseIsUnderAttack'),
+                lastTrigger: null,
+                command: id,
+                id: id,
+                image: 'smart_alarm.png',
+                location: null,
+                server: server.title,
+                messageId: null,
+            };
+            added++;
+        }
+        else if (device.type === ENTITY_TYPES.STORAGE_MONITOR) {
+            if (server.storageMonitors[id]) continue;
+
+            server.storageMonitors[id] = {
+                name: device.name || intlGet('storageMonitor'),
+                reachable: true,
+                id: id,
+                type: null,
+                decaying: false,
+                upkeep: null,
+                everyone: false,
+                inGame: true,
+                image: 'storage_monitor.png',
+                location: null,
+                server: server.title,
+                messageId: null,
+            };
+            added++;
+        }
+    }
+
+    return added;
+}
+
+function normalizeName(name) {
+    return `${name === undefined || name === null ? '' : name}`.trim().toLowerCase();
+}
+
+/*
+    Writes the servers and paired entities of the account state into the instance: an entry is matched by pairing
+    id, then by name, and created with the relay key when the bot does not know the server yet.
+*/
+function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
+    const result = { servers: 0, created: 0, devices: 0 };
+
+    for (const data of servers || []) {
+        if (!data || !data.id) continue;
+
+        const keys = Object.keys(instance.serverList || {});
+
+        let serverId = keys.find((key) => instance.serverList[key] && instance.serverList[key].guid === data.id);
+        if (!serverId && data.name) {
+            serverId = keys.find((key) =>
+                instance.serverList[key] && normalizeName(instance.serverList[key].title) === normalizeName(data.name));
+        }
+
+        const existing = serverId ? instance.serverList[serverId] : null;
+        const entry = createServerEntry(data, existing, steamId);
+
+        result.devices += addDevices(entry, data, intlGet);
+        if (!existing) result.created++;
+
+        instance.serverList[serverId || `${RELAY_SERVER_IP}-${data.id}`] = entry;
+        result.servers++;
+    }
+
+    return result;
+}
+
+module.exports = {
+    ENTITY_TYPES: ENTITY_TYPES,
+    RELAY_SERVER_IP: RELAY_SERVER_IP,
+    toEntityIdString: toEntityIdString,
+    parseSyncPayload: parseSyncPayload,
+    createServerEntry: createServerEntry,
+    addDevices: addDevices,
+    applySyncServers: applySyncServers,
+};
+
