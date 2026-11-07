@@ -236,11 +236,20 @@ function normalizeName(name) {
     Writes the servers and paired entities of the account state into the instance: an entry is matched by pairing
     id, then by name, and created with the relay key when the bot does not know the server yet.
 */
-function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
-    const result = { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [] };
+function applySyncServers(instance, steamId, servers, intlGet = (key) => key, options = {}) {
+    const result = { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [], skipped: [] };
 
     for (const data of servers || []) {
         if (!data || !data.id) continue;
+
+        /*
+            A server that the user removed in Discord stays removed, even though the account is still paired with it.
+            A new pairing in the Rust+ app clears that mark (see rustplusHistory.applyPairingEntries).
+        */
+        if (!options.includeDeleted && instance.deletedServers && instance.deletedServers[data.id]) {
+            result.skipped.push(`${data.id}`);
+            continue;
+        }
 
         const keys = Object.keys(instance.serverList || {});
 
@@ -267,6 +276,9 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
         instance.serverList[key] = entry;
         result.servers++;
 
+        /* The rest of the bot expects a lite mirror for every server, also for one that is adopted while it runs. */
+        ensureServerListLiteEntry(instance, key, entry);
+
         if (credentialsChanged) {
             result.updated++;
             result.updatedKeys.push(key);
@@ -274,6 +286,34 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
     }
 
     return result;
+}
+
+/*
+    serverListLite mirrors the credentials of every server per steam id (see util/createInstanceFile.js). It is created
+    here as well, because servers that are adopted while the bot runs never pass the repair of the instance file.
+*/
+function ensureServerListLiteEntry(instance, key, entry) {
+    if (!instance.serverListLite) instance.serverListLite = {};
+    if (!instance.serverListLite[key]) instance.serverListLite[key] = {};
+
+    if (entry && entry.steamId && !instance.serverListLite[key][entry.steamId]) {
+        instance.serverListLite[key][entry.steamId] = {
+            serverIp: entry.serverIp,
+            appPort: entry.appPort,
+            steamId: entry.steamId,
+            playerToken: entry.playerToken,
+        };
+    }
+}
+
+/*
+    The lite mirror of a server (`serverListLite[serverId]`, keyed by steam id). It is empty when the server has none,
+    which keeps the callers safe: they run Object.keys() on it.
+*/
+function getServerListLiteEntry(instance, serverId) {
+    const lite = (instance && instance.serverListLite) ? instance.serverListLite[serverId] : null;
+
+    return (lite && typeof lite === 'object') ? lite : {};
 }
 
 module.exports = {
@@ -285,5 +325,7 @@ module.exports = {
     createServerEntry: createServerEntry,
     addDevices: addDevices,
     applySyncServers: applySyncServers,
+    ensureServerListLiteEntry: ensureServerListLiteEntry,
+    getServerListLiteEntry: getServerListLiteEntry,
 };
 

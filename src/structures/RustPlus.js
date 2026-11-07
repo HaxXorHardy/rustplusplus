@@ -41,6 +41,7 @@ const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusLite = require('../structures/RustPlusLite');
 const RustPlusLogin = require('../util/rustplusLogin.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
+const RustPlusSync = require('../util/rustplusSync.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
 const TeamHandler = require('../handlers/teamHandler.js');
 const Timer = require('../util/timer.js');
@@ -2084,10 +2085,13 @@ class RustPlus extends RustPlusLib {
         }
 
         const instance = Client.client.getInstance(this.guildId);
-        if (!Object.keys(instance.serverListLite[this.serverId]).includes(this.team.leaderSteamId)) {
+        /* Empty when the server has no lite mirror, Object.keys() is used on it below. */
+        const serverListLite = RustPlusSync.getServerListLiteEntry(instance, this.serverId);
+
+        if (!Object.keys(serverListLite).includes(this.team.leaderSteamId)) {
             let names = '';
             for (const player of this.team.players) {
-                if (Object.keys(instance.serverListLite[this.serverId]).includes(player.steamId)) {
+                if (Object.keys(serverListLite).includes(player.steamId)) {
                     names += `${player.name}, `
                 }
             }
@@ -2103,7 +2107,7 @@ class RustPlus extends RustPlusLib {
 
             if (this.team.leaderSteamId !== callerSteamId) {
                 if (this.generalSettings.leaderCommandOnlyForPaired) {
-                    if (!Object.keys(instance.serverListLite[this.serverId]).includes(callerSteamId)) {
+                    if (!Object.keys(serverListLite).includes(callerSteamId)) {
                         return Client.client.intlGet(this.guildId, 'youAreNotPairedWithServer');
                     }
                 }
@@ -2143,7 +2147,7 @@ class RustPlus extends RustPlusLib {
                     }
                     else {
                         if (this.generalSettings.leaderCommandOnlyForPaired) {
-                            if (!Object.keys(instance.serverListLite[this.serverId]).includes(player.steamId)) {
+                            if (!Object.keys(serverListLite).includes(player.steamId)) {
                                 return Client.client.intlGet(this.guildId, 'playerNotPairedWithServer', {
                                     name: player.name
                                 });

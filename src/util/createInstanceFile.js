@@ -24,6 +24,7 @@ const Path = require('path');
 
 const InstanceUtils = require('../util/instanceUtils.js');
 const Constants = require('./constants.js');
+const RustPlusSync = require('./rustplusSync.js');
 
 require('./types.js');
 
@@ -199,6 +200,8 @@ module.exports = (client, guild) => {
         if (!instance.hasOwnProperty('serverList')) instance.serverList = {};
         if (!instance.hasOwnProperty('serverListLite')) instance.serverListLite = {};
         if (!instance.hasOwnProperty('trackers')) instance.trackers = {};
+        /* Servers that were removed in Discord, so the account state cannot adopt them again. */
+        if (!instance.hasOwnProperty('deletedServers')) instance.deletedServers = {};
         if (!instance.hasOwnProperty('marketSubscriptionList')) instance.marketSubscriptionList = {
             all: [],
             buy: [],
@@ -219,19 +222,11 @@ module.exports = (client, guild) => {
         }
         if (!instance.whitelist.hasOwnProperty('steamIds')) instance.whitelist['steamIds'] = [];
         if (!instance.hasOwnProperty('aliases')) instance.aliases = [];
+    }
 
-        for (const serverId of Object.keys(instance.serverList)) {
-            if (!Object.keys(instance.serverListLite).includes(serverId)) {
-                instance.serverListLite[serverId] = new Object();
-            }
-
-            instance.serverListLite[serverId][instance.serverList[serverId].steamId] = {
-                serverIp: instance.serverList[serverId].serverIp,
-                appPort: instance.serverList[serverId].appPort,
-                steamId: instance.serverList[serverId].steamId,
-                playerToken: instance.serverList[serverId].playerToken
-            };
-        }
+    /* Every server needs its lite mirror, also one that was adopted while the bot was running. */
+    for (const serverId of Object.keys(instance.serverList)) {
+        RustPlusSync.ensureServerListLiteEntry(instance, serverId, instance.serverList[serverId]);
     }
 
     /* Check every serverList for missing keys */

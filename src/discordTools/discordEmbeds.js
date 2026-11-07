@@ -25,6 +25,7 @@ const Constants = require('../util/constants.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Timer = require('../util/timer');
+const RustPlusSync = require('../util/rustplusSync.js');
 
 function isValidUrl(url) {
     if (url.startsWith('https') || url.startsWith('http')) return true;
@@ -873,6 +874,9 @@ module.exports = {
         const teamBmInstance = (teamBmId !== null && teamBmId !== undefined) ?
             Client.client.battlemetricsInstances[teamBmId] : null;
 
+        /* Empty when the server has no lite mirror yet, Object.keys() is used on it below. */
+        const serverListLite = RustPlusSync.getServerListLiteEntry(instance, rustplus.serverId);
+
         for (const player of rustplus.team.players) {
             let playtimeStr = '';
             if (teamBmInstance) {
@@ -899,7 +903,7 @@ module.exports = {
                 status += (isAfk) ? Constants.AFK_EMOJI : Constants.ONLINE_EMOJI;
                 status += (player.isAlive) ? ((isAfk) ? Constants.SLEEPING_EMOJI : Constants.ALIVE_EMOJI) :
                     Constants.DEAD_EMOJI;
-                status += (Object.keys(instance.serverListLite[rustplus.serverId]).includes(player.steamId)) ?
+                status += (Object.keys(serverListLite).includes(player.steamId)) ?
                     Constants.PAIRED_EMOJI : '';
                 status += (isAfk) ? ` ${afkTime}\n` : '\n';
             }
@@ -907,7 +911,7 @@ module.exports = {
                 const offlineTime = player.getOfflineTime('s');
                 status += Constants.OFFLINE_EMOJI;
                 status += (player.isAlive) ? Constants.SLEEPING_EMOJI : Constants.DEAD_EMOJI;
-                status += (Object.keys(instance.serverListLite[rustplus.serverId]).includes(player.steamId)) ?
+                status += (Object.keys(serverListLite).includes(player.steamId)) ?
                     Constants.PAIRED_EMOJI : '';
                 status += (offlineTime !== null) ? offlineTime : '';
                 status += '\n';

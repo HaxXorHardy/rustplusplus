@@ -325,3 +325,42 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(client.saved, 0);
     });
 });
+
+/*
+    The account stays paired with a server that was removed in Discord. The history is applied on every run, so only a
+    pairing that is newer than the deletion may bring the server back.
+*/
+Test.describe('RustPlusHistory.applyPairingEntries (removed servers)', () => {
+    const DELETED_AT = Date.parse('2026-11-07T13:00:00+00:00');
+
+    Test.it('keeps a removed server out when the history only holds an older pairing', () => {
+        const instance = { serverList: {}, deletedServers: { [SERVER_ID]: DELETED_AT } };
+
+        const entries = RustPlusHistory.parsePairingEntries([
+            serverPairEntry(1947563374, 5, '2026-11-07T12:00:00.0000000+00:00'),
+        ]);
+
+        const result = RustPlusHistory.applyPairingEntries(instance, STEAM_ID, entries, intlGet);
+
+        Assert.strictEqual(result.servers, 0);
+        Assert.deepStrictEqual(instance.serverList, {});
+        Assert.strictEqual(SERVER_ID in instance.deletedServers, true);
+    });
+
+    Test.it('brings a removed server back when it was paired again afterwards', () => {
+        const instance = { serverList: {}, deletedServers: { [SERVER_ID]: DELETED_AT } };
+
+        const entries = RustPlusHistory.parsePairingEntries([
+            serverPairEntry(1947563374, 6, '2026-11-07T14:00:00.0000000+00:00'),
+        ]);
+
+        const result = RustPlusHistory.applyPairingEntries(instance, STEAM_ID, entries, intlGet);
+
+        Assert.strictEqual(result.servers, 1);
+        Assert.strictEqual(SERVER_ID in instance.deletedServers, false);
+
+        const serverKeys = Object.keys(instance.serverList);
+        Assert.strictEqual(serverKeys.length, 1);
+        Assert.strictEqual(instance.serverList[serverKeys[0]].guid, SERVER_ID);
+    });
+});

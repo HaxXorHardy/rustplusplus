@@ -686,6 +686,15 @@ module.exports = async (client, interaction) => {
 
         await DiscordTools.deleteMessageById(guildId, instance.channelId.servers, server.messageId);
 
+        /*
+            The account of the Rust+ app stays paired with the server, so it has to be remembered that the server was
+            removed here - otherwise the next refresh would adopt it again.
+        */
+        if (server.guid) {
+            if (!instance.deletedServers) instance.deletedServers = {};
+            instance.deletedServers[server.guid] = Date.now();
+        }
+
         delete instance.serverList[ids.serverId];
         client.setInstance(guildId, instance);
     }

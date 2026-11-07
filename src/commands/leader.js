@@ -21,6 +21,7 @@
 const Builder = require('@discordjs/builders');
 
 const DiscordEmbeds = require('../discordTools/discordEmbeds');
+const RustPlusSync = require('../util/rustplusSync.js');
 
 module.exports = {
     name: 'leader',
@@ -67,10 +68,13 @@ module.exports = {
             return;
         }
 
-        if (!Object.keys(instance.serverListLite[rustplus.serverId]).includes(rustplus.team.leaderSteamId)) {
+        /* Empty when the server has no lite mirror, Object.keys() is used on it below. */
+        const serverListLite = RustPlusSync.getServerListLiteEntry(instance, rustplus.serverId);
+
+        if (!Object.keys(serverListLite).includes(rustplus.team.leaderSteamId)) {
             let names = '';
             for (const player of rustplus.team.players) {
-                if (Object.keys(instance.serverListLite[rustplus.serverId]).includes(player.steamId)) {
+                if (Object.keys(serverListLite).includes(player.steamId)) {
                     names += `${player.name}, `
                 }
             }
@@ -95,7 +99,7 @@ module.exports = {
                 }
                 else {
                     if (rustplus.generalSettings.leaderCommandOnlyForPaired) {
-                        if (!Object.keys(instance.serverListLite[rustplus.serverId]).includes(player.steamId)) {
+                        if (!Object.keys(serverListLite).includes(player.steamId)) {
                             const str = client.intlGet(rustplus.guildId, 'playerNotPairedWithServer', {
                                 name: player.name
                             });

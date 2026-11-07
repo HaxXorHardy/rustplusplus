@@ -120,6 +120,19 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
         const hasCredentials = entry.playerToken !== undefined && entry.playerToken !== null;
         if (entry.entityId === null && !hasCredentials) continue;
 
+        /*
+            A pairing of a server that was removed in Discord brings it back - but only when the pairing is newer than
+            the deletion, otherwise the history would undo every deletion again and again.
+        */
+        const deletedAt = instance.deletedServers ? instance.deletedServers[entry.serverId] : null;
+        if (deletedAt) {
+            const pairedAt = entry.date ? Date.parse(entry.date) : NaN;
+
+            if (!Number.isFinite(pairedAt) || pairedAt <= deletedAt) continue;
+
+            delete instance.deletedServers[entry.serverId];
+        }
+
         const applied = RustPlusSync.applySyncServers(instance, steamId, [{
             id: entry.serverId,
             name: entry.serverName,

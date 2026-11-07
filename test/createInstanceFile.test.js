@@ -117,4 +117,25 @@ Test.describe('createInstanceFile', () => {
         Assert.strictEqual(client.saved.activeServer, SERVER_ID);
         Assert.strictEqual(client.warnings.length, 0);
     });
+
+    /*
+        The lite mirror is read by the team message (Object.keys) - a server without one crashed the startup.
+    */
+    Test.it('creates the lite mirror of the servers of the instance', () => {
+        writeInstance({
+            firstTime: false,
+            activeServer: SERVER_ID,
+            serverList: {
+                [SERVER_ID]: fakeServer(),
+            },
+            trackers: {},
+        });
+
+        const client = fakeClient();
+        CreateInstanceFile(client, { id: GUILD_ID });
+
+        Assert.deepStrictEqual(Object.keys(client.saved.serverListLite), [SERVER_ID]);
+        Assert.ok(client.saved.serverListLite[SERVER_ID]['76561198000000012']);
+        Assert.deepStrictEqual(client.saved.deletedServers, {});
+    });
 });

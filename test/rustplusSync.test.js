@@ -114,7 +114,8 @@ Test.describe('RustPlusSync.applySyncServers', () => {
 
         const result = RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet);
 
-        Assert.deepStrictEqual(result, { servers: 1, created: 1, devices: 3, updated: 0, updatedKeys: [] });
+        Assert.deepStrictEqual(result,
+            { servers: 1, created: 1, devices: 3, updated: 0, updatedKeys: [], skipped: [] });
 
         const server = instance.serverList[`relay-${SERVER_ID}`];
         Assert.strictEqual(server.guid, SERVER_ID);
@@ -168,7 +169,63 @@ Test.describe('RustPlusSync.applySyncServers (existing entries)', () => {
         const instance = { serverList: {} };
 
         Assert.deepStrictEqual(RustPlusSync.applySyncServers(instance, STEAM_ID, [{ name: 'no id' }], intlGet),
-            { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [] });
+            { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [], skipped: [] });
         Assert.deepStrictEqual(instance.serverList, {});
+    });
+
+    /* Servers adopted while the bot runs never pass the repair of the instance file, the mirror has to be created. */
+    Test.it('creates the lite mirror of an adopted server', () => {
+        const instance = { serverList: {} };
+        const data = RustPlusSync.parseSyncPayload(syncPayload());
+
+        RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet);
+
+        const key = Object.keys(instance.serverList)[0];
+        Assert.deepStrictEqual(Object.keys(instance.serverList[key]), [
+            'title', 'serverIp', 'appPort', 'guid', 'steamId', 'playerToken', 'description', 'img', 'url', 'notes',
+            'switches', 'alarms', 'storageMonitors', 'markers', 'switchGroups', 'messageId', 'battlemetricsId',
+            'connect', 'cargoShipEgressTimeMs', 'oilRigLockedCrateUnlockTimeMs', 'deepSeaMinWipeCooldownMs',
+            'deepSeaMaxWipeCooldownMs', 'deepSeaWipeDurationMs', 'timeTillDay', 'timeTillNight', 'customCameraGroups',
+        ]);
+
+        Assert.deepStrictEqual(Object.keys(instance.serverListLite[key]), [STEAM_ID]);
+        Assert.strictEqual(instance.serverListLite[key][STEAM_ID].playerToken, 1623465021);
+        Assert.strictEqual(instance.serverListLite[key][STEAM_ID].guid, undefined);
+    });
+});
+
+/*
+    The Rust+ account stays paired with a server after the user removes it in Discord. Without a mark the account state
+    would adopt it again on the next refresh, which made deleting a server look broken.
+*/
+Test.describe('RustPlusSync.applySyncServers (removed servers)', () => {
+    const DELETED_AT = 1794058229000;
+
+    Test.it('does not adopt a server that was removed in Discord', () => {
+        const instance = { serverList: {}, deletedServers: { [SERVER_ID]: DELETED_AT } };
+        const data = RustPlusSync.parseSyncPayload(syncPayload());
+
+        const result = RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet);
+
+        Assert.strictEqual(result.servers, 0);
+        Assert.deepStrictEqual(result.skipped, [SERVER_ID]);
+        Assert.deepStrictEqual(instance.serverList, {});
+    });
+
+    Test.it('adopts it when the caller explicitly asks for removed servers', () => {
+        const instance = { serverList: {}, deletedServers: { [SERVER_ID]: DELETED_AT } };
+        const data = RustPlusSync.parseSyncPayload(syncPayload());
+
+        const result = RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet,
+            { includeDeleted: true });
+
+        Assert.strictEqual(result.servers, 1);
+        Assert.deepStrictEqual(result.skipped, []);
+    });
+
+    Test.it('reads the lite mirror of a server that has none', () => {
+        Assert.deepStrictEqual(RustPlusSync.getServerListLiteEntry({ serverList: {} }, 'relay-1'), {});
+        Assert.deepStrictEqual(RustPlusSync.getServerListLiteEntry({ serverListLite: {} }, 'relay-1'), {});
+        Assert.deepStrictEqual(RustPlusSync.getServerListLiteEntry(null, 'relay-1'), {});
     });
 });
