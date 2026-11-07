@@ -646,8 +646,14 @@ class RustPlus extends RustPlusLib {
         if (!server) return 0;
 
         let subscribed = 0;
+        let changed = false;
 
         for (const id of Object.keys(server.alarms || {})) {
+            const alarm = server.alarms[id];
+
+            /* A device that the server does not know anymore is not asked again on every reconnect. */
+            if (alarm && alarm.reachable === false) continue;
+
             try {
                 const response = await this.setSubscriptionAsync(id, true);
 
@@ -655,6 +661,13 @@ class RustPlus extends RustPlusLib {
                 if (response instanceof Error || (response && response.error)) {
                     this.log(Client.client.intlGet(null, 'warningCap'),
                         `Could not subscribe to alarm ${id}.`, 'debug');
+
+                    /* not_found means the entity is gone (destroyed in game, or paired with another server). */
+                    if (alarm && response && `${response.error}`.includes('not_found')) {
+                        alarm.reachable = false;
+                        changed = true;
+                    }
+
                     continue;
                 }
 
@@ -665,6 +678,8 @@ class RustPlus extends RustPlusLib {
                     `Could not subscribe to alarm ${id}: ${e && e.message ? e.message : e}`, 'debug');
             }
         }
+
+        if (changed) Client.client.setInstance(this.guildId, instance);
 
         return subscribed;
     }
