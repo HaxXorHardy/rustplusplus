@@ -24,6 +24,7 @@ const Client = require('./clientRegistry.js');
 const Config = require('../../config');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
+const RustPlusTransport = require('../util/rustplusTransport.js');
 
 class RustPlusLite extends RustPlusLib {
     constructor(guildId, logger, rustplus, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false,
@@ -58,7 +59,23 @@ class RustPlusLite extends RustPlusLib {
     }
 
     connect() {
-        if (!this.resolveAuthenticatedTransport()) return super.connect();
+        if (!this.resolveAuthenticatedTransport()) {
+            /*
+                The leader has no Rust+ login of their own, so the relay socket cannot be authenticated. An entry that
+                is keyed by its pairing id (`relay-<uuid>`) has no address either, and the library transport would
+                throw on `ws://relay:<uuid>` (see util/rustplusTransport.js). Refuse the connection instead of
+                ending the process with an unhandled rejection.
+            */
+            if (RustPlusTransport.isRelayAddress(this.server) || !this.server || !this.port) {
+                this.log(Client.client.intlGet(null, 'warningCap'),
+                    `There is no Rust+ login stored for the leader ${this.playerId}, the connection of the team ` +
+                    'leader is not tracked. Use "/credentials login" in Discord with that Steam account.', 'warn');
+
+                return undefined;
+            }
+
+            return super.connect();
+        }
 
         return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
     }

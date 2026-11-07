@@ -72,6 +72,18 @@ function isConnectionFailure(error) {
     return CONNECTION_FAILURE_CODES.includes(error ? error.code : undefined);
 }
 
+/*
+    A server that was paired without an ip/port is keyed by its pairing id (`relay-<uuid>`, see util/rustplusSync.js)
+    and is only reachable through the authenticated socket. The library transports can only build
+    `ws://<server>:<port>` or the proxy path, and `ws://relay:<uuid>` is not a valid URL: the WebSocket constructor
+    throws inside the library, which ends the process through an unhandled rejection.
+*/
+const RELAY_SERVER_IP = 'relay';
+
+function isRelayAddress(server) {
+    return `${server === undefined || server === null ? '' : server}`.trim().toLowerCase() === RELAY_SERVER_IP;
+}
+
 /* Human readable endpoint for the log, mirrors what the rustplus.js library connects to. */
 function describeEndpoint(server, port, useFacepunchProxy) {
     return useFacepunchProxy ?
@@ -116,12 +128,14 @@ function describeSocketEndpoint(serverGuid, buildVersion = SOCKET_BUILD_VERSION)
 module.exports = {
     MODES: MODES,
     DIRECT_FAILURES_BEFORE_PROXY: DIRECT_FAILURES_BEFORE_PROXY,
+    RELAY_SERVER_IP: RELAY_SERVER_IP,
     SOCKET_PROTOCOL: SOCKET_PROTOCOL,
     SOCKET_ORIGIN: SOCKET_ORIGIN,
     SOCKET_BUILD_VERSION: SOCKET_BUILD_VERSION,
     normalizeMode: normalizeMode,
     shouldUseFacepunchProxy: shouldUseFacepunchProxy,
     isConnectionFailure: isConnectionFailure,
+    isRelayAddress: isRelayAddress,
     describeEndpoint: describeEndpoint,
     buildSocketUrl: buildSocketUrl,
     buildSocketProtocols: buildSocketProtocols,

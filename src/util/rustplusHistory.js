@@ -104,6 +104,36 @@ function parsePairingEntries(entries) {
 }
 
 /*
+    The pairing token that the newest notification of every server carries. The history keeps every pairing of a
+    server, so replaying the older ones must not keep flipping the token around (that looked like a renewal on every
+    run and made the instance reconnect every few minutes).
+*/
+function newestPlayerTokens(entries) {
+    const tokens = new Map();
+
+    /* The history is newest first, so the first notification of a server carries its current token. */
+    for (const entry of Array.isArray(entries) ? entries : []) {
+        if (!entry || !entry.serverId) continue;
+        if (entry.playerToken === undefined || entry.playerToken === null) continue;
+
+        if (!tokens.has(entry.serverId)) tokens.set(entry.serverId, entry.playerToken);
+    }
+
+    return tokens;
+}
+
+/* The pairing credentials of every server entry, to tell a real renewal from the replay of the history. */
+function credentialsSnapshot(instance) {
+    const snapshot = new Map();
+
+    for (const [key, server] of Object.entries(instance.serverList || {})) {
+        if (server) snapshot.set(key, `${server.guid}|${server.playerToken}`);
+    }
+
+    return snapshot;
+}
+
+/*
     Writes the paired servers and devices of the history into the instance. Existing entries are matched by pairing
     id, then by name, so nothing is duplicated.
 
@@ -113,6 +143,8 @@ function parsePairingEntries(entries) {
 */
 function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key) {
     const result = { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [], added: [] };
+    const tokens = newestPlayerTokens(entries);
+    const before = credentialsSnapshot(instance);
 
     for (const entry of [...(entries || [])].reverse()) {
         if (!entry || !entry.serverId) continue;
@@ -139,7 +171,8 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
             name: entry.serverName,
             ip: entry.ip,
             port: entry.port,
-            playerToken: entry.playerToken,
+            /* The newest pairing of the server decides about the token, older ones are only replayed for devices. */
+            playerToken: tokens.has(entry.serverId) ? tokens.get(entry.serverId) : entry.playerToken,
             headerImage: entry.headerImage,
             desc: entry.description,
             url: entry.url,
@@ -153,11 +186,6 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
         result.servers += applied.servers;
         result.created += applied.created;
         result.devices += applied.devices;
-        result.updated += applied.updated;
-
-        for (const key of applied.updatedKeys) {
-            if (!result.updatedKeys.includes(key)) result.updatedKeys.push(key);
-        }
 
         if (applied.devices !== 0 && entry.entityId !== null) {
             const serverKey = Object.keys(instance.serverList)
@@ -170,6 +198,16 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
             });
         }
     }
+
+    /*
+        Only a server whose stored credentials differ from the ones before the replay was renewed. The history holds
+        every pairing of a server, so the intermediate states of the replay are no renewal.
+    */
+    for (const [key, credentials] of credentialsSnapshot(instance)) {
+        if (before.has(key) && before.get(key) !== credentials) result.updatedKeys.push(key);
+    }
+
+    result.updated = result.updatedKeys.length;
 
     return result;
 }

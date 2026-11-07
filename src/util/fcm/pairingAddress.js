@@ -28,7 +28,9 @@
     rustplus instance (`${server}-${port}`) matches the entry in the instance file.
 */
 
-const RELAY_SERVER_IP = 'relay';
+const RustPlusTransport = require('../rustplusTransport.js');
+
+const RELAY_SERVER_IP = RustPlusTransport.RELAY_SERVER_IP;
 
 function resolveServerAddress(instance, body) {
     if (!body) return null;

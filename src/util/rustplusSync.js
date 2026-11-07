@@ -28,6 +28,7 @@
 */
 
 const Constants = require('./constants.js');
+const RustPlusTransport = require('./rustplusTransport.js');
 
 /* AppEntityType of rustplus.proto */
 const ENTITY_TYPES = {
@@ -37,7 +38,7 @@ const ENTITY_TYPES = {
 };
 
 /* Server key used when the account state has no ip/port for a server (the relay does not need them). */
-const RELAY_SERVER_IP = 'relay';
+const RELAY_SERVER_IP = RustPlusTransport.RELAY_SERVER_IP;
 
 /* The pairing token is an int32 in the protocol: the history returns it as a string, the account state as a number. */
 function normalizePlayerToken(value) {

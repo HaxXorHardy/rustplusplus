@@ -456,3 +456,48 @@ Test.describe('RustPlusHistory.applyPairingEntries (removed servers)', () => {
         Assert.strictEqual(instance.serverList[serverKeys[0]].guid, SERVER_ID);
     });
 });
+
+/*
+    The history keeps every pairing of a server. Replaying the older ones must not look like a renewal, otherwise the
+    instance reconnects on every refresh (every five minutes) although nothing changed.
+*/
+Test.describe('RustPlusHistory.applyPairingEntries (replay)', () => {
+    Test.it('does not report a renewal when the replay ends where it started', () => {
+        const instance = { serverList: {} };
+
+        const entries = RustPlusHistory.parsePairingEntries([
+            serverPairEntry(300, 3, '2026-11-07T16:38:49.2660604+00:00'),
+            serverPairEntry(200, 2, '2026-11-07T16:28:10.6870231+00:00'),
+            serverPairEntry(100, 1, '2026-11-07T16:14:33.2544318+00:00'),
+        ]);
+
+        const first = RustPlusHistory.applyPairingEntries(instance, STEAM_ID, entries, intlGet);
+        Assert.strictEqual(first.created, 1);
+        Assert.strictEqual(first.updated, 0);
+        Assert.deepStrictEqual(first.updatedKeys, []);
+
+        const again = RustPlusHistory.applyPairingEntries(instance, STEAM_ID, entries, intlGet);
+        Assert.strictEqual(again.updated, 0);
+        Assert.deepStrictEqual(again.updatedKeys, []);
+        Assert.strictEqual(instance.serverList['91.229.114.90-28111'].playerToken, 300);
+    });
+
+    Test.it('still reports a renewal when a newer pairing arrives', () => {
+        const instance = { serverList: {} };
+
+        RustPlusHistory.applyPairingEntries(instance, STEAM_ID,
+            RustPlusHistory.parsePairingEntries([serverPairEntry(100, 1, '2026-11-07T16:14:33.2544318+00:00')]),
+            intlGet);
+
+        const entries = RustPlusHistory.parsePairingEntries([
+            serverPairEntry(400, 2, '2026-11-07T17:00:00.0000000+00:00'),
+            serverPairEntry(100, 1, '2026-11-07T16:14:33.2544318+00:00'),
+        ]);
+
+        const result = RustPlusHistory.applyPairingEntries(instance, STEAM_ID, entries, intlGet);
+
+        Assert.strictEqual(result.updated, 1);
+        Assert.deepStrictEqual(result.updatedKeys, ['91.229.114.90-28111']);
+        Assert.strictEqual(instance.serverList['91.229.114.90-28111'].playerToken, 400);
+    });
+});

@@ -37,6 +37,7 @@ const Languages = require('../util/languages.js');
 const Logger = require('./Logger.js');
 const Map = require('../util/map.js');
 const getRuntimeDataStorage = require('../util/storage/getRuntimeDataStorage.js');
+const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusLite = require('../structures/RustPlusLite');
 const RustPlusLogin = require('../util/rustplusLogin.js');
@@ -68,6 +69,8 @@ class RustPlus extends RustPlusLib {
         this.uptimeServer = null;
         this.transportReconnectScheduled = false;   /* A dropped request already asked for a reconnect. */
         this.lastTokenRenewalAttemptMs = 0;         /* Throttles the renewal of the account token. */
+        this.authRetryTimer = null;                 /* Retry of a connection whose login/token is not usable. */
+        this.authRetryAttempt = 0;                  /* Failed attempts in a row, the retry delay grows with it. */
 
         /* Status flags */
         this.isOperational = false;         /* Connected to the server, and request is verified. */
@@ -519,6 +522,22 @@ class RustPlus extends RustPlusLib {
     connect() {
         if (this.serverGuid === null || this.authToken === null) {
             /*
+                A server entry that was paired without an address is keyed by its pairing id (`relay-<uuid>`) and is
+                only reachable through the authenticated relay socket. The library transports would build
+                `ws://relay:<uuid>`, which throws inside the WebSocket constructor and ends the process through an
+                unhandled rejection. Refuse the connection and retry later instead.
+            */
+            if (RustPlusTransport.isRelayAddress(this.server)) {
+                this.log(Client.client.intlGet(null, 'errorCap'),
+                    `There is no usable Rust+ login for ${this.playerId}, so "${this.serverId}" cannot be connected: ` +
+                    'the server is reached through the relay socket, which needs the account token. Use ' +
+                    '"/credentials login" in Discord to sign in with Steam.', 'error');
+
+                this.scheduleAuthRetry('The Rust+ login of this steam account is missing.');
+                return undefined;
+            }
+
+            /*
                 Without a login the library connects directly with `ws://<ip>:<port>/<token>`. A server that was
                 never paired with an address (an entry of an older version, or a pairing that only carried the
                 pairing id) has none, and the websocket constructor would throw `Invalid URL: ws://undefined:undefined`.
@@ -529,16 +548,55 @@ class RustPlus extends RustPlusLib {
                     `The address of the server "${this.serverId}" is unknown, it cannot be connected. ` +
                     'Use "/credentials login" in Discord: the login reads the servers, their address and the ' +
                     'pairing id from the Rust+ account.', 'error');
+
+                this.scheduleAuthRetry('The address of the server is unknown.');
                 return undefined;
             }
 
             return super.connect();
         }
 
+        /* The transport is usable, a retry that was queued for a missing login is not needed anymore. */
+        this.cancelAuthRetry();
+
         /* The stored account token expires after ~14 days, renew it instead of connecting with a dead one. */
         if (this.shouldRenewAuthToken()) return this.renewAuthTokenAndConnect();
 
         return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
+    }
+
+    /*
+        A connection that could not be built (missing login, unusable token) is retried with the reconnect backoff, so
+        the bot recovers on its own once the login is stored again (for example by scripts/rustplusLogin.js) - without
+        a tight loop that would spam the log while the configuration is broken.
+    */
+    scheduleAuthRetry(reason) {
+        if (this.isDeleted || this.authRetryTimer !== null) return;
+
+        this.authRetryAttempt += 1;
+
+        const delayMs = ReconnectBackoff(this.authRetryAttempt, Config.general.reconnectIntervalMs,
+            Config.general.reconnectIntervalMaxMs);
+
+        this.log(Client.client.intlGet(null, 'infoCap'),
+            `${reason} New connection attempt in ${Math.round(delayMs / 1000)} s.`, 'info');
+
+        this.authRetryTimer = setTimeout(() => {
+            this.authRetryTimer = null;
+            if (!this.isDeleted) this.connect();
+        }, delayMs);
+
+        if (typeof this.authRetryTimer.unref === 'function') this.authRetryTimer.unref();
+    }
+
+    /* Stops the retry of a connection that cannot be built, called as soon as the transport is usable again. */
+    cancelAuthRetry() {
+        this.authRetryAttempt = 0;
+
+        if (this.authRetryTimer !== null) {
+            clearTimeout(this.authRetryTimer);
+            this.authRetryTimer = null;
+        }
     }
 
     /* A renewal is due when the token expires soon and a refresh token of the Steam login is stored. */
@@ -557,6 +615,8 @@ class RustPlus extends RustPlusLib {
     */
     async renewAuthTokenAndConnect() {
         this.lastTokenRenewalAttemptMs = Date.now();
+
+        let renewalError = null;
 
         try {
             const auth = await RustPlusLogin.renewAuth(this.playerId,
@@ -579,14 +639,35 @@ class RustPlus extends RustPlusLib {
             this.log(Client.client.intlGet(null, 'infoCap'), 'Rust+ account token renewed.');
         }
         catch (e) {
-            this.log(Client.client.intlGet(null, 'warningCap'),
-                `The Rust+ account token could not be renewed: ${e && e.message ? e.message : e} ` +
-                'Use "/credentials login" in Discord to sign in again.', 'warn');
-
-            return undefined;
+            renewalError = e;
         }
 
-        return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
+        /*
+            A failed renewal must not keep the bot offline: the stored token is valid for ~14 days, so it is usually
+            usable even when it already sits inside the renewal window. Only an expired token cannot be used at all.
+        */
+        const stored = RustPlusAuth.readAuth(this.playerId);
+        const errorMessage = renewalError === null ? '' :
+            `${renewalError && renewalError.message ? renewalError.message : renewalError}`;
+
+        if (stored !== null && !RustPlusAuth.isTokenExpired(stored)) {
+            this.authToken = stored.token;
+
+            if (renewalError !== null) {
+                this.log(Client.client.intlGet(null, 'warningCap'),
+                    `The Rust+ account token could not be renewed (${errorMessage}), connecting with the stored ` +
+                    `token that expires ${describeTokenExpiry(stored)}.`, 'warn');
+            }
+
+            return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
+        }
+
+        this.log(Client.client.intlGet(null, 'errorCap'),
+            `The Rust+ account token could not be renewed (${errorMessage === '' ? 'unknown error' : errorMessage}) ` +
+            'and the stored token has expired. Use "/credentials login" in Discord to sign in with Steam again.', 'error');
+
+        this.scheduleAuthRetry('The Rust+ account token is not usable.');
+        return undefined;
     }
 
     /*
@@ -800,6 +881,7 @@ class RustPlus extends RustPlusLib {
 
     deleteThisRustplusInstance() {
         this.isDeleted = true;
+        this.cancelAuthRetry();
         this.disconnect();
 
         if (Client.client.rustplusInstances.hasOwnProperty(this.guildId)) {
@@ -3561,6 +3643,12 @@ class RustPlus extends RustPlusLib {
         return Object.values(monuments).sort((a, b) =>
             (b.count - a.count) || a.name.localeCompare(b.name));
     }
+}
+
+/* ISO timestamp of the stored token expiry, for the log. */
+function describeTokenExpiry(auth) {
+    const expiresAt = RustPlusAuth.getTokenExpiry(auth);
+    return expiresAt === null ? 'unknown' : new Date(expiresAt * 1000).toISOString();
 }
 
 module.exports = RustPlus;

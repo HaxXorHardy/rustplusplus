@@ -113,3 +113,22 @@ Test.describe('RustPlusTransport authenticated socket', () => {
             'authenticated wss://companion-rust.facepunch.com/socket/uuid?v=1792502454122');
     });
 });
+
+Test.describe('RustPlusTransport.isRelayAddress', () => {
+    Test.it('recognises a server entry that is keyed by its pairing id', () => {
+        Assert.strictEqual(RustPlusTransport.isRelayAddress('relay'), true);
+        Assert.strictEqual(RustPlusTransport.isRelayAddress(' relay '), true);
+        Assert.strictEqual(RustPlusTransport.isRelayAddress('RELAY'), true);
+    });
+
+    Test.it('keeps real addresses on the library transports', () => {
+        Assert.strictEqual(RustPlusTransport.isRelayAddress('91.229.114.90'), false);
+        Assert.strictEqual(RustPlusTransport.isRelayAddress('rust.example.com'), false);
+        Assert.strictEqual(RustPlusTransport.isRelayAddress(undefined), false);
+        Assert.strictEqual(RustPlusTransport.isRelayAddress(null), false);
+    });
+
+    Test.it('uses the same key as the instance file', () => {
+        Assert.strictEqual(RustPlusTransport.RELAY_SERVER_IP, 'relay');
+    });
+});
