@@ -32,19 +32,7 @@ module.exports = {
 
         if (!(steamId in credentials)) return;
 
-        if (steamId === credentials.hoster) {
-            if (client.fcmListeners[guildId]) {
-                client.fcmListeners[guildId].destroy();
-            }
-            delete client.fcmListeners[guildId];
-            credentials.hoster = null;
-        }
-        else {
-            if (client.fcmListenersLite[guildId][steamId]) {
-                client.fcmListenersLite[guildId][steamId].destroy();
-            }
-            delete client.fcmListenersLite[guildId][steamId];
-        }
+        if (steamId === credentials.hoster) credentials.hoster = null;
 
         delete credentials[steamId];
         InstanceUtils.writeCredentialsFile(guildId, credentials);

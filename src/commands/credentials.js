@@ -23,7 +23,6 @@ const Builder = require('@discordjs/builders');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordModals = require('../discordTools/discordModals.js');
-const DiscordTools = require('../discordTools/discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 
 module.exports = {
@@ -33,33 +32,6 @@ module.exports = {
         return new Builder.SlashCommandBuilder()
             .setName('credentials')
             .setDescription(client.intlGet(guildId, 'commandsCredentialsDesc'))
-            .addSubcommand(subcommand => subcommand
-                .setName('add')
-                .setDescription(client.intlGet(guildId, 'commandsCredentialsAddDesc'))
-                .addStringOption(option => option
-                    .setName('gcm_android_id')
-                    .setDescription('GCM Android ID.')
-                    .setRequired(true))
-                .addStringOption(option => option
-                    .setName('gcm_security_token')
-                    .setDescription('GCM Security Token.')
-                    .setRequired(true))
-                .addStringOption(option => option
-                    .setName('steam_id')
-                    .setDescription('Steam ID.')
-                    .setRequired(true))
-                .addStringOption(option => option
-                    .setName('issued_date')
-                    .setDescription('Issued date of the credentials.')
-                    .setRequired(true))
-                .addStringOption(option => option
-                    .setName('expire_date')
-                    .setDescription('Expire date of the credentials.')
-                    .setRequired(true))
-                .addBooleanOption(option => option
-                    .setName('host')
-                    .setDescription('Host the bot')
-                    .setRequired(false)))
             .addSubcommand(subcommand => subcommand
                 .setName('login')
                 .setDescription(client.intlGet(guildId, 'commandsCredentialsLoginDesc')))
@@ -96,10 +68,6 @@ module.exports = {
         await interaction.deferReply({ ephemeral: true });
 
         switch (interaction.options.getSubcommand()) {
-            case 'add': {
-                addCredentials(client, interaction, verifyId);
-            } break;
-
             case 'remove': {
                 removeCredentials(client, interaction, verifyId);
             } break;
@@ -117,75 +85,6 @@ module.exports = {
         }
     },
 };
-
-async function addCredentials(client, interaction, verifyId) {
-    const guildId = interaction.guildId;
-    const credentials = InstanceUtils.readCredentialsFile(guildId);
-    const steamId = interaction.options.getString('steam_id');
-    const credentialCount = Object.keys(credentials).length;
-    const isHoster = interaction.options.getBoolean('host') || credentialCount === 1 ||
-        credentials.hoster === steamId;
-    const existing = credentials[steamId];
-
-    /*
-        Only ask for admin rights when this actually takes over an existing credential:
-        a new hoster is selected while credentials are already registered, or an existing
-        credential of another Discord user is refreshed.
-    */
-    const isBecomingNewHoster = isHoster && credentials.hoster !== steamId;
-    const isOtherUsersCredential = existing && existing.discord_user_id &&
-        existing.discord_user_id !== interaction.member.user.id;
-
-    if ((isBecomingNewHoster && credentialCount !== 1) || isOtherUsersCredential) {
-        if (!await client.requireAdminPrivileges(interaction)) return;
-    }
-
-    /* Re-adding an existing steamId refreshes the stored credentials instead of being rejected. */
-    credentials[steamId] = new Object();
-    credentials[steamId].gcm = new Object();
-    credentials[steamId].gcm.android_id = interaction.options.getString('gcm_android_id');
-    credentials[steamId].gcm.security_token = interaction.options.getString('gcm_security_token');
-    credentials[steamId].issued_date = interaction.options.getString('issued_date');
-    credentials[steamId].expire_date = interaction.options.getString('expire_date');
-    credentials[steamId].discord_user_id = interaction.member.user.id;
-
-    const prevHoster = credentials.hoster;
-    if (isHoster) credentials.hoster = steamId;
-
-    InstanceUtils.writeCredentialsFile(guildId, credentials);
-
-    /* Start Fcm Listener */
-    if (isHoster) {
-        require('../util/fcm/FcmListener.js')(client, DiscordTools.getGuild(interaction.guildId));
-        if (prevHoster !== null && prevHoster !== steamId) {
-            require('../util/fcm/FcmListenerLite.js')(client, DiscordTools.getGuild(interaction.guildId), prevHoster);
-        }
-    }
-    else {
-        require('../util/fcm/FcmListenerLite.js')(client, DiscordTools.getGuild(interaction.guildId), steamId);
-
-        const rustplus = client.rustplusInstances[guildId];
-        if (rustplus && rustplus.team.leaderSteamId === steamId) {
-            rustplus.updateLeaderRustPlusLiteInstance();
-        }
-    }
-
-    client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'slashCommandValueChange', {
-        id: `${verifyId}`,
-        value: `add, ${steamId}, ` +
-            `${credentials[steamId].discord_user_id}, ` +
-            `${isHoster}, ` +
-            `${credentials[steamId].gcm.android_id}, ` +
-            `${credentials[steamId].gcm.security_token}, ` +
-            `${credentials[steamId].issued_date}, ` +
-            `${credentials[steamId].expire_date}`
-    }));
-
-    const str = client.intlGet(interaction.guildId, existing ?
-        'credentialsUpdatedSuccessfully' : 'credentialsAddedSuccessfully', { steamId: steamId });
-    await client.interactionEditReply(interaction, DiscordEmbeds.getActionInfoEmbed(0, str));
-    client.log(client.intlGet(null, 'infoCap'), str);
-}
 
 async function removeCredentials(client, interaction, verifyId) {
     const guildId = interaction.guildId;
@@ -216,19 +115,8 @@ async function removeCredentials(client, interaction, verifyId) {
         return;
     }
 
-    if (steamId === credentials.hoster) {
-        if (client.fcmListeners[guildId]) {
-            client.fcmListeners[guildId].destroy();
-        }
-        delete client.fcmListeners[guildId];
-        credentials.hoster = null;
-    }
-    else {
-        if (client.fcmListenersLite[guildId] && client.fcmListenersLite[guildId][steamId]) {
-            client.fcmListenersLite[guildId][steamId].destroy();
-            delete client.fcmListenersLite[guildId][steamId];
-        }
-    }
+    /* A removed hoster leaves the guild without one, it has to be chosen again. */
+    if (steamId === credentials.hoster) credentials.hoster = null;
 
     delete credentials[steamId];
     InstanceUtils.writeCredentialsFile(guildId, credentials);
@@ -273,7 +161,6 @@ async function setHosterCredentials(client, interaction, verifyId) {
         return;
     }
 
-    const prevHoster = credentials.hoster;
     credentials.hoster = steamId;
     InstanceUtils.writeCredentialsFile(guildId, credentials);
 
@@ -286,11 +173,6 @@ async function setHosterCredentials(client, interaction, verifyId) {
         rustplus.disconnect();
         delete client.rustplusInstances[guildId];
         await DiscordMessages.sendServerMessage(guildId, rustplus.serverId);
-    }
-
-    require('../util/fcm/FcmListener.js')(client, DiscordTools.getGuild(interaction.guildId));
-    if (prevHoster !== null) {
-        require('../util/fcm/FcmListenerLite.js')(client, DiscordTools.getGuild(interaction.guildId), prevHoster);
     }
 
     client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'slashCommandValueChange', {

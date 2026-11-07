@@ -18,11 +18,18 @@
 
 */
 
+/*
+    Warns the Discord user of a steam account when the stored Rust+ login (credentials/rustplusAuth/<steamId>.json) is
+    about to expire or has expired. The account token lives ~14 days. A stored Steam refresh token lets the bot renew it
+    on its own, so only an account without one (or an expired token) needs the user.
+*/
+
 const Config = require('../../config');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
+const RustPlusAuth = require('../util/rustplusAuth.js');
 
 const STATE_EXPIRED = 'expired';
 const STATE_EXPIRING_SOON = 'expiringSoon';
@@ -39,8 +46,8 @@ module.exports = {
 };
 
 /*
-    Resolve the expiry state of the given credentials. Returns one of the STATE_*
-    constants or null when no notification is due yet.
+    Resolve the expiry state of the given token expiry. Returns one of the STATE_* constants or null when no
+    notification is due yet.
 */
 function getExpiryState(expireDate, now, warningSeconds) {
     if (expireDate <= now) return STATE_EXPIRED;
@@ -48,68 +55,73 @@ function getExpiryState(expireDate, now, warningSeconds) {
     return null;
 }
 
-async function handleGuild(client, guildId, now, warningSeconds) {
+/* The Discord user that logged in with this steam account, null when the guild does not know it. */
+async function getOwner(guildId, steamId) {
     let credentials = null;
+
     try {
         credentials = InstanceUtils.readCredentialsFile(guildId);
     }
     catch (e) {
-        client.log(client.intlGet(null, 'warningCap'),
-            client.intlGet(null, 'credentialsNotRegisteredForGuild', { id: guildId }));
-        return;
+        return null;
     }
 
-    let changed = false;
+    const owner = (credentials && credentials[steamId]) ? credentials[steamId].discord_user_id : null;
+    if (!owner) return null;
 
-    for (const steamId of Object.keys(credentials)) {
-        if (steamId === 'hoster') continue;
+    return await DiscordTools.getUserById(guildId, owner);
+}
 
-        const credential = credentials[steamId];
-        if (!credential || !credential.expire_date) continue;
+/* Every state is announced once per token: a renewed token carries a new expiry and is announced again. */
+function alreadyNotified(client, key) {
+    if (!client.credentialsExpiryNotified) client.credentialsExpiryNotified = new Object();
 
-        const expireDate = Number(credential.expire_date);
-        if (!Number.isFinite(expireDate)) continue;
+    return client.credentialsExpiryNotified[key] === true;
+}
 
-        const state = getExpiryState(expireDate, now, warningSeconds);
+function markNotified(client, key) {
+    if (!client.credentialsExpiryNotified) client.credentialsExpiryNotified = new Object();
+
+    client.credentialsExpiryNotified[key] = true;
+}
+
+async function handleGuild(client, guildId, now, warningSeconds) {
+    /* Every stored login of the guild is checked, the token file is the only source of the token state. */
+    for (const steamId of RustPlusAuth.listSteamIds()) {
+        const auth = RustPlusAuth.readAuth(steamId);
+        if (auth === null) continue;
+
+        const expiresAt = RustPlusAuth.getTokenExpiry(auth);
+        if (expiresAt === null) continue;
+
+        const state = getExpiryState(expiresAt, now, warningSeconds);
         if (state === null) continue;
 
-        /* Never notify the same user twice for the same credential state. */
-        if (state === STATE_EXPIRED && credential.expireNotified) continue;
-        if (state === STATE_EXPIRING_SOON && credential.expireWarned) continue;
+        /* An account that can renew itself needs no user, the bot fetches a new token on the next connect. */
+        if (state === STATE_EXPIRING_SOON && auth.steamRefreshToken) continue;
+        if (alreadyNotified(client, `${steamId}:${state}:${expiresAt}`)) continue;
 
-        const expired = state === STATE_EXPIRED;
-        const user = await DiscordTools.getUserById(guildId, credential.discord_user_id);
+        const user = await getOwner(guildId, steamId);
         if (!user) {
             client.log(client.intlGet(null, 'warningCap'),
                 client.intlGet(guildId, 'credentialsExpiryUserNotFound', {
-                    discordUserId: credential.discord_user_id,
+                    discordUserId: '-',
                     steamId: steamId
                 }));
             continue;
         }
 
+        const expired = state === STATE_EXPIRED;
+
         await client.messageSend(user, {
-            embeds: [DiscordEmbeds.getCredentialsExpiryEmbed(guildId, steamId, expireDate, expired)],
+            embeds: [DiscordEmbeds.getCredentialsExpiryEmbed(guildId, steamId, expiresAt, expired)],
             components: [DiscordButtons.getCredentialsExpiryButton(guildId)]
         });
 
-        if (expired) {
-            credential.expireNotified = true;
-        }
-        else {
-            credential.expireWarned = true;
-        }
-        changed = true;
+        markNotified(client, `${steamId}:${state}:${expiresAt}`);
 
         client.log(client.intlGet(null, 'infoCap'),
-            client.intlGet(guildId, expired ?
-                'credentialsExpiredNotified' : 'credentialsExpiringSoonNotified', {
-                    discordUserId: credential.discord_user_id,
-                    steamId: steamId
-                }));
-    }
-
-    if (changed) {
-        InstanceUtils.writeCredentialsFile(guildId, credentials);
+            `${expired ? 'The Rust+ login has expired' : 'The Rust+ login expires soon'}, the owner of ${steamId} ` +
+            'was notified.');
     }
 }

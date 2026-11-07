@@ -22,6 +22,7 @@ const Constants = require('../util/constants.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusLogin = require('../util/rustplusLogin.js');
@@ -115,6 +116,28 @@ function forgetDeletedServers(instance, ids) {
 
         delete instance.deletedServers[`${id}`];
     }
+}
+/*
+    The login is the only way an account gets into the guild credentials: it stores which Discord user owns which steam
+    account. The pairing id lives in the server entry, the account token in credentials/rustplusAuth/<steamId>.json, so
+    the FCM fields of older versions are dropped with the entry.
+*/
+function registerCredentials(guildId, steamId, discordUserId) {
+    const credentials = InstanceUtils.readCredentialsFile(guildId);
+
+    credentials[`${steamId}`] = {
+        discord_user_id: discordUserId,
+        login: 'rustplus',
+        updated_at: new Date().toISOString(),
+    };
+
+    /* The first login of a guild also chooses the hoster, a stale hoster is replaced. */
+    const hoster = credentials.hoster;
+    if (!hoster || !Object.prototype.hasOwnProperty.call(credentials, `${hoster}`)) {
+        credentials.hoster = `${steamId}`;
+    }
+
+    InstanceUtils.writeCredentialsFile(guildId, credentials);
 }
 
 /* Step 1 of the login: Steam credentials, then either the code prompt or the finish. */
@@ -249,7 +272,10 @@ async function complete(client, interaction, flow) {
         /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
         RustPlusLogin.storeAuth(auth.steamId, auth.token, data.servers, flow.getRefreshToken());
 
-        /* Servers and paired devices of the account, FCM credentials are not required for the setup. */
+        /* The login registers the Discord user as the owner of the steam account, /credentials show lists it. */
+        registerCredentials(guildId, auth.steamId, interaction.member.user.id);
+
+        /* Servers and paired devices of the account. */
         const instance = client.getInstance(guildId);
 
         /*

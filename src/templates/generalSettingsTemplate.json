@@ -7,8 +7,6 @@
     "trademark": "rustplusplus",
     "inGameCommandsEnabled": true,
     "inGameCommandAccessMode": "blacklist",
-    "fcmAlarmNotificationEnabled": false,
-    "fcmAlarmNotificationEveryone": false,
     "smartAlarmNotifyInGame": true,
     "smartSwitchNotifyInGameWhenChangedFromDiscord": true,
     "leaderCommandEnabled": true,

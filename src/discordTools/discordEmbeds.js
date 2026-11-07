@@ -24,6 +24,7 @@ const Client = require('../structures/clientRegistry.js');
 const Constants = require('../util/constants.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
+const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
 const RustPlusSync = require('../util/rustplusSync.js');
 
@@ -33,8 +34,8 @@ function isValidUrl(url) {
 }
 
 /*
-    The paired Discord user of a server. The bot also runs without FCM credentials, then no user is paired with the
-    steam account and the texts fall back to the bot itself.
+    The paired Discord user of a server. The login registers the Discord user of a steam account, without one the
+    texts fall back to the bot itself.
 */
 async function getPairedUser(guildId, server) {
     if (!server || !server.steamId) return null;
@@ -1113,22 +1114,22 @@ module.exports = {
         let hoster = '';
         let expires = '';
 
-        for (const credential of Object.keys(credentials)) {
-            if (credential === 'hoster') continue;
-
-            const content = credentials[credential];
+        for (const steamId of entries) {
+            const content = credentials[steamId];
             const user = await DiscordTools.getUserById(guildId, content.discord_user_id);
-            names += `${user.user.username}\n`;
-            steamIds += `${credential}\n`;
-            hoster += `${credential === credentials.hoster ? `${Constants.LEADER_EMOJI}\n` : '\u200B\n'}`;
 
-            const expireDate = Number(content.expire_date);
-            if (content.expire_date && Number.isFinite(expireDate)) {
-                const relativeDate = DiscordTools.getDiscordFormattedDate(expireDate, 'R');
-                expires += `${expireDate <= now ? `${Constants.NOT_FOUND_EMOJI} ` : ''}${relativeDate}\n`;
+            names += `${user && user.user ? user.user.username : Client.client.intlGet(guildId, 'unknown')}\n`;
+            steamIds += `${steamId}\n`;
+            hoster += `${steamId === credentials.hoster ? `${Constants.LEADER_EMOJI}\n` : '\u200B\n'}`;
+
+            /* The account token of the login lives ~14 days, it is renewed with the stored Steam refresh token. */
+            const expiresAt = RustPlusAuth.getTokenExpiry(RustPlusAuth.readAuth(steamId));
+            if (expiresAt !== null) {
+                const relativeDate = DiscordTools.getDiscordFormattedDate(expiresAt, 'R');
+                expires += `${expiresAt <= now ? `${Constants.NOT_FOUND_EMOJI} ` : ''}${relativeDate}\n`;
             }
             else {
-                expires += `${Client.client.intlGet(guildId, 'unknown')}\n`;
+                expires += `${Client.client.intlGet(guildId, 'credentialsNoLogin')}\n`;
             }
         }
 
@@ -1139,7 +1140,7 @@ module.exports = {
 
         const options = {
             color: Constants.COLOR_DEFAULT,
-            title: Client.client.intlGet(guildId, 'fcmCredentials'),
+            title: Client.client.intlGet(guildId, 'rustplusCredentials'),
             fields: [
                 { name: Client.client.intlGet(guildId, 'name'), value: names, inline: true },
                 { name: 'SteamID', value: steamIds, inline: true },

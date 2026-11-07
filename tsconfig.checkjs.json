@@ -18,9 +18,9 @@
     "src/util/responseUtils.js",
     "src/util/formatLogValue.js",
     "src/util/trackerInputParser.js",
-    "src/util/fcmPersistentIds.js",
-    "src/util/RuntimeDataStorage.js",
-    "src/util/getRuntimeDataStorage.js",
+    "src/util/rustplusTransport.js",
+    "src/util/storage/RuntimeDataStorage.js",
+    "src/util/storage/getRuntimeDataStorage.js",
     "src/structures/clientRegistry.js"
   ]
 }

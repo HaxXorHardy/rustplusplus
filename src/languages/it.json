@@ -867,5 +867,7 @@
     "yield": "Yield",
     "youAreAlreadyLeader": "Sei già il leader.",
     "youAreNotPairedWithServer": "Il comando del leader non funziona perché non sei associato al server.",
-    "credentialsShowEmptyHint": "Non ci sono credenziali FCM salvate. Servono solo per le notifiche di abbinamento e le notifiche FCM (allarmi, eventi del team) - la connessione a Rust+ usa \"/credentials login\". Aggiungile con \"/credentials add\"."
+    "credentialsShowEmptyHint": "Non ci sono credenziali FCM salvate. Servono solo per le notifiche di abbinamento e le notifiche FCM (allarmi, eventi del team) - la connessione a Rust+ usa \"/credentials login\". Aggiungile con \"/credentials add\".",
+    "rustplusCredentials": "Rust+ credentials",
+    "credentialsNoLogin": "no Rust+ login stored"
 }

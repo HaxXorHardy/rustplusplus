@@ -23,7 +23,6 @@ module.exports = {
     async execute(client, guild) {
         require('../util/createInstanceFile')(client, guild);
         require('../util/createCredentialsFile')(client, guild);
-        client.fcmListenersLite[guild.id] = new Object();
 
         client.loadGuildIntl(guild.id);
 

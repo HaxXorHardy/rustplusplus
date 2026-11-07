@@ -158,44 +158,6 @@ module.exports = async (client, interaction) => {
             components: [DiscordButtons.getInGameTeammateNotificationsButtons(guildId)]
         });
     }
-    else if (interaction.customId === 'FcmAlarmNotification') {
-        instance.generalSettings.fcmAlarmNotificationEnabled = !instance.generalSettings.fcmAlarmNotificationEnabled;
-        client.setInstance(guildId, instance);
-
-        if (rustplus) rustplus.generalSettings.fcmAlarmNotificationEnabled =
-            instance.generalSettings.fcmAlarmNotificationEnabled;
-
-        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
-            id: `${verifyId}`,
-            value: `${instance.generalSettings.fcmAlarmNotificationEnabled}`
-        }));
-
-        await client.interactionUpdate(interaction, {
-            components: [DiscordButtons.getFcmAlarmNotificationButtons(
-                guildId,
-                instance.generalSettings.fcmAlarmNotificationEnabled,
-                instance.generalSettings.fcmAlarmNotificationEveryone)]
-        });
-    }
-    else if (interaction.customId === 'FcmAlarmNotificationEveryone') {
-        instance.generalSettings.fcmAlarmNotificationEveryone = !instance.generalSettings.fcmAlarmNotificationEveryone;
-        client.setInstance(guildId, instance);
-
-        if (rustplus) rustplus.generalSettings.fcmAlarmNotificationEveryone =
-            instance.generalSettings.fcmAlarmNotificationEveryone;
-
-        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
-            id: `${verifyId}`,
-            value: `${instance.generalSettings.fcmAlarmNotificationEveryone}`
-        }));
-
-        await client.interactionUpdate(interaction, {
-            components: [DiscordButtons.getFcmAlarmNotificationButtons(
-                guildId,
-                instance.generalSettings.fcmAlarmNotificationEnabled,
-                instance.generalSettings.fcmAlarmNotificationEveryone)]
-        });
-    }
     else if (interaction.customId === 'SmartAlarmNotifyInGame') {
         instance.generalSettings.smartAlarmNotifyInGame = !instance.generalSettings.smartAlarmNotifyInGame;
         client.setInstance(guildId, instance);

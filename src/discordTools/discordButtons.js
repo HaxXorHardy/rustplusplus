@@ -347,22 +347,6 @@ module.exports = {
             }));
     },
 
-    getFcmAlarmNotificationButtons: function (guildId, enabled, everyone) {
-        return new Discord.ActionRowBuilder().addComponents(
-            module.exports.getButton({
-                customId: 'FcmAlarmNotification',
-                label: enabled ?
-                    Client.client.intlGet(guildId, 'enabledCap') :
-                    Client.client.intlGet(guildId, 'disabledCap'),
-                style: enabled ? SUCCESS : DANGER
-            }),
-            module.exports.getButton({
-                customId: 'FcmAlarmNotificationEveryone',
-                label: '@everyone',
-                style: everyone ? SUCCESS : DANGER
-            }));
-    },
-
     getSmartAlarmNotifyInGameButton: function (guildId, enabled) {
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({

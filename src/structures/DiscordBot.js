@@ -33,8 +33,6 @@ const RegisterSlashCommands = require('../discordTools/RegisterSlashCommands.js'
 const SetupGuildCategory = require('../discordTools/SetupGuildCategory.js');
 const SetupGuildChannels = require('../discordTools/SetupGuildChannels.js');
 const SetupSettingsMenu = require('../discordTools/SetupSettingsMenu.js');
-const FcmListener = require('../util/fcm/FcmListener.js');
-const FcmListenerLite = require('../util/fcm/FcmListenerLite.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Items = require('./Items');
 const Logger = require('./Logger.js');
@@ -50,8 +48,6 @@ class DiscordBot extends Discord.Client {
         this.logger = new Logger(Path.join(__dirname, '..', '..', 'logs/discordBot.log'), 'default');
 
         this.commands = new Discord.Collection();
-        this.fcmListeners = new Object();
-        this.fcmListenersLite = new Object();
         this.instances = {};
         this.guildIntl = {};
         this.botIntl = null;
@@ -248,14 +244,6 @@ class DiscordBot extends Discord.Client {
             await PermissionHandler.resetPermissionsAllChannels(this, guild);
         }
 
-        FcmListener(this, guild);
-        const credentials = InstanceUtils.readCredentialsFile(guild.id);
-        for (const steamId of Object.keys(credentials)) {
-            if (steamId !== credentials.hoster && steamId !== 'hoster') {
-                FcmListenerLite(this, guild, steamId);
-            }
-        }
-
         await SetupSettingsMenu(this, guild);
 
         if (firstTime) await PermissionHandler.resetPermissionsAllChannels(this, guild);
@@ -279,14 +267,14 @@ class DiscordBot extends Discord.Client {
             /* Credential files of older versions have no owner, they cannot be matched with the members. */
             if (!content || !content.discord_user_id) {
                 this.log(this.intlGet(null, 'warningCap'),
-                    `FCM credentials of ${steamId} have no Discord user stored, removing them.`);
+                    `The stored credentials of ${steamId} have no Discord user, removing them., removing them.`);
                 steamIdRemoveCredentials.push(steamId);
                 continue;
             }
 
             if (!(memberIds.includes(content.discord_user_id))) {
                 this.log(this.intlGet(null, 'warningCap'),
-                    `FCM credentials of ${steamId} belong to ${content.discord_user_id}, who is not a member of ` +
+                    `The stored credentials of ${steamId} belong to ${content.discord_user_id}, who is not a member of ` +
                     `${guild.name} anymore - removing them.`);
                 steamIdRemoveCredentials.push(steamId);
             }
@@ -296,19 +284,8 @@ class DiscordBot extends Discord.Client {
         if (steamIdRemoveCredentials.length === 0) return;
 
         for (const steamId of steamIdRemoveCredentials) {
-            if (steamId === credentials.hoster) {
-                if (this.fcmListeners[guild.id]) {
-                    this.fcmListeners[guild.id].destroy();
-                }
-                delete this.fcmListeners[guild.id];
-                credentials.hoster = null;
-            }
-            else {
-                if (this.fcmListenersLite[guild.id] && this.fcmListenersLite[guild.id][steamId]) {
-                    this.fcmListenersLite[guild.id][steamId].destroy();
-                }
-                if (this.fcmListenersLite[guild.id]) delete this.fcmListenersLite[guild.id][steamId];
-            }
+            /* The hoster of a removed credential has to be chosen again. */
+            if (steamId === credentials.hoster) credentials.hoster = null;
 
             delete credentials[steamId];
         }

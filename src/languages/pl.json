@@ -867,5 +867,7 @@
     "yield": "Plon",
     "youAreAlreadyLeader": "Jesteś już liderem.",
     "youAreNotPairedWithServer": "Komenda leader nie działa, ponieważ nie jesteś sparowany z serwerem.",
-    "credentialsShowEmptyHint": "Brak zapisanych danych FCM. Są potrzebne tylko do powiadomień o parowaniu i powiadomień FCM (alarmy, zdarzenia drużyny) - połączenie z Rust+ używa \"/credentials login\". Dodaj je przez \"/credentials add\"."
+    "credentialsShowEmptyHint": "Brak zapisanych danych FCM. Są potrzebne tylko do powiadomień o parowaniu i powiadomień FCM (alarmy, zdarzenia drużyny) - połączenie z Rust+ używa \"/credentials login\". Dodaj je przez \"/credentials add\".",
+    "rustplusCredentials": "Rust+ credentials",
+    "credentialsNoLogin": "no Rust+ login stored"
 }

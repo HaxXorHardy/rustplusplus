@@ -1,11 +1,10 @@
 # Frequently Asked Questions
 - [When I run 'npm install' I get an error](#when-i-run-npm-install-i-get-an-error)
-- [I've added the credentials but when I pair I get no notification](#credentials-added-but-no-pair-notification)
+- [I've paired a device but no Discord message appears](#credentials-added-but-no-pair-notification)
 - [The bot keep resetting channel permissions after restart](#bot-reset-channel-permissions)
 - [Im getting 'ERROR: {"code":"DisallowedIntents"}' when trying to start the bot](#disallowed-intents)
 - [Im getting 'ERROR: {"code": "TokenInvalid"}' when trying to start the bot](#token-invalid)
 - [Im getting 'ERROR: SyntaxError: Unexpected token '', ""... is not valid JSON' or 'ERROR: SyntaxError: Unexpected token in JSON at position 0' when trying to start the bot](#unexpected-token-invalid-json)
-- [When trying to get my credentials from the app, it's completely empty](#credential-app-empty)
 - [In-Game chat messages are not shown In-Game (or not mirrored to Discord) on some servers](#ingame-chat-on-some-servers)
 
 <a name="when-i-run-npm-install-i-get-an-error"></a>
@@ -16,9 +15,18 @@ If you're getting the error below, try running `npm i -g npm`. This should allow
 
 
 <a name="credentials-added-but-no-pair-notification"></a>
-## I've added the credentials but when I pair I get no notification
+## I've paired a device but no Discord message appears
 
-If you're having trouble getting a pair notifications (server/smart device), several things can be causing this. It's possible that the credentials you are currently using have been outdated, when generating credentials, they usually last for two weeks, so you can try to re-generate them through the [rustplusplus credential application](https://github.com/alexemanuelol/rustplusplus-credential-application) or the [rustplusplus website](https://rustplusplus-credentials.netlify.app/).
+The bot does not use FCM anymore. It reads the **notification history of the Rust+ account** (`POST /api/history/read`)
+every `RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes) and adopts the paired server or device from it. The log shows:
+
+* `Rust+ pairing of <server> renewed, reconnecting with the new player token.` - the pairing was adopted.
+* `Paired device <id> was adopted from the notification history.` - a switch/alarm/storage monitor was adopted.
+* `Could not read the pairing history: ...` - the stored account token is not usable anymore, `/credentials login`
+  signs in again.
+
+A pairing that happened while the bot was **offline** is adopted right after the next start (or with
+`/credentials login`), because the history keeps it.
 
 If you're still not getting any notifications and you are simultaneously using the rust companion app and are successfully getting pairing notifications there, this could be the issue. While it's possible to run both apps at the same time, it's not recommended. The reason for this is that using the same steam account credentials in different places makes the notifications a bit unstable, some notifications might still get through. In the scenario of trying to pair a server or a smart device, you can just try doing several attempts of pairing and eventually it will get through.
 
@@ -52,14 +60,6 @@ This happens when the token you placed in the config file is invalid. There have
 ![Unexpected token in json 2](docs/images/faq/unexpected_token_invalid_json_at_pos_0.png)
 
 This occurs for some people when their PC crash, there is still no solution for this but I hope to solve this in the future. Meanwhile you can follow the [issue on GitHub](https://github.com/HaxXorHardy/rustplusplus/issues) for updates. Current solution to be able to continue is to remove your instance file and let the bot create a new one when you start the bot next time.
-
-
-<a name="credential-app-empty"></a>
-## When trying to get my credentials from the app, it's completely empty
-
-If the rustplusplus credential application looks like the image below after you've logged in with your steam details this might be because of where you live or something else blocking you from generating. The solution for you would be to try it on the [rustplusplus website](https://rustplusplus-credentials.netlify.app/) instead.
-
-![credential app empty](docs/images/faq/empty-credential-app.png)
 
 
 <a name="ingame-chat-on-some-servers"></a>
@@ -202,7 +202,7 @@ Notes:
 
 #### Do I still need FCM credentials?
 
-No, not for the bot to work. `/api/syncData` - which the login already fetches - contains the servers of the
+No - the FCM client was removed from this fork. The bot connects through the authenticated relay socket of the
 account **and their paired devices**:
 
 ```json
@@ -214,8 +214,8 @@ account **and their paired devices**:
 with the names from the Rust+ app (`type` 1 = switch, 2 = alarm, 3 = storage monitor). A server without `ip/port`
 in the account state is keyed `relay-<uuid>`, which is exactly what the authenticated socket needs.
 
-FCM credentials are only needed for the push notifications of the app (raid alarm, team login, smart alarm while the
-bot is not connected). Everything else is read from the account itself:
+Alarms, deaths and team events are detected by polling the connected server (see the notification settings);
+they no longer depend on push notifications of the app. Everything else is read from the account itself:
 
 #### Newly paired devices are adopted automatically
 
@@ -254,7 +254,6 @@ new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.
 | `src/util/rustplusAuth.js` | reads/writes `credentials/rustplusAuth/<steamId>.json`, resolves server names -> ids |
 | `src/util/rustplusLogin.js` | Steam login (`steam-session`), Rust+ login, `/api/syncData` |
 | `src/util/rustplusLoginPages.js` | HTTP/HTML part of the browser flow (cookie jar, forms, page parsing) |
-| `src/util/fcm/pairingAddress.js` | server key of a pairing notification (ip/port or the pairing id) |
 | `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`, code modal, reconnect) |
 
 The login logs every step (`Rust+ login step N: … (cookies: …)`, `page title …, openid fields …`), so a failing

@@ -47,8 +47,6 @@ function readCredentials() {
 
 function fakeBot() {
     return {
-        fcmListeners: {},
-        fcmListenersLite: {},
         warnings: [],
         log(title, text) {
             this.warnings.push(text);
@@ -89,7 +87,7 @@ Test.describe('DiscordBot.syncCredentialsWithUsers', () => {
         Assert.strictEqual(STEAM_ID in credentials, false);
         Assert.strictEqual(credentials.hoster, null);
         Assert.strictEqual(bot.warnings.length, 1);
-        Assert.match(bot.warnings[0], new RegExp(`FCM credentials of ${STEAM_ID}`));
+        Assert.match(bot.warnings[0], new RegExp(`stored credentials of ${STEAM_ID}`));
     });
 
     Test.it('removes credentials without an owner', async () => {
@@ -100,6 +98,6 @@ Test.describe('DiscordBot.syncCredentialsWithUsers', () => {
 
         Assert.strictEqual(STEAM_ID_LITE in readCredentials(), false);
         Assert.strictEqual(bot.warnings.length, 1);
-        Assert.match(bot.warnings[0], /have no Discord user stored/);
+        Assert.match(bot.warnings[0], /have no Discord user/);
     });
 });

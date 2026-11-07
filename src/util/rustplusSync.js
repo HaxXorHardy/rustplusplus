@@ -118,7 +118,7 @@ function parseSyncPayload(payload) {
         })),
     };
 }
-/* Defaults of a server entry, the shape the rest of the bot expects (see util/fcm/FcmListener.js). */
+/* Defaults of a server entry, the shape the rest of the bot expects (see util/createInstanceFile.js). */
 function createServerEntry(data, existing, steamId, options = {}) {
     const entry = Object.assign({
         title: data.name || 'Rust+ server',

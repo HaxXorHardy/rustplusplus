@@ -867,5 +867,7 @@
     "yield": "Rendement",
     "youAreAlreadyLeader": "Vous êtes déjà le chef du groupe.",
     "youAreNotPairedWithServer": "La commande Leader ne fonctionne pas car n'est pas associé au serveur.",
-    "credentialsShowEmptyHint": "Aucun identifiant FCM n'est enregistré. Ils ne servent qu'aux notifications d'appairage et aux notifications FCM (alarmes, événements d'équipe) - la connexion Rust+ utilise \"/credentials login\". Ajoutez-les avec \"/credentials add\"."
+    "credentialsShowEmptyHint": "Aucun identifiant FCM n'est enregistré. Ils ne servent qu'aux notifications d'appairage et aux notifications FCM (alarmes, événements d'équipe) - la connexion Rust+ utilise \"/credentials login\". Ajoutez-les avec \"/credentials add\".",
+    "rustplusCredentials": "Rust+ credentials",
+    "credentialsNoLogin": "no Rust+ login stored"
 }
