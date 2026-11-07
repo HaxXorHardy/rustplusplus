@@ -617,6 +617,45 @@ class RustPlus extends RustPlusLib {
         this.connect();
     }
 
+    /*
+        The Rust+ app subscribes to the entities it displays, the server then pushes their changes (broadcast
+        entityChanged) instead of waiting for the next poll. Same here, so a triggered alarm or a switched device
+        shows up immediately.
+    */
+    async subscribeEntities(instance) {
+        const server = instance.serverList[this.serverId];
+        if (!server) return 0;
+
+        const ids = [
+            ...Object.keys(server.switches || {}),
+            ...Object.keys(server.alarms || {}),
+            ...Object.keys(server.storageMonitors || {}),
+        ];
+
+        let subscribed = 0;
+
+        for (const id of ids) {
+            try {
+                const response = await this.setSubscriptionAsync(id, true);
+
+                /* setSubscriptionAsync resolves with the error instead of throwing it. */
+                if (response instanceof Error || (response && response.error)) {
+                    this.log(Client.client.intlGet(null, 'warningCap'),
+                        `Could not subscribe to entity ${id}.`, 'debug');
+                    continue;
+                }
+
+                subscribed++;
+            }
+            catch (e) {
+                this.log(Client.client.intlGet(null, 'warningCap'),
+                    `Could not subscribe to entity ${id}: ${e && e.message ? e.message : e}`, 'debug');
+            }
+        }
+
+        return subscribed;
+    }
+
     updateLeaderRustPlusLiteInstance() {
         if (this.leaderRustPlusInstance !== null) {
             if (Client.client.rustplusLiteReconnectTimers[this.guildId]) {

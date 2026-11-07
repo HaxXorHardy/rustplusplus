@@ -115,6 +115,13 @@ module.exports = {
         rustplus.isNewConnection = false;
         rustplus.loadMarkers();
 
+        /* Let the server push changes of the paired entities, like the Rust+ app does. */
+        const subscribed = await rustplus.subscribeEntities(instance);
+        if (subscribed !== 0) {
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `Subscribed to ${subscribed} device(s), their changes are pushed by the server.`);
+        }
+
         await PollingHandler.pollingHandler(rustplus, client);
         rustplus.restorePersistentRuntimeState();
         rustplus.persistMapMarkersRuntimeState();
