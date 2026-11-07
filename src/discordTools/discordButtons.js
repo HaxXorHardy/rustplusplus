@@ -471,6 +471,24 @@ module.exports = {
             }));
     },
 
+    getCredentialsLoginCodeButton: function (guildId) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                customId: 'CredentialsLoginCode',
+                label: Client.client.intlGet(guildId, 'credentialsLoginCodeButton'),
+                style: PRIMARY
+            }));
+    },
+
+    getCredentialsLoginDoneButton: function (guildId) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                customId: 'CredentialsLoginDone',
+                label: Client.client.intlGet(guildId, 'credentialsLoginDoneButton'),
+                style: SUCCESS
+            }));
+    },
+
     getBotMutedInGameButton: function (guildId, isMuted) {
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({

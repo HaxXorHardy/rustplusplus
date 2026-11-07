@@ -22,6 +22,7 @@ const Builder = require('@discordjs/builders');
 
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const DiscordModals = require('../discordTools/discordModals.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 
@@ -60,6 +61,9 @@ module.exports = {
                     .setDescription('Host the bot')
                     .setRequired(false)))
             .addSubcommand(subcommand => subcommand
+                .setName('login')
+                .setDescription(client.intlGet(guildId, 'commandsCredentialsLoginDesc')))
+            .addSubcommand(subcommand => subcommand
                 .setName('remove')
                 .setDescription(client.intlGet(guildId, 'commandsCredentialsRemoveDesc'))
                 .addStringOption(option => option
@@ -83,6 +87,12 @@ module.exports = {
         client.logInteraction(interaction, verifyId, 'slashCommand');
 
         if (!await client.validatePermissions(interaction)) return;
+
+        /* The login is answered with a modal, which is not possible after a deferred reply. */
+        if (interaction.options.getSubcommand() === 'login') {
+            return await interaction.showModal(DiscordModals.getCredentialsLoginModal(interaction.guildId));
+        }
+
         await interaction.deferReply({ ephemeral: true });
 
         switch (interaction.options.getSubcommand()) {

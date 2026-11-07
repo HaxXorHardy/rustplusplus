@@ -76,3 +76,210 @@ You can check what a server supports without touching the running bot:
 ```
 node scripts/clanChatProbe.js [--server=<ip-appPort>] [--send] [--send-team]
 ```
+
+<a name="rustplus-connection-problems"></a>
+## The bot cannot connect to the server (reconnect loop, `ECONNRESET` / `socket hang up`)
+
+The bot reaches the Rust+ websocket of the server in one of two ways:
+
+| Transport | Endpoint | When it is used |
+|---|---|---|
+| direct | `ws://<server-ip>:<app-port>` | default, fastest |
+| Facepunch proxy | `wss://companion-rust.facepunch.com/game/<server-ip>/<app-port>` | when the app port is not reachable from the outside or direct connections do not work |
+
+`ERROR: Error [code=ECONNRESET]: socket hang up` directly after `CONNECTING` means the TCP connection is accepted
+and dropped again. Typical causes:
+
+* the server is offline or restarting (for example during a wipe),
+* the **app port** changed after a wipe/restart - check the app port and add the server again,
+* the hosting provider does not expose the app port to the internet (NAT, proxy, DDoS protection),
+* direct connections to the Rust+ websocket are not accepted by the server anymore (the Rust server code removed
+  support for them, see the commit `rustplus_remove_direct` / `#168162`).
+
+The transport is configured with `RPP_RUSTPLUS_TRANSPORT` in the `.env` file:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | direct first, after 3 failed attempts in a row the Facepunch proxy is used |
+| `direct` | only direct connections (`ws://...`) |
+| `proxy` | only the Facepunch proxy (`wss://companion-rust.facepunch.com/...`) |
+
+The `CONNECTING` line in the log shows which endpoint is used:
+
+```
+CONNECTING: CONNECTING TO SERVER... (direct ws://1.2.3.4:28082)
+CONNECTING: CONNECTING TO SERVER... (Facepunch proxy companion-rust.facepunch.com/game/1.2.3.4/28082, 3 direct attempt(s) failed)
+```
+
+### Check both transports without touching the bot
+
+```
+node scripts/rustplusProbe.js [--guild=<guildId>] [--server=<ip-appPort>]
+node scripts/rustplusProbe.js --ip=<ip> --port=<appPort> [--json]
+```
+
+The probe only opens (and immediately closes) the websocket, so no player token is needed. Example measured on
+2026-11-07 against a **live** rust server (7/100 players, the port answered and was open):
+
+```
+  direct  ws://1.2.3.4:28018                                     ECONNRESET (socket hang up)      80 ms
+  proxy   wss://companion-rust.facepunch.com/game/1.2.3.4/28018  HTTP 418 I'm a teapot          1457 ms
+```
+
+Facepunch's relay answers `HTTP 418` for **every** target - also for a nonsense target and for a plain HTTPS `GET`
+without any websocket upgrade - which means the relay endpoint is currently disabled, not that the server is
+offline. Combined with `ECONNRESET` on the direct connection this matches the removal of direct connections in the
+Rust server code: **as of 2026-11-07 the Rust+ websocket is not reachable for third party clients at all.**
+
+That is nothing the bot can work around: it keeps retrying and automatically uses whichever transport works again
+once Facepunch provides one. Use the probe script to check the state from time to time.
+
+### The transport the Rust+ app uses (verified 2026-11-07)
+
+The mobile app (0.0.37) is only a native shell: it loads the web app **https://app.playrust.com** and uses its
+JavaScript for the connection. That code builds the websocket like this:
+
+```js
+getWebSocketConnectUrl(v) { return `wss://${host()}/socket/${this.serverId}?v=${v}` }
+getSubProtocols() {
+    const token = this._getAuthToken();
+    return ['rustplus.auth.v1', base64url(token)];
+}
+```
+
+| Part | Value |
+|---|---|
+| host | `companion-rust.facepunch.com` (staging build: `rust-companion-app-staging.azurewebsites.net`) |
+| `serverId` | the **pairing id (UUID)** of the server - not `ip:port` |
+| `v` | build timestamp of the web app: `2026-10-20T13:20:54.122Z` -> `1792502454122` |
+| auth token | the player token, sent as the **second websocket subprotocol** (base64url encoded) |
+
+That explains the observations: `ws://ip:appPort` is reset (direct connections removed), the old
+`/game/<ip>/<port>` relay always answers `418`, and `/socket/<id>` answers `404` for an id that Facepunch does not
+know (an unauthenticated or unknown request never reaches the upgrade).
+
+**rustplusplus speaks this protocol since 2026-11-07**, see the login section below.
+
+### Logging in with Steam
+
+The server id and the account token come from a Steam login of the Rust+ web app. There are two ways to do it, both
+run the same code.
+
+#### In Discord: `/credentials login` (recommended)
+
+1. Run `/credentials login` (needs the usual admin permissions).
+2. A modal asks for the Steam account name and password. The answer is ephemeral, only you see the response - but
+   Discord itself transmits the text, so use it on a server you trust.
+3. Steam Guard: asks Steam whether the device may be authorized (push message in the Steam app), approve it there
+   and press **Confirmed** - the bot polls Steam immediately. If Steam asks for a code instead (e-mail or
+   authenticator), press **Enter code**. Both buttons are shown when Steam accepts both ways.
+4. The bot stores `credentials/rustplusAuth/<steamId>.json` (token + server list), writes the pairing id into every
+   server of the guild whose name matches, reconnects the active server and shows the expiry date.
+
+#### Headless: `npm run rustplus:login`
+
+```
+node scripts/rustplusLogin.js --account=<name>     # password: RPP_STEAM_PASSWORD or prompt
+```
+
+1. The password is asked on the terminal (or taken from `RPP_STEAM_PASSWORD`), the Steam Guard code is asked when
+   Steam requires one.
+2. It stores `credentials/rustplusAuth/<steamId>.json` with the account token and the server list
+   (server name -> pairing id).
+3. Start the bot: it reads the token, resolves the server id of the active server by its name and connects over the
+   authenticated websocket. The resolved id is stored as `guid` in `instances/<guildId>.json`.
+4. Repeat the login when the token expires (`exp` inside the token, about two weeks) - the bot logs a warning
+   when that happens.
+
+Notes:
+
+* The login needs no browser and no extra program: `steam-session` talks to the Steam login servers directly.
+* In Docker, mount the `credentials/rustplusAuth` folder (or run `/credentials login` once inside the running bot).
+* The pairing id is also stored when a server is paired (`id` of the pairing notification), so the login file is
+  only needed for the token.
+* Without a token the bot falls back to the direct/proxy transports (`RPP_RUSTPLUS_TRANSPORT`), which Facepunch
+  disabled - the log says so.
+
+#### How it is built
+
+| File | Task |
+|---|---|
+| `src/util/rustplusTransport.js` | endpoints and handshake data (socket url, subprotocols, origin, token expiry) |
+| `src/util/rustplusSocket.js` | the authenticated websocket, wired to the events of `rustplus.js` |
+| `src/util/rustplusAuth.js` | reads/writes `credentials/rustplusAuth/<steamId>.json`, resolves server names -> ids |
+| `src/util/rustplusLogin.js` | Steam login (`steam-session`), Rust+ login, `/api/syncData` |
+| `src/util/rustplusLoginPages.js` | HTTP/HTML part of the browser flow (cookie jar, forms, page parsing) |
+| `src/util/fcm/pairingAddress.js` | server key of a pairing notification (ip/port or the pairing id) |
+| `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`, code modal, reconnect) |
+
+The login logs every step (`Rust+ login step N: … (cookies: …)`, `page title …, openid fields …`), so a failing
+login shows which page Steam returned instead of a generic error.
+
+#### Reading the values manually in the browser
+
+Useful for debugging, the login script does all of this automatically.
+
+1. Open https://app.playrust.com and log in with Steam.
+2. Open a server in the app first (so a connection exists), then open the DevTools console and paste:
+
+```js
+/* log every websocket the app opens from now on */
+const OWS = window.WebSocket;
+window.WebSocket = new Proxy(OWS, {
+    construct(target, args) {
+        console.log('%c[WS URL]', 'color:#0f0', args[0]);
+        console.log('%c[WS PROTOCOLS]', 'color:#0f0', args[1]);
+        return new target(...args);
+    }
+});
+
+/* also dump the persisted app state: the settings model holds `authentication.token` and the server list */
+(async () => {
+    const dumpStore = (db, storeName) => new Promise((resolve) => {
+        const request = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+        request.onsuccess = () => {
+            for (const row of request.result) console.log('[store]', db.name, storeName, row);
+            resolve();
+        };
+        request.onerror = () => resolve();
+    });
+
+    for (const info of await indexedDB.databases()) {
+        const db = await new Promise((resolve) => {
+            const request = indexedDB.open(info.name);
+            request.onsuccess = (event) => resolve(event.target.result);
+            request.onerror = () => resolve(null);
+        });
+        if (!db) continue;
+        for (const storeName of db.objectStoreNames) await dumpStore(db, storeName);
+    }
+
+    console.log('[localStorage]', Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)])));
+})();
+```
+
+3. Force a new connection without reloading the page (a reload would drop the patch):
+   switch to another server and back, or set DevTools Network throttling to "Offline" and back.
+   The console then shows the URL and the subprotocols; the second subprotocol value is the auth token and the
+   last path segment of the URL is the server id.
+
+   Without a reconnect the values are in the `[store]` lines instead: the settings model (IndexedDB
+   `rustplus-cache`, store `cache`) contains `authentication.token` (the auth token) and the server entries with
+   their `id` (the server id). The developer section of the settings page (`/settings#developer`) only contains
+   test buttons, it does not show the values.
+4. Check the transport. Either with the bot repository:
+
+```
+node scripts/rustplusProbe.js --socket-id=<server id from the URL> --auth-token-b64=<second subprotocol>
+```
+
+   or directly in the browser console (the Network tab shows the HTTP status of the upgrade):
+
+```js
+const ws = new WebSocket('wss://companion-rust.facepunch.com/socket/<id>?v=<v>',
+    ['rustplus.auth.v1', '<token>']);
+ws.onopen = () => console.log('OPEN');
+ws.onclose = (e) => console.log('CLOSE', e.code, e.reason);
+ws.onerror = () => console.log('ERROR (see Network tab)');
+```
+

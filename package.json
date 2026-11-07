@@ -1,10 +1,11 @@
 {
     "name": "rustplusplus",
-    "version": "1.28.6",
+    "version": "1.29.0",
     "description": "A NodeJS Discord Bot that uses the rustplus.js library to utilize the power of the Rust+ Companion App with additional Quality-of-Life features.",
     "main": "index.ts",
     "scripts": {
         "start": "ts-node .",
+        "rustplus:login": "node scripts/rustplusLogin.js",
         "build:static-db": "node scripts/buildStaticFilesDb.js",
         "download:rust-items": "node scripts/downloadRustItems.js",
         "update:static-data": "node scripts/updateStaticData.js",
@@ -35,6 +36,7 @@
         "ffmpeg-static": "^5.1.0",
         "gm": "^1.25.0",
         "jimp": "^0.22.7",
+        "steam-session": "^1.9.4",
         "translate": "^1.4.1",
         "ts-node": "^10.9.2",
         "typescript": "^5.8.3",

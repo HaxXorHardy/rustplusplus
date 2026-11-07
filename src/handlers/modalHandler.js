@@ -23,6 +23,7 @@ const Discord = require('discord.js');
 const Battlemetrics = require('../structures/Battlemetrics');
 const Config = require('../../config');
 const Constants = require('../util/constants.js');
+const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Keywords = require('../util/keywords.js');
@@ -41,6 +42,21 @@ module.exports = async (client, interaction) => {
             id: `${verifyId}`,
             user: `${interaction.user.username} (${interaction.user.id})`
         }));
+        return;
+    }
+
+    if (interaction.customId === 'CredentialsLogin') {
+        await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
+        await CredentialsLoginHandler.start(client, interaction,
+            interaction.fields.getTextInputValue('SteamAccountName'),
+            interaction.fields.getTextInputValue('SteamPassword'));
+        return;
+    }
+
+    if (interaction.customId === 'CredentialsLoginCode') {
+        await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
+        await CredentialsLoginHandler.submitCode(client, interaction,
+            interaction.fields.getTextInputValue('SteamGuardCode'));
         return;
     }
 

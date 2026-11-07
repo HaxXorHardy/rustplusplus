@@ -129,6 +129,7 @@ Subcommand | Options | Description | Required
 &nbsp; | `issued_date` | Issued date of the credentials. | `True`
 &nbsp; | `expire_date` | Expire date of the credentials. | `True`
 &nbsp; | `hoster` | Should be hoster. | `False`
+`login` | &nbsp; | Login with Steam to fetch the Rust+ token and the server ids. | &nbsp;
 `remove` | &nbsp; | Remove Credentials. | &nbsp;
 &nbsp; | `steam_id` | Steam ID. | `False`
 `show` | &nbsp; | Show all registered Credentials. | &nbsp;

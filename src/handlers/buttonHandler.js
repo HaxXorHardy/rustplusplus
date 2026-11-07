@@ -22,6 +22,7 @@ const Discord = require('discord.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
+const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordModals = require('../discordTools/discordModals.js');
@@ -72,6 +73,13 @@ module.exports = async (client, interaction) => {
             components: [DiscordButtons.getNotificationButtons(
                 guildId, ids.setting, setting.discord, setting.inGame, setting.voice)]
         });
+    }
+    else if (interaction.customId === 'CredentialsLoginCode') {
+        await interaction.showModal(DiscordModals.getCredentialsLoginCodeModal(guildId));
+    }
+    else if (interaction.customId === 'CredentialsLoginDone') {
+        await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
+        await CredentialsLoginHandler.confirm(client, interaction);
     }
     else if (interaction.customId === 'AllowInGameCommands') {
         instance.generalSettings.inGameCommandsEnabled = !instance.generalSettings.inGameCommandsEnabled;

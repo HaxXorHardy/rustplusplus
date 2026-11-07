@@ -57,6 +57,51 @@ module.exports = {
         return modal;
     },
 
+    getCredentialsLoginModal(guildId) {
+        const modal = module.exports.getModal({
+            customId: 'CredentialsLogin',
+            title: Client.client.intlGet(guildId, 'credentialsLoginModalTitle')
+        });
+
+        modal.addComponents(
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'SteamAccountName',
+                label: Client.client.intlGet(guildId, 'credentialsLoginAccountLabel'),
+                style: Discord.TextInputStyle.Short,
+                required: true,
+                minLength: 1
+            })),
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'SteamPassword',
+                label: Client.client.intlGet(guildId, 'credentialsLoginPasswordLabel'),
+                style: Discord.TextInputStyle.Short,
+                required: true,
+                minLength: 1
+            }))
+        );
+
+        return modal;
+    },
+
+    getCredentialsLoginCodeModal(guildId) {
+        const modal = module.exports.getModal({
+            customId: 'CredentialsLoginCode',
+            title: Client.client.intlGet(guildId, 'credentialsLoginCodeModalTitle')
+        });
+
+        modal.addComponents(
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'SteamGuardCode',
+                label: Client.client.intlGet(guildId, 'credentialsLoginCodeLabel'),
+                style: Discord.TextInputStyle.Short,
+                required: true,
+                minLength: 1
+            }))
+        );
+
+        return modal;
+    },
+
     getCustomTimersEditModal(guildId, serverId) {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];
