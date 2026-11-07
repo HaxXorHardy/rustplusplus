@@ -25,6 +25,7 @@ const BattlemetricsHandler = require('../handlers/battlemetricsHandler.js');
 const Config = require('../../config');
 const CredentialsExpiryHandler = require('../handlers/credentialsExpiryHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 
@@ -177,7 +178,7 @@ module.exports = {
             if (instance.activeServer === null && serverIds.length === 1) {
                 const server = instance.serverList[serverIds[0]];
 
-                if (server && (server.guid || (server.serverIp && server.appPort))) {
+                if (server && server.paired !== false && (server.guid || (server.serverIp && server.appPort))) {
                     instance.activeServer = serverIds[0];
                     client.setInstance(guildId, instance);
 

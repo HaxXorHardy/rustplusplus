@@ -245,10 +245,11 @@ Test.describe('RustPlusHistory.refresh', () => {
             rustplusReconnectTimers: {},
             rustplusReconnecting: {},
             createdRustplusInstances: [],
+            warnings: [],
             getInstance: () => instance,
             setInstance: () => { client.saved += 1; },
             intlGet: (guildId, key) => key,
-            log: () => undefined,
+            log: (title, text) => client.warnings.push(text),
             createRustplusInstance: (...args) => client.createdRustplusInstances.push(args),
         };
 
@@ -261,13 +262,17 @@ Test.describe('RustPlusHistory.refresh', () => {
 
         const originalListSteamIds = RustPlusAuth.listSteamIds;
         const originalReadAuth = RustPlusAuth.readAuth;
+        const originalWriteAuth = RustPlusAuth.writeAuth;
 
         RustPlusAuth.listSteamIds = () => (auth === null ? [] : [STEAM_ID]);
         RustPlusAuth.readAuth = () => auth;
+        /* The refresh stores the account state, the test must not write into the credentials folder. */
+        RustPlusAuth.writeAuth = () => undefined;
 
         t.after(() => {
             RustPlusAuth.listSteamIds = originalListSteamIds;
             RustPlusAuth.readAuth = originalReadAuth;
+            RustPlusAuth.writeAuth = originalWriteAuth;
         });
     }
 
@@ -282,7 +287,8 @@ Test.describe('RustPlusHistory.refresh', () => {
         const client = fakeClient(instance);
 
         /* No pairing notifications, the server list of the account is enough to adopt the server. */
-        const added = await RustPlusHistory.refresh(client, async () => []);
+        const added = await RustPlusHistory.refresh(client, async () => [],
+            async () => ({ servers: [{ id: SERVER_ID, name: "Captain's Quarters", playerToken: 42, devices: [] }] }));
 
         const serverKeys = Object.keys(instance.serverList);
         Assert.strictEqual(serverKeys.length, 1);
@@ -312,7 +318,7 @@ Test.describe('RustPlusHistory.refresh', () => {
         const instance = { activeServer: null, serverList: {}, trackers: {} };
         const client = fakeClient(instance);
 
-        await RustPlusHistory.refresh(client, async () => []);
+        await RustPlusHistory.refresh(client, async () => [], async () => ({ servers: [] }));
 
         Assert.deepStrictEqual(Object.keys(instance.serverList), []);
         Assert.strictEqual(instance.activeServer, null);
@@ -325,10 +331,87 @@ Test.describe('RustPlusHistory.refresh', () => {
         const instance = { activeServer: null, serverList: {}, trackers: {} };
         const client = fakeClient(instance);
 
-        await RustPlusHistory.refresh(client, async () => []);
+        await RustPlusHistory.refresh(client, async () => [], async () => ({ servers: [] }));
 
         Assert.deepStrictEqual(Object.keys(instance.serverList), []);
         Assert.strictEqual(client.saved, 0);
+    });
+
+    /*
+        A pairing notification stays in the history after the server was removed in the Rust+ app. Adopting it from
+        there starts a connection that only ends in `not_found` answers, so the account state has to decide.
+    */
+    Test.it('does not adopt a server that the account is not paired with anymore', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => [serverPairEntry(1234, 7, '2026-11-07T16:14:33.0000000+00:00')],
+            async () => ({ servers: [] }));
+
+        Assert.deepStrictEqual(Object.keys(instance.serverList), []);
+        Assert.strictEqual(instance.activeServer, null);
+        Assert.strictEqual(client.createdRustplusInstances.length, 0);
+    });
+
+    Test.it('marks a server whose pairing is gone and stops connecting it', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const serverKey = `relay-${SERVER_ID}`;
+        const instance = {
+            activeServer: serverKey,
+            serverList: {
+                [serverKey]: {
+                    title: "Captain's Quarters",
+                    guid: SERVER_ID,
+                    steamId: STEAM_ID,
+                    playerToken: -889972864,
+                    switches: {},
+                    alarms: {},
+                    storageMonitors: {},
+                },
+            },
+            trackers: {},
+        };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => [], async () => ({ servers: [] }));
+
+        Assert.strictEqual(instance.serverList[serverKey].paired, false);
+        Assert.strictEqual(instance.activeServer, null);
+        Assert.strictEqual(client.saved, 1);
+        Assert.strictEqual(client.createdRustplusInstances.length, 0);
+        Assert.ok(client.warnings.some((text) => text.includes('is not paired with')));
+    });
+
+    Test.it('keeps a server that the account is still paired with', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const serverKey = `relay-${SERVER_ID}`;
+        const instance = {
+            activeServer: serverKey,
+            serverList: {
+                [serverKey]: {
+                    title: "Captain's Quarters",
+                    guid: SERVER_ID,
+                    steamId: STEAM_ID,
+                    playerToken: 42,
+                    switches: {},
+                    alarms: {},
+                    storageMonitors: {},
+                },
+            },
+            trackers: {},
+        };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => [],
+            async () => ({ servers: [{ id: SERVER_ID, name: "Captain's Quarters", playerToken: 42, devices: [] }] }));
+
+        Assert.strictEqual(instance.serverList[serverKey].paired, true);
+        Assert.strictEqual(instance.activeServer, serverKey);
+        Assert.strictEqual(client.warnings.length, 0);
     });
 });
 

@@ -19,6 +19,7 @@
 */
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const ReconnectBackoff = require('../util/reconnectBackoff.js');
 
 const Config = require('../../config');
 
@@ -79,9 +80,16 @@ module.exports = {
                 client.rustplusReconnectTimers[guildId] = null;
             }
 
+            /* A server that stays unreachable must not be asked every few seconds: the delay grows with each try. */
+            const attempt = (client.rustplusReconnectAttempts[guildId] || 0) + 1;
+            client.rustplusReconnectAttempts[guildId] = attempt;
+
+            const delayMs = ReconnectBackoff(attempt, Config.general.reconnectIntervalMs,
+                Config.general.reconnectIntervalMaxMs);
+
             client.rustplusReconnectTimers[guildId] = setTimeout(
                 client.createRustplusInstance.bind(client),
-                Config.general.reconnectIntervalMs,
+                delayMs,
                 guildId,
                 rustplus.server,
                 rustplus.port,

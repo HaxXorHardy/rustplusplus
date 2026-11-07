@@ -33,6 +33,7 @@ const Axios = require('axios');
 
 const RustPlusLoginPages = require('./rustplusLoginPages.js');
 const RustPlusAuth = require('./rustplusAuth.js');
+const RustPlusLogin = require('./rustplusLogin.js');
 const RustPlusSync = require('./rustplusSync.js');
 
 const HISTORY_URL = 'https://companion-rust.facepunch.com/api/history/read';
@@ -110,11 +111,15 @@ function parsePairingEntries(entries) {
     a new player token when it is paired again, for example after a wipe), `entity` entries add a device. The list is
     newest first, so it is applied oldest first and the newest pairing decides about the player token.
 */
-function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key) {
+function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key, options = {}) {
     const result = { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [], added: [] };
+    const allowedServerIds = Array.isArray(options.allowedServerIds) ? new Set(options.allowedServerIds) : null;
 
     for (const entry of [...(entries || [])].reverse()) {
         if (!entry || !entry.serverId) continue;
+
+        /* A pairing message of a server the account is not paired with anymore is only a leftover. */
+        if (allowedServerIds !== null && !allowedServerIds.has(`${entry.serverId}`)) continue;
 
         /* Alarm notifications have neither an entity nor credentials, they only report an attack. */
         const hasCredentials = entry.playerToken !== undefined && entry.playerToken !== null;
@@ -180,7 +185,7 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
     A renewed pairing of the active server (new player token) reconnects the instance, otherwise the bot would keep
     asking with credentials the server does not accept (`not_found` on every request).
 */
-async function refresh(client, fetchHistoryFn = fetchHistory) {
+async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = RustPlusLogin.fetchSyncData) {
     const added = [];
 
     for (const guildId of Object.keys(client.instances || {})) {
@@ -203,22 +208,53 @@ async function refresh(client, fetchHistoryFn = fetchHistory) {
 
                 const intlGet = (key) => client.intlGet(guildId, key);
 
-                /* The server list of the account carries the pairing id, the token and the paired devices. */
-                const synced = RustPlusSync.applySyncServers(instance, steamId, auth.servers || [], intlGet,
-                    { keepCredentials: true });
+                /*
+                    The account state is the truth about the pairing. The notification history only holds messages:
+                    a server that the app does not list anymore answers every request with not_found, so adopting it
+                    from the history would only start a connection that cannot work.
+                */
+                const accountServers = await readAccountServers(client, steamId, auth, fetchSyncFn);
+
+                let changed = false;
+
+                if (accountServers !== null) {
+                    /* Keep the stored snapshot current, the token renewal and the login use it. */
+                    try {
+                        RustPlusAuth.writeAuth(steamId, Object.assign({}, auth, { servers: accountServers }));
+                    }
+                    catch (e) {
+                        client.log(client.intlGet(null, 'warningCap'),
+                            `Could not store the account state of ${steamId}: ${e && e.message ? e.message : e}`,
+                            'debug');
+                    }
+                }
+
+                /* Servers whose pairing is gone are not connected anymore, their entry stays. */
+                if (markUnpairedServers(client, instance, accountServers) !== 0) changed = true;
+
+                const servers = (accountServers === null) ? (auth.servers || []) : accountServers;
+
+                /* The account state is fresh, its tokens are current; the stored snapshot must not overwrite them. */
+                const synced = RustPlusSync.applySyncServers(instance, steamId, servers, intlGet,
+                    { keepCredentials: accountServers === null });
 
                 /* The history renews the credentials of a server and adds devices that the app does not list. */
                 const entries = parsePairingEntries(await fetchHistoryFn(auth.token));
                 const applied = (entries.length === 0) ? emptyPairingResult() :
-                    applyPairingEntries(instance, steamId, entries, intlGet);
+                    applyPairingEntries(instance, steamId, entries, intlGet, {
+                        allowedServerIds: (accountServers === null) ? null : accountServers.map((e) => `${e.id}`),
+                    });
 
-                if (synced.created === 0 && synced.updated === 0 && applied.devices === 0 &&
-                    applied.created === 0 && applied.updated === 0) {
-                    continue;
+                if (synced.created !== 0 || synced.updated !== 0 || applied.devices !== 0 ||
+                    applied.created !== 0 || applied.updated !== 0) {
+                    changed = true;
                 }
 
+                if (!changed) continue;
+
                 /* Devices and servers that were adopted now need their Discord messages and their connection. */
-                const firstServerKey = Object.keys(instance.serverList)[0];
+                const firstServerKey = Object.keys(instance.serverList)
+                    .find((key) => instance.serverList[key] && instance.serverList[key].paired !== false);
                 let activatedKey = null;
 
                 if (instance.activeServer === null && firstServerKey) {
@@ -253,6 +289,53 @@ async function refresh(client, fetchHistoryFn = fetchHistory) {
     }
 
     return added;
+}
+
+/* The servers of the Rust+ account, or null when the state could not be read (then nothing is changed). */
+async function readAccountServers(client, steamId, auth, fetchSyncFn) {
+    try {
+        const sync = await fetchSyncFn(auth.token);
+        if (!sync || !Array.isArray(sync.servers)) return null;
+
+        return sync.servers;
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'warningCap'),
+            `Could not read the Rust+ account state of ${steamId}: ${e && e.message ? e.message : e}`, 'debug');
+
+        return null;
+    }
+}
+
+/*
+    Marks the servers of the instance that the account is not paired with anymore. Their player token is invalid, so
+    the bot stops connecting them instead of ending in a reconnect loop of `not_found` answers.
+*/
+function markUnpairedServers(client, instance, accountServers) {
+    if (accountServers === null) return 0;
+
+    const pairedIds = new Set(accountServers.map((entry) => `${entry.id}`));
+    let changed = 0;
+
+    for (const [key, server] of Object.entries(instance.serverList)) {
+        if (!server) continue;
+
+        const paired = !server.guid || pairedIds.has(`${server.guid}`);
+        if (server.paired === paired) continue;
+
+        server.paired = paired;
+        changed += 1;
+
+        if (!paired) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `The Rust+ account is not paired with "${server.title}" anymore, it is not connected. ` +
+                'Pair it again in the Rust+ app to use it.');
+
+            if (instance.activeServer === key) instance.activeServer = null;
+        }
+    }
+
+    return changed;
 }
 
 function emptyPairingResult() {

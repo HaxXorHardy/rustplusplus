@@ -49,6 +49,8 @@ module.exports = {
         language: process.env.RPP_LANGUAGE || 'en',
         pollingIntervalMs: envInt('RPP_POLLING_INTERVAL', 10000),
         reconnectIntervalMs: envInt('RPP_RECONNECT_INTERVAL', 15000),
+        /* Upper limit of the reconnect backoff, a server that stays offline is not asked every 15 seconds. */
+        reconnectIntervalMaxMs: envInt('RPP_RECONNECT_INTERVAL_MAX', 5 * 60 * 1000),
         /* Debug mode enables verbose (debug level) logging and call stacks in the logs. */
         debug: debug,
         showCallStackError: debug || envBool('RPP_LOG_CALL_STACK', false),

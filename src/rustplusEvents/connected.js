@@ -134,6 +134,10 @@ module.exports = {
         rustplus.pollingTaskId = setInterval(PollingHandler.pollingHandler, client.pollingIntervalMs, rustplus, client);
         rustplus.isOperational = true;
 
+        /* The server answers, the next disconnect starts with the shortest delay again. */
+        client.rustplusReconnectAttempts = client.rustplusReconnectAttempts || new Object();
+        client.rustplusReconnectAttempts[guildId] = 0;
+
         /* Fetch the clan of the paired steam account, the clan chat support of rustplusplus depends on it. */
         try {
             await ClanChatHandler.updateClanInfo(rustplus, client);

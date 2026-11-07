@@ -61,6 +61,8 @@ class DiscordBot extends Discord.Client {
         this.rustplusInstances = new Object();
         this.activeRustplusInstances = new Object();
         this.rustplusReconnectTimers = new Object();
+        /* Number of reconnect attempts in a row, the delay grows with it. */
+        this.rustplusReconnectAttempts = new Object();
         this.rustplusLiteReconnectTimers = new Object();
         this.rustplusReconnecting = new Object();
         this.rustplusMaps = new Object();
@@ -381,6 +383,7 @@ class DiscordBot extends Discord.Client {
     resetRustplusVariables(guildId) {
         this.activeRustplusInstances[guildId] = false;
         this.rustplusReconnecting[guildId] = false;
+        this.rustplusReconnectAttempts[guildId] = 0;
         delete this.rustplusMaps[guildId];
 
         if (this.rustplusReconnectTimers[guildId]) {
