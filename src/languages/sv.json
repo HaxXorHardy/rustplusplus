@@ -691,6 +691,7 @@
     "serverInvalid": "Anslutningen till servern verkar vara ogiltig. Försök att återkoppla till servern.",
     "serverJustOffline": "Servern gick precis offline.",
     "serverJustOnline": "Servern gick precis online.",
+    "serverNotAnswering": "Servern svarade inte ({reason}). Den är förmodligen offline eller startar om; ansluter igen automatiskt.",
     "serverStatus": "Server Status",
     "serviceUnavailable": "Tjänst otillgänglig: {error}",
     "setBotLanguage": "Ställ in bot-språket till: {language}.",

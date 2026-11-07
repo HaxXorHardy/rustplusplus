@@ -36,7 +36,6 @@ module.exports = {
 
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'connectedToServer'));
 
-        const instance = client.getInstance(rustplus.guildId);
         const guildId = rustplus.guildId;
         const serverId = rustplus.serverId;
 
@@ -49,22 +48,22 @@ module.exports = {
         /* Start the token replenish task */
         rustplus.tokensReplenishTaskId = setInterval(rustplus.replenishTokens.bind(rustplus), 1000);
 
-        /* Request the map. Act as a check to see if connection is truly operational. */
+        /*
+            Request the map. Act as a check to see if connection is truly operational.
+
+            A server that answers `not_found` to every request is offline, restarting or lost its Rust+ pairing.
+            That is temporary, so the server stays configured and the instance reconnects instead of dropping it.
+        */
         const map = await rustplus.getMapAsync(3 * 60 * 1000); /* 3 min timeout */
         if (!(await rustplus.isResponseValid(map))) {
-            rustplus.log(client.intlGet(null, 'errorCap'),
-                client.intlGet(null, 'somethingWrongWithConnection'), 'error');
+            const reason = (map && map.error) ? `${map.error}` : 'unknown';
 
-            instance.activeServer = null;
-            client.setInstance(guildId, instance);
+            rustplus.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'serverNotAnswering', {
+                reason: reason
+            }), 'error');
 
-            await DiscordMessages.sendServerConnectionInvalidMessage(guildId, serverId);
-            await DiscordMessages.sendServerMessage(guildId, serverId, null);
-
-            client.resetRustplusVariables(guildId);
-
+            /* Reconnect through the `disconnected` event, keeping activeServer and the server message. */
             rustplus.disconnect();
-            delete client.rustplusInstances[guildId];
             return;
         }
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'rustplusOperational'));

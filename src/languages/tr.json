@@ -691,6 +691,7 @@
     "serverInvalid": "Bağlanılmaya çalışılan sunucu geçersiz olabilir tekrardan eşleştirme yapın.",
     "serverJustOffline": "Sunucu kapandı.",
     "serverJustOnline": "Sunucu açıldı.",
+    "serverNotAnswering": "Sunucu yanıt vermedi ({reason}). Muhtemelen çevrimdışı veya yeniden başlatılıyor; otomatik olarak yeniden bağlanılıyor.",
     "serverStatus": "Sunucu Durumu",
     "serviceUnavailable": "Servis Mevcut Değil: {error}",
     "setBotLanguage": "Bot dilini ayarla: {language}.",

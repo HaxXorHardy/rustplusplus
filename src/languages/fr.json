@@ -691,6 +691,7 @@
     "serverInvalid": "La connexion au serveur semble invalide. Essayez de vous reconnecter au serveur.",
     "serverJustOffline": "Le serveur vient juste se mettre hors ligne.",
     "serverJustOnline": "Le serveur vient d'être mis en ligne.",
+    "serverNotAnswering": "Le serveur n'a pas répondu ({reason}). Il est probablement hors ligne ou en redémarrage ; reconnexion automatique.",
     "serverStatus": "Statut du serveur",
     "serviceUnavailable": "Service indisponible: {error}",
     "setBotLanguage": "Définissez la langue du bot sur: {language}.",

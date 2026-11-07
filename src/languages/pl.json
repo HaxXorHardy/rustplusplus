@@ -691,6 +691,7 @@
     "serverInvalid": "Połączenie z serwerem wydaje się nieprawidłowe. Spróbuj ponownie sparować z serwerem.",
     "serverJustOffline": "Serwer właśnie przeszedł offline.",
     "serverJustOnline": "Serwer właśnie przeszedł online.",
+    "serverNotAnswering": "Serwer nie odpowiedział ({reason}). Prawdopodobnie jest offline lub się restartuje; ponawiam połączenie automatycznie.",
     "serverStatus": "Server Status",
     "serviceUnavailable": "Usługa niedostępna: {error}",
     "setBotLanguage": "Ustaw język bota na: {language}.",

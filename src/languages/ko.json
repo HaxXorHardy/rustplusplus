@@ -691,6 +691,7 @@
     "serverInvalid": "서버에 대한 연결이 잘못된 것 같습니다. 서버에 다시 연결해 보십시오.",
     "serverJustOffline": "서버가 방금 오프라인 상태가 되었습니다.",
     "serverJustOnline": "서버가 방금 온라인 상태가 되었습니다.",
+    "serverNotAnswering": "서버가 응답하지 않았습니다({reason}). 서버가 오프라인이거나 재시작 중일 수 있으며, 자동으로 다시 연결합니다.",
     "serverStatus": "Server Status",
     "serviceUnavailable": "서비스를 사용할 수 없음: {error}",
     "setBotLanguage": "봇 언어를 {language} (으)로 설정합니다.",

@@ -60,6 +60,7 @@
     "battlemetricsTrackerNameChangesCap": "TRACKER NAME CHANGES",
     "battlemetricsTrackerPlayerNameChanged": "Battlemetrics Tracker Player Name Changed",
     "blacklist": "Blacklist",
+    "serverNotAnswering": "The server did not answer ({reason}). It is probably offline or restarting; reconnecting automatically.",
     "whitelist": "Whitelist",
     "boomBox": "Boom Box",
     "bot": "bot",

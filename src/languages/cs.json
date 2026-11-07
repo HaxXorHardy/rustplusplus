@@ -691,6 +691,7 @@
     "serverInvalid": "Připojení k serveru se zdá být neplatné. Zkus server znovu spárovat.",
     "serverJustOffline": "Server právě přešel do offline režimu.",
     "serverJustOnline": "Server právě přešel do online režimu.",
+    "serverNotAnswering": "Server neodpověděl ({reason}). Je pravděpodobně offline nebo se restartuje; připojuji se znovu automaticky.",
     "serverStatus": "Server Status",
     "serviceUnavailable": "Služba není dostupná: {error}",
     "setBotLanguage": "Nastavit jazyk bota na: {language}.",

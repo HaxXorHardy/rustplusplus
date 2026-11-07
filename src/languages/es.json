@@ -691,6 +691,7 @@
     "serverInvalid": "La conexión con el servidor parece no ser válida. Intente volver a conectar con el servidor.",
     "serverJustOffline": "Servidor acaba de desconectarse.",
     "serverJustOnline": "Servidor acaba de conectarse.",
+    "serverNotAnswering": "El servidor no respondió ({reason}). Probablemente está fuera de línea o reiniciándose; se reintenta automáticamente.",
     "serverStatus": "Server Status",
     "serviceUnavailable": "Servicio no disponible: {error}",
     "setBotLanguage": "Establece el idioma del bot a: {language}.",
