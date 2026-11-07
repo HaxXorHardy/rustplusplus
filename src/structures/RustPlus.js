@@ -2870,7 +2870,8 @@ class RustPlus extends RustPlusLib {
         let playerIndex = 0;
         for (const playerId of foundPlayers) {
             const time = bmInstance.getOnlineTime(playerId);
-            const playerString = `${bmInstance.players[playerId]['name']} [${time[1]}], `;
+            const timeStr = (time !== null) ? time[1] : '--:--';
+            const playerString = `${bmInstance.players[playerId]['name']} [${timeStr}], `;
 
             if ((string.length + playerString.length + leftLength) < messageMaxLength) {
                 string += playerString;

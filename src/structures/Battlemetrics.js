@@ -22,6 +22,7 @@ const Axios = require('axios');
 
 const Client = require('./clientRegistry.js');
 const Config = require('../../config');
+const BattlemetricsTime = require('../util/battlemetricsTime.js');
 const getStaticFilesStorage = require('../util/storage/getStaticFilesStorage.js');
 const Utils = require('../util/utils.js');
 
@@ -32,7 +33,6 @@ const SERVER_LOG_SIZE = 1000;
 const CONNECTION_LOG_SIZE = 1000;
 const PLAYER_CONNECTION_LOG_SIZE = 100;
 const NAME_CHANGE_LOG_SIZE = 100;
-const TIME_PLAYED_GAME = 'rust';
 const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
 const TIME_PLAYED_DEFAULT_LIMIT = 100;
 
@@ -193,21 +193,8 @@ class Battlemetrics {
     }
 
     /**
-     *  Construct the Battlemetrics API call for getting the time played statistics of a player.
-     *  Note: the start/stop window only limits the optional 'history' array. The 'timePlayed'
-     *  attribute is the all-time total and is not affected by the window.
-     *  @param {number} id The id of the player.
-     *  @param {number} days The number of days for the optional history window.
-     *  @return {string} The Battlemetrics API call string.
-     */
-    GET_PLAYER_TIME_PLAYED_STATISTICS_API_CALL(id, days = 1) {
-        const stop = new Date().toISOString();
-        const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        return `https://api.battlemetrics.com/players/${id}/time-played-statistics?start=${start}&stop=${stop}`;
-    }
-
-    /**
      *  Construct the Battlemetrics API call for getting a player with the servers included.
+     *  Every included server carries meta.timePlayed, the time the player spent on that server.
      *  @param {number} id The id of the player.
      *  @return {string} The Battlemetrics API call string.
      */
@@ -699,6 +686,10 @@ class Battlemetrics {
                     this.loginPlayers.push(entity.id);
                 }
             }
+
+            /* The length of the current session is part of the metadata of the server request. */
+            this.players[entity.id]['sessionTime'] = BattlemetricsTime.getSessionSeconds(entity.meta);
+
             this.onlinePlayers.push(entity.id);
         }
 
@@ -793,17 +784,17 @@ class Battlemetrics {
     }
 
     /**
-     *  Get the online time of a player.
+     *  Get the online time (the length of the current session) of a player.
      *  @param {string} playerId The id of the player to get online time from.
      *  @return {Array} index 0: seconds online, index 1: The formatted online time of a player.
      */
     getOnlineTime(playerId) {
         if (!this.lastUpdateSuccessful || !this.players.hasOwnProperty(playerId) ||
-            !this.players[playerId]['updatedAt']) {
+            typeof (this.players[playerId]['sessionTime']) !== 'number') {
             return null;
         }
 
-        return this.#formatTime(this.players[playerId]['updatedAt']);
+        return BattlemetricsTime.formatSeconds(this.players[playerId]['sessionTime']);
     }
 
     /**
@@ -821,14 +812,14 @@ class Battlemetrics {
     }
 
     /**
-     *  Get an array of online players ordered by time played.
-     *  @return {Array} An array of online players ordered by time played.
+     *  Get an array of online players ordered by the length of their current session.
+     *  @return {Array} An array of online players ordered by the length of their current session.
      */
     getOnlinePlayerIdsOrderedByTime() {
         const unordered = [];
         for (const playerId of this.onlinePlayers) {
-            const seconds = this.#formatTime(this.players[playerId]['updatedAt']);
-            unordered.push([seconds !== null ? seconds[0] : 0, playerId]);
+            const seconds = this.players[playerId]['sessionTime'];
+            unordered.push([typeof (seconds) === 'number' ? seconds : 0, playerId]);
         }
         let ordered = unordered.sort(function (a, b) { return b[0] - a[0] })
         return ordered.map(e => e[1]);
@@ -863,9 +854,9 @@ class Battlemetrics {
     }
 
     /**
-     *  Get the cached total time played (all-time, in seconds) of a player.
+     *  Get the cached time played on this server (in seconds) of a player.
      *  @param {string} playerId The Battlemetrics player id.
-     *  @return {number|null} The time played in seconds or null when not cached.
+     *  @return {number|null} The time played on this server in seconds or null when not cached.
      */
     getCachedTimePlayed(playerId) {
         const cached = this._timePlayedCache[playerId];
@@ -873,9 +864,9 @@ class Battlemetrics {
     }
 
     /**
-     *  Get the total time played (all-time, in seconds) of a player, using the cache when fresh.
+     *  Get the time played on this server (in seconds) of a player, using the cache when fresh.
      *  @param {string} playerId The Battlemetrics player id.
-     *  @return {number|null} The time played in seconds or null when it could not be fetched.
+     *  @return {number|null} The time played on this server in seconds or null when it could not be fetched.
      */
     async getTotalTimePlayed(playerId) {
         const cached = this._timePlayedCache[playerId];
@@ -891,33 +882,23 @@ class Battlemetrics {
     }
 
     /**
-     *  Fetch the total time played (all-time, in seconds) of a player.
-     *  Primary: the 'rust' entry of the time played statistics.
-     *  Fallback: the sum of meta.timePlayed over all servers included with the player.
+     *  Fetch the time a player spent on this server (in seconds).
+     *  Battlemetrics reports it as meta.timePlayed of the server entry of the player.
+     *  The profile wide total of the time played statistics is deliberately not used: it sums every server and
+     *  every name based match of a profile together, which produces numbers far beyond any real play time.
      *  @param {string} playerId The Battlemetrics player id.
-     *  @return {number|null} The time played in seconds or null.
+     *  @return {number|null} The time played on this server in seconds or null.
      */
     async fetchTotalTimePlayed(playerId) {
-        const statistics = await this.request(this.GET_PLAYER_TIME_PLAYED_STATISTICS_API_CALL(playerId));
-        if (statistics && Array.isArray(statistics.data)) {
-            for (const entry of statistics.data) {
-                if (typeof (entry.id) !== 'string' || !entry.id.endsWith(`:${TIME_PLAYED_GAME}`)) continue;
-
-                const value = entry.attributes ? entry.attributes.timePlayed : null;
-                if (typeof (value) === 'number') return value;
-            }
-        }
-
         const player = await this.request(this.GET_PLAYER_API_CALL(playerId));
-        if (player && Array.isArray(player.included)) {
-            let total = 0;
-            for (const entity of player.included) {
-                if (entity.type !== 'server') continue;
+        if (!player || !Array.isArray(player.included)) return null;
 
-                const value = entity.meta ? entity.meta.timePlayed : null;
-                if (typeof (value) === 'number') total += value;
-            }
-            if (total > 0) return total;
+        for (const entity of player.included) {
+            if (entity.type !== 'server') continue;
+            if (String(entity.id) !== String(this.id)) continue;
+
+            const value = entity.meta ? entity.meta.timePlayed : null;
+            if (typeof (value) === 'number') return value;
         }
 
         return null;
