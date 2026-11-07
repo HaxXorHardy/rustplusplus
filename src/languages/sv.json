@@ -871,5 +871,5 @@
     "rustplusCredentials": "Rust+ credentials",
     "credentialsNoLogin": "no Rust+ login stored",
     "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below.",
-    "timePlayedOnThisServer": "on this server"
+    "timePlayedOnThisServer": "current session"
 }

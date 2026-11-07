@@ -221,7 +221,7 @@ async function displaySpecificUser(client, interaction, battlemetricsId, playerI
     description += `__**${onOffString}:**__ ${time !== null ? `[${time[1]}]` : ''}\n`;
 
     const playtimeSeconds = await bmInstance.getTotalTimePlayed(playerId);
-    const serverPlaytimeSeconds = bmInstance.getServerTimePlayed(playerId);
+    const serverPlaytimeSeconds = bmInstance.getSessionTimePlayed(playerId);
 
     description += `__**${client.intlGet(guildId, 'timePlayed')}:**__ `;
     description += (typeof (playtimeSeconds) === 'number') ? Timer.secondsToCompactHours(playtimeSeconds) : client.intlGet(guildId, 'empty');

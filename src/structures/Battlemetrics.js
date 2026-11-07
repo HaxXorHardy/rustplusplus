@@ -406,6 +406,19 @@ class Battlemetrics {
     }
 
     /**
+     *  Format a duration as [seconds, HH:MM].
+     *  @param {number} totalSeconds The duration in seconds.
+     *  @return {Array} index 0: seconds, index 1: The formatted duration.
+     */
+    #formatSeconds(totalSeconds) {
+        const seconds = Math.max(0, Math.floor(totalSeconds));
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+
+        return [seconds, `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`];
+    }
+
+    /**
      *  Format the time from timestamp to now [seconds,HH:MM].
      *  @param {string} timestamp The timestamp from before.
      *  @return {Array} index 0: seconds, index 1: The formatted time, null if invalid.
@@ -712,7 +725,7 @@ class Battlemetrics {
                 }
             }
             /* The time on this server is part of the player metadata of the server request (seconds). */
-            this.players[entity.id]['serverTimePlayed'] = getServerTimeFromMetadata(entity.meta);
+            this.players[entity.id]['sessionTime'] = getServerTimeFromMetadata(entity.meta);
 
             this.onlinePlayers.push(entity.id);
         }
@@ -813,12 +826,10 @@ class Battlemetrics {
      *  @return {Array} index 0: seconds online, index 1: The formatted online time of a player.
      */
     getOnlineTime(playerId) {
-        if (!this.lastUpdateSuccessful || !this.players.hasOwnProperty(playerId) ||
-            !this.players[playerId]['updatedAt']) {
-            return null;
-        }
+        const player = this.players[playerId];
+        if (!this.lastUpdateSuccessful || !player || typeof player['sessionTime'] !== 'number') return null;
 
-        return this.#formatTime(this.players[playerId]['updatedAt']);
+        return this.#formatSeconds(player['sessionTime']);
     }
 
     /**
@@ -842,8 +853,8 @@ class Battlemetrics {
     getOnlinePlayerIdsOrderedByTime() {
         const unordered = [];
         for (const playerId of this.onlinePlayers) {
-            const seconds = this.#formatTime(this.players[playerId]['updatedAt']);
-            unordered.push([seconds !== null ? seconds[0] : 0, playerId]);
+            const seconds = this.players[playerId]['sessionTime'];
+            unordered.push([typeof seconds === 'number' ? seconds : 0, playerId]);
         }
         let ordered = unordered.sort(function (a, b) { return b[0] - a[0] })
         return ordered.map(e => e[1]);
@@ -878,16 +889,16 @@ class Battlemetrics {
     }
 
     /**
-     *  Get the time a player has on this server (in seconds) from the last server update.
-     *  Battlemetrics carries it in the metadata of the server request, so no extra call is needed.
+     *  Get the length of the current session on this server (in seconds).
+     *  Battlemetrics carries it in the metadata of the players of the server request, so no extra call is needed.
      *  @param {string} playerId The Battlemetrics player id.
-     *  @return {number|null} The seconds on this server or null when the player is unknown.
+     *  @return {number|null} The seconds of the current session or null when the player is unknown.
      */
-    getServerTimePlayed(playerId) {
+    getSessionTimePlayed(playerId) {
         const player = this.players[playerId];
-        if (!player || typeof player.serverTimePlayed !== 'number') return null;
+        if (!player || typeof player.sessionTime !== 'number') return null;
 
-        return player.serverTimePlayed;
+        return player.sessionTime;
     }
 
     /**
