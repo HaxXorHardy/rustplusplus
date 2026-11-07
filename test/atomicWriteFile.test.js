@@ -51,6 +51,16 @@ Test.describe('atomicWriteFile', () => {
         Assert.deepStrictEqual(Fs.readdirSync(directory), ['instance.json']);
     });
 
+    Test.it('creates the directory of the target when it is missing', (t) => {
+        const directory = makeTempDirectory(t);
+        /* `credentials` and `instances` are not part of the repository, a fresh installation starts without them. */
+        const target = Path.join(directory, 'credentials', 'rustplusAuth', 'steam.json');
+
+        AtomicWriteFile(target, 'payload');
+
+        Assert.strictEqual(Fs.readFileSync(target, 'utf8'), 'payload');
+    });
+
     Test.it('replaces existing content instead of appending', (t) => {
         const directory = makeTempDirectory(t);
         const target = Path.join(directory, 'instance.json');

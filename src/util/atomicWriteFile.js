@@ -19,16 +19,22 @@
 */
 
 const Fs = require('fs');
+const Path = require('path');
 
 /*
     Write a file so that a crash can never leave a half-written result behind: the data goes to a
     temporary file, is flushed to disk, and only then replaces the target through an atomic rename.
     Any failure removes the temporary file and rethrows the original error.
+
+    The directory of the target is created when it does not exist yet: `instances` and `credentials` are
+    not part of the repository, so a fresh installation writes into a directory that has to be made first.
     @param {string} targetPath
     @param {string} data
     @param {BufferEncoding} [encoding]
 */
 module.exports = function atomicWriteFile(targetPath, data, encoding = /** @type {BufferEncoding} */ ('utf8')) {
+    Fs.mkdirSync(Path.dirname(targetPath), { recursive: true });
+
     const tempPath = `${targetPath}.tmp`;
 
     Fs.writeFileSync(tempPath, data, { encoding });
