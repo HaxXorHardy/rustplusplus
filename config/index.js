@@ -62,6 +62,8 @@ module.exports = {
         rustplusTransport: process.env.RPP_RUSTPLUS_TRANSPORT || 'auto',
         /* Renew the Rust+ account token this many seconds before it expires (default 3 days). */
         rustplusTokenRenewBeforeSeconds: envInt('RPP_RUSTPLUS_TOKEN_RENEW_BEFORE', 3 * 24 * 3600),
+        /* How often the notification history is read to adopt servers/devices that were paired in-game. */
+        rustplusHistoryIntervalMs: envInt('RPP_RUSTPLUS_HISTORY_INTERVAL', 5 * 60 * 1000), /* 5 min */
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',

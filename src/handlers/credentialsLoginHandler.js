@@ -22,6 +22,7 @@ const Constants = require('../util/constants.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
+const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusLogin = require('../util/rustplusLogin.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
@@ -214,11 +215,24 @@ async function complete(client, interaction, flow) {
         const instance = client.getInstance(guildId);
         const applied = RustPlusSync.applySyncServers(instance, auth.steamId, data.servers,
             (key) => client.intlGet(guildId, key));
+
+        /* Devices that were paired in-game but not added in the app are only in the notification history. */
+        let paired = { devices: 0 };
+        try {
+            const history = await RustPlusHistory.fetchHistory(auth.token);
+            paired = RustPlusHistory.applyPairingEntries(instance, auth.steamId,
+                RustPlusHistory.parsePairingEntries(history), (key) => client.intlGet(guildId, key));
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Could not read the pairing history: ${e && e.message ? e.message : e}`, 'warn');
+        }
+
         client.setInstance(guildId, instance);
 
         client.log(client.intlGet(null, 'infoCap'),
             `Rust+ login: ${applied.servers} server(s), ${applied.created} newly created, ` +
-            `${applied.devices} device(s) adopted.`);
+            `${applied.devices + paired.devices} device(s) adopted.`);
 
         restartActiveServer(client, guildId);
 

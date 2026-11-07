@@ -113,8 +113,8 @@ function parseSyncPayload(payload) {
 function createServerEntry(data, existing, steamId) {
     const entry = Object.assign({
         title: data.name || 'Rust+ server',
-        serverIp: RELAY_SERVER_IP,
-        appPort: data.id,
+        serverIp: data.ip || RELAY_SERVER_IP,
+        appPort: data.port || data.id,
         guid: data.id,
         steamId: steamId ? `${steamId}` : null,
         playerToken: data.playerToken,
@@ -246,7 +246,8 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
         result.devices += addDevices(entry, data, intlGet);
         if (!existing) result.created++;
 
-        instance.serverList[serverId || `${RELAY_SERVER_IP}-${data.id}`] = entry;
+        /* The key of the instance is <ip>-<appPort>, which is the pairing id when no address is known. */
+        instance.serverList[serverId || `${entry.serverIp}-${entry.appPort}`] = entry;
         result.servers++;
     }
 

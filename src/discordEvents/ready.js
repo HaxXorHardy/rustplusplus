@@ -24,6 +24,9 @@ const Path = require('path');
 const BattlemetricsHandler = require('../handlers/battlemetricsHandler.js');
 const Config = require('../../config');
 const CredentialsExpiryHandler = require('../handlers/credentialsExpiryHandler.js');
+const DiscordMessages = require('../discordTools/discordMessages.js');
+const RustPlusHistory = require('../util/rustplusHistory.js');
+const RustPlusSync = require('../util/rustplusSync.js');
 
 module.exports = {
     name: 'clientReady',
@@ -84,6 +87,41 @@ module.exports = {
         await CredentialsExpiryHandler.handler(client, true);
         client.credentialsExpiryIntervalId = setInterval(CredentialsExpiryHandler.handler,
             Config.general.credentialsExpiryCheckIntervalMs, client, false);
+
+        /*
+            Adopt servers and devices that were paired in-game. The notification history of the account knows them,
+            so this works without FCM credentials.
+        */
+        const refreshPairingHistory = async () => {
+            const added = await RustPlusHistory.refresh(client);
+
+            for (const device of added) {
+                if (!device.serverKey) continue;
+
+                try {
+                    if (device.entityType === RustPlusSync.ENTITY_TYPES.SWITCH) {
+                        await DiscordMessages.sendSmartSwitchMessage(device.guildId, device.serverKey, device.entityId);
+                    }
+                    else if (device.entityType === RustPlusSync.ENTITY_TYPES.ALARM) {
+                        await DiscordMessages.sendSmartAlarmMessage(device.guildId, device.serverKey, device.entityId);
+                    }
+                    else if (device.entityType === RustPlusSync.ENTITY_TYPES.STORAGE_MONITOR) {
+                        await DiscordMessages.sendStorageMonitorMessage(device.guildId, device.serverKey,
+                            device.entityId);
+                    }
+
+                    client.log(client.intlGet(null, 'infoCap'),
+                        `Paired device ${device.entityId} was adopted from the notification history.`);
+                }
+                catch (e) {
+                    client.log(client.intlGet(null, 'warningCap'), e, 'warning');
+                }
+            }
+        };
+
+        refreshPairingHistory();
+        client.pairingHistoryIntervalId = setInterval(refreshPairingHistory,
+            Config.general.rustplusHistoryIntervalMs);
 
         client.createRustplusInstancesFromConfig();
     },

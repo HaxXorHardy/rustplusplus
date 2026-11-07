@@ -214,10 +214,23 @@ account **and their paired devices**:
 with the names from the Rust+ app (`type` 1 = switch, 2 = alarm, 3 = storage monitor). A server without `ip/port`
 in the account state is keyed `relay-<uuid>`, which is exactly what the authenticated socket needs.
 
-FCM credentials are only needed for
+FCM credentials are only needed for the push notifications of the app (raid alarm, team login, smart alarm while the
+bot is not connected). Everything else is read from the account itself:
 
-* the push notifications of the app (raid alarm, team login, smart alarm while the bot is not polling), and
-* pairing **new** devices in the moment you pair them (a new `/credentials login` picks them up as well).
+#### Newly paired devices are adopted automatically
+
+Pairing a device in-game only puts a **notification** into the history of the account (`POST /api/history/read`,
+the same list the app and app.playrust.com show). It contains everything:
+
+```json
+{ "title": "Smart Switch", "body": "Tap to pair with this device.",
+  "data": "{\"id\":\"<server uuid>\",\"name\":\"...\",\"ip\":\"91.229.114.90\",\"port\":\"28111\",
+            \"playerToken\":-395561831,\"entityId\":\"116582\",\"entityType\":\"1\",\"entityName\":\"Smart Switch\"}" }
+```
+
+`util/rustplusHistory.js` reads that history, `/credentials login` adopts the devices right away and
+`RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes) keeps doing it while the bot runs - the Discord message of the
+new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.**
 
 #### The token renews itself
 
