@@ -18,11 +18,27 @@
 
 */
 
+const RustPlusTransport = require('../util/rustplusTransport.js');
+
 module.exports = {
     name: 'connecting',
     async execute(rustplus, client) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
-        rustplus.log(client.intlGet(null, 'connectingCap'), client.intlGet(null, 'connectingToServer'));
+        const failures = client.rustplusConnectFailures || new Object();
+        const directFailures = failures[rustplus.guildId] || 0;
+        const authenticated = rustplus.serverGuid !== null && rustplus.authToken !== null;
+
+        /* The transport is part of the log, so a wrong endpoint or a blocked connection shows up here. */
+        const details = [authenticated ?
+            RustPlusTransport.describeSocketEndpoint(rustplus.serverGuid) :
+            RustPlusTransport.describeEndpoint(rustplus.server, rustplus.port, rustplus.useFacepunchProxy)];
+
+        if (!authenticated && rustplus.useFacepunchProxy && directFailures !== 0) {
+            details.push(`${directFailures} direct attempt(s) failed`);
+        }
+
+        rustplus.log(client.intlGet(null, 'connectingCap'),
+            `${client.intlGet(null, 'connectingToServer')} (${details.join(', ')})`);
     },
 };

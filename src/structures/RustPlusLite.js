@@ -22,13 +22,19 @@ const RustPlusLib = require('@liamcottle/rustplus.js');
 
 const Client = require('./clientRegistry.js');
 const Config = require('../../config');
+const RustPlusAuth = require('../util/rustplusAuth.js');
+const RustPlusSocket = require('../util/rustplusSocket.js');
 
 class RustPlusLite extends RustPlusLib {
-    constructor(guildId, logger, rustplus, serverIp, appPort, steamId, playerToken) {
-        super(serverIp, appPort, steamId, playerToken);
+    constructor(guildId, logger, rustplus, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false,
+        serverGuid = null) {
+        super(serverIp, appPort, steamId, playerToken, useFacepunchProxy);
 
         this.serverId = `${this.server}-${this.port}`;
         this.guildId = guildId;
+        this.useFacepunchProxy = useFacepunchProxy;   /* Websocket transport, see util/rustplusTransport.js */
+        this.serverGuid = serverGuid;                 /* Pairing id (uuid) of the server. */
+        this.authToken = null;                        /* Account token of the Rust+ web login. */
         this.logger = logger;
         this.rustplus = rustplus;
 
@@ -42,6 +48,19 @@ class RustPlusLite extends RustPlusLib {
         this.on('connecting', (...args) => rustPlusLiteConnectingEvent(this, ...args));
         this.on('disconnected', (...args) => rustPlusLiteDisconnectedEvent(this, ...args));
         this.on('error', (...args) => rustPlusLiteErrorEvent(this, ...args));
+    }
+
+    /* The leader account needs its own Rust+ login token, and the same server id as the main instance. */
+    resolveAuthenticatedTransport() {
+        const auth = RustPlusAuth.readAuth(this.playerId);
+        this.authToken = auth ? auth.token : null;
+        return this.serverGuid !== null && this.authToken !== null;
+    }
+
+    connect() {
+        if (!this.resolveAuthenticatedTransport()) return super.connect();
+
+        return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
     }
 
     log(title, text, level = 'info') {
@@ -82,9 +101,13 @@ class RustPlusLite extends RustPlusLib {
                 Client.client.intlGet(null, 'responseIsUndefined'), 'error');
             return false;
         }
-        else if (response.toString() === 'Error: Timeout reached while waiting for response') {
+        else if (response instanceof Error) {
+            const message = `${response.message}`;
+
             this.log(Client.client.intlGet(null, 'errorCap'),
-                Client.client.intlGet(null, 'responseTimeout'), 'error');
+                (message.includes('Timeout reached while waiting for response')) ?
+                    Client.client.intlGet(null, 'responseTimeout') :
+                    message, 'error');
             return false;
         }
         else if (response.hasOwnProperty('error')) {

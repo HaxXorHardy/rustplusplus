@@ -36,7 +36,10 @@ const Languages = require('../util/languages.js');
 const Logger = require('./Logger.js');
 const Map = require('../util/map.js');
 const getRuntimeDataStorage = require('../util/storage/getRuntimeDataStorage.js');
+const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusLite = require('../structures/RustPlusLite');
+const RustPlusSocket = require('../util/rustplusSocket.js');
+const RustPlusTransport = require('../util/rustplusTransport.js');
 const TeamHandler = require('../handlers/teamHandler.js');
 const Timer = require('../util/timer.js');
 
@@ -44,16 +47,20 @@ const TOKENS_LIMIT = 24;        /* Per player */
 const TOKENS_REPLENISH = 3;     /* Per second */
 
 class RustPlus extends RustPlusLib {
-    constructor(guildId, serverIp, appPort, steamId, playerToken) {
-        super(serverIp, appPort, steamId, playerToken);
+    constructor(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false) {
+        super(serverIp, appPort, steamId, playerToken, useFacepunchProxy);
 
         this.serverId = `${this.server}-${this.port}`;
         this.guildId = guildId;
+        this.useFacepunchProxy = useFacepunchProxy;   /* Websocket transport, see util/rustplusTransport.js */
+        this.serverGuid = null;     /* Pairing id (uuid) of the server, used by the authenticated socket. */
+        this.authToken = null;      /* Account token of the Rust+ web login, see scripts/rustplusLogin.js. */
         this.runtimeDataStorage = getRuntimeDataStorage();
         this.persistentRuntimeStateRestored = false;
 
         this.leaderRustPlusInstance = null;
         this.uptimeServer = null;
+        this.transportReconnectScheduled = false;   /* A dropped request already asked for a reconnect. */
 
         /* Status flags */
         this.isOperational = false;         /* Connected to the server, and request is verified. */
@@ -453,6 +460,86 @@ class RustPlus extends RustPlusLib {
         this.persistentRuntimeStateRestored = true;
     }
 
+    /*
+        The Rust+ app talks to Facepunch's relay with one authenticated websocket per server, addressed by the
+        server id (the pairing uuid) instead of ip:port. The account token comes from the Steam login of the Rust+
+        web app ("/credentials login" in Discord or scripts/rustplusLogin.js), the server id is stored next to the
+        other server data.
+    */
+    resolveAuthenticatedTransport() {
+        const instance = Client.client.getInstance(this.guildId);
+        const server = instance.serverList[this.serverId];
+        const auth = RustPlusAuth.readAuth(this.playerId);
+
+        this.authToken = auth ? auth.token : null;
+        this.serverGuid = server ? (server.guid || null) : null;
+
+        /* Remember the server id from the login file, so it only has to be resolved once. */
+        if (server && this.serverGuid === null) {
+            const guid = RustPlusAuth.resolveServerGuid(auth, server.title);
+            if (guid !== null) {
+                this.serverGuid = guid;
+                server.guid = guid;
+                Client.client.setInstance(this.guildId, instance);
+            }
+        }
+
+        if (this.authToken === null) {
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                'No Rust+ account token stored for this steam account, the bot falls back to the direct ' +
+                'connection (removed by Facepunch). Use "/credentials login" in Discord to log in with Steam.', 'warn');
+        }
+        else if (RustPlusAuth.isTokenExpired(auth)) {
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                'The stored Rust+ account token has expired. Use "/credentials login" in Discord again.', 'warn');
+        }
+        else if (this.serverGuid === null) {
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                `The server id of "${server ? server.title : this.serverId}" is unknown, it is not listed in the ` +
+                'login file. Use "/credentials login" in Discord again.', 'warn');
+        }
+
+        return this.serverGuid !== null && this.authToken !== null;
+    }
+
+    /*
+        Connect through the authenticated websocket of the Rust+ app (util/rustplusSocket.js), or through the
+        library transports when no login/token is available.
+    */
+    connect() {
+        if (this.serverGuid === null || this.authToken === null) return super.connect();
+
+        return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
+    }
+
+    /*
+        The relay socket can be gone while a request is in flight (relay restart, reconnect). Instead of failing
+        deep inside the library with a TypeError on a null socket, ask for a reconnect and fail the request with a
+        message the logs can use.
+    */
+    sendRequest(data, callback) {
+        if (!this.websocket || this.websocket.readyState !== 1) {   /* 1 = OPEN */
+            this.scheduleTransportReconnect();
+            throw new Error('Not connected to the Rust+ relay');
+        }
+
+        return super.sendRequest(data, callback);
+    }
+
+    /* Reconnect once when a request had to be dropped, the polling loop keeps running meanwhile. */
+    scheduleTransportReconnect() {
+        if (this.isDeleted || this.transportReconnectScheduled) return;
+
+        this.transportReconnectScheduled = true;
+
+        const timer = setTimeout(() => {
+            this.transportReconnectScheduled = false;
+            if (!this.isDeleted) this.connect();
+        }, 2000);
+
+        if (typeof timer.unref === 'function') timer.unref();
+    }
+
     build() {
         const instance = Client.client.getInstance(this.guildId);
 
@@ -464,6 +551,8 @@ class RustPlus extends RustPlusLib {
         /* Setup settings */
         this.generalSettings = instance.generalSettings;
         this.notificationSettings = instance.notificationSettings;
+
+        this.resolveAuthenticatedTransport();
 
         this.connect();
     }
@@ -480,10 +569,17 @@ class RustPlus extends RustPlusLib {
         }
 
         const instance = Client.client.getInstance(this.guildId);
-        const leader = this.team.leaderSteamId;
+
+        /* Without team data (not polled yet, or the request failed) there is no leader to connect to. */
+        const leader = this.team === null || this.team === undefined ? null : this.team.leaderSteamId;
+        if (leader === null) return;
         if (leader === this.playerId) return;
-        if (!(leader in instance.serverListLite[this.serverId])) return;
-        const serverLite = instance.serverListLite[this.serverId][leader];
+
+        const serverListLite = instance.serverListLite ? instance.serverListLite[this.serverId] : null;
+        if (!serverListLite || !(leader in serverListLite)) return;
+
+        const serverLite = serverListLite[leader];
+        if (!serverLite) return;
 
         this.leaderRustPlusInstance = new RustPlusLite(
             this.guildId,
@@ -492,7 +588,9 @@ class RustPlus extends RustPlusLib {
             serverLite.serverIp,
             serverLite.appPort,
             serverLite.steamId,
-            serverLite.playerToken
+            serverLite.playerToken,
+            this.useFacepunchProxy,
+            this.serverGuid
         );
         this.leaderRustPlusInstance.connect();
     }
@@ -1003,9 +1101,14 @@ class RustPlus extends RustPlusLib {
                 Client.client.intlGet(null, 'responseIsUndefined'), 'error');
             return false;
         }
-        else if (response.toString() === 'Error: Timeout reached while waiting for response') {
+        else if (response instanceof Error) {
+            /* A timeout, a closed relay socket or an AppError - log what actually happened. */
+            const message = `${response.message}`;
+
             this.log(Client.client.intlGet(null, 'errorCap'),
-                Client.client.intlGet(null, 'responseTimeout'), 'error');
+                (message.includes('Timeout reached while waiting for response')) ?
+                    Client.client.intlGet(null, 'responseTimeout') :
+                    message, 'error');
             return false;
         }
         else if (response.hasOwnProperty('error')) {
@@ -2048,7 +2151,6 @@ class RustPlus extends RustPlusLib {
                             this.markers[command].y);
                         const distance = Math.floor(Map.getDistance(player.x, player.y, this.markers[command].x,
                             this.markers[command].y));
-                        console.log(this.markers[command])
 
                         return Client.client.intlGet(this.guildId, 'markerLocation', {
                             name: command,

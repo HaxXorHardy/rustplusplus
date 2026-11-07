@@ -236,6 +236,8 @@ module.exports = (client, guild) => {
 
     /* Check every serverList for missing keys */
     for (const [serverId, content] of Object.entries(instance.serverList)) {
+        /* The pairing id (uuid) of the server, resolved from the Rust+ login file when it is missing. */
+        if (!content.hasOwnProperty('guid')) content.guid = null;
         if (!content.hasOwnProperty('customCameraGroups')) content.customCameraGroups = {};
         if (!content.hasOwnProperty('cargoShipEgressTimeMs')) {
             content.cargoShipEgressTimeMs = Constants.DEFAULT_CARGO_SHIP_EGRESS_TIME_MS;

@@ -27,6 +27,7 @@ const DiscordTools = require('../../discordTools/discordTools.js');
 const FcmPersistentIds = require('./fcmPersistentIds.js');
 const InstanceUtils = require('../instanceUtils.js');
 const Map = require('../map.js');
+const PairingAddress = require('./pairingAddress.js');
 const Scrape = require('../scrape.js');
 
 module.exports = async (client, guild, steamId) => {
@@ -174,15 +175,19 @@ function isValidUrl(url) {
 
 async function pairingServer(client, guild, steamId, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+
+    const serverId = address.serverId;
 
     if (!instance.serverListLite.hasOwnProperty(serverId)) instance.serverListLite[serverId] = new Object();
 
     instance.serverListLite[serverId][steamId] = {
-        serverIp: body.ip,
-        appPort: body.port,
+        serverIp: address.serverIp,
+        appPort: address.appPort,
         steamId: body.playerId,
         playerToken: body.playerToken,
+        guid: address.guid,
     };
     client.setInstance(guild.id, instance);
 
@@ -194,7 +199,9 @@ async function pairingServer(client, guild, steamId, title, message, body) {
 
 async function pairingEntitySwitch(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     if (!instance.serverList.hasOwnProperty(serverId)) return;
     const switches = instance.serverList[serverId].switches;
 
@@ -244,7 +251,9 @@ async function pairingEntitySwitch(client, guild, title, message, body) {
 
 async function pairingEntitySmartAlarm(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     if (!instance.serverList.hasOwnProperty(serverId)) return;
     const alarms = instance.serverList[serverId].alarms;
 
@@ -292,7 +301,9 @@ async function pairingEntitySmartAlarm(client, guild, title, message, body) {
 
 async function pairingEntityStorageMonitor(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     if (!instance.serverList.hasOwnProperty(serverId)) return;
     const storageMonitors = instance.serverList[serverId].storageMonitors;
 

@@ -32,6 +32,7 @@ const DiscordTools = require('../../discordTools/discordTools.js');
 const FcmPersistentIds = require('./fcmPersistentIds.js');
 const InstanceUtils = require('../instanceUtils.js');
 const Map = require('../map.js');
+const PairingAddress = require('./pairingAddress.js');
 const Scrape = require('../scrape.js');
 
 module.exports = async (client, guild) => {
@@ -232,7 +233,14 @@ function isValidUrl(url) {
 
 async function pairingServer(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) {
+        client.log('FCM', `GuildID: ${guild.id}, pairing notification without ip/port and without id: ` +
+            `${Object.keys(body).join(', ')}`);
+        return;
+    }
+
+    const serverId = address.serverId;
     const server = instance.serverList[serverId];
 
     let messageObj = undefined;
@@ -254,8 +262,10 @@ async function pairingServer(client, guild, title, message, body) {
 
     instance.serverList[serverId] = {
         title: title,
-        serverIp: body.ip,
-        appPort: body.port,
+        serverIp: address.serverIp,
+        appPort: address.appPort,
+        /* The pairing id (uuid) of the server, the authenticated Rust+ websocket is addressed with it. */
+        guid: address.guid || (server ? server.guid : null) || null,
         steamId: body.playerId,
         playerToken: body.playerToken,
         description: body.desc.replace(/\\n/g, '\n').replace(/\\t/g, '\t'),
@@ -283,10 +293,11 @@ async function pairingServer(client, guild, title, message, body) {
     if (!instance.serverListLite.hasOwnProperty(serverId)) instance.serverListLite[serverId] = new Object();
 
     instance.serverListLite[serverId][body.playerId] = {
-        serverIp: body.ip,
-        appPort: body.port,
+        serverIp: address.serverIp,
+        appPort: address.appPort,
         steamId: body.playerId,
         playerToken: body.playerToken,
+        guid: address.guid,
     };
     client.setInstance(guild.id, instance);
 
@@ -295,7 +306,9 @@ async function pairingServer(client, guild, title, message, body) {
 
 async function pairingEntitySwitch(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     if (!instance.serverList.hasOwnProperty(serverId)) return;
     const switches = instance.serverList[serverId].switches;
 
@@ -345,7 +358,9 @@ async function pairingEntitySwitch(client, guild, title, message, body) {
 
 async function pairingEntitySmartAlarm(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     if (!instance.serverList.hasOwnProperty(serverId)) return;
     const alarms = instance.serverList[serverId].alarms;
 
@@ -393,7 +408,9 @@ async function pairingEntitySmartAlarm(client, guild, title, message, body) {
 
 async function pairingEntityStorageMonitor(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     if (!instance.serverList.hasOwnProperty(serverId)) return;
     const storageMonitors = instance.serverList[serverId].storageMonitors;
 
@@ -472,7 +489,9 @@ async function alarmAlarm(client, guild, title, message, body) {
     setting fcmAlarmNotificationEnabled is enabled. Those notifications will be handled here. */
 
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     const entityId = body.entityId;
     const server = instance.serverList[serverId];
     const rustplus = client.rustplusInstances[guild.id];
@@ -490,7 +509,9 @@ async function alarmAlarm(client, guild, title, message, body) {
 
 async function alarmRaidAlarm(client, guild, title, message, body) {
     const instance = client.getInstance(guild.id);
-    const serverId = `${body.ip}-${body.port}`;
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
+    const serverId = address.serverId;
     const rustplus = client.rustplusInstances[guild.id];
 
     if (!instance.serverList.hasOwnProperty(serverId)) return;
@@ -538,8 +559,10 @@ async function teamLogin(client, guild, title, message, body) {
             guild.id, body, await Scrape.scrapeSteamProfilePicture(client, body.targetId))]
     }
 
+    const address = PairingAddress.resolveServerAddress(instance, body);
+    if (address === null) return;
     const rustplus = client.rustplusInstances[guild.id];
-    const serverId = `${body.ip}-${body.port}`;
+    const serverId = address.serverId;
 
     if (!rustplus || (rustplus && (serverId !== rustplus.serverId))) {
         await DiscordMessages.sendMessage(guild.id, content, null, instance.channelId.activity);

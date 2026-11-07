@@ -41,6 +41,7 @@ const Logger = require('./Logger.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 const RustLabs = require('../structures/RustLabs');
 const RustPlus = require('../structures/RustPlus');
+const RustPlusTransport = require('../util/rustplusTransport.js');
 
 class DiscordBot extends Discord.Client {
     constructor(props) {
@@ -63,6 +64,9 @@ class DiscordBot extends Discord.Client {
         this.rustplusLiteReconnectTimers = new Object();
         this.rustplusReconnecting = new Object();
         this.rustplusMaps = new Object();
+        /* Consecutive failed connection attempts per guild, decides about the websocket transport. */
+        this.rustplusConnectFailures = new Object();
+        this.steamLoginFlows = new Object();
 
         this.uptimeBot = null;
 
@@ -316,7 +320,16 @@ class DiscordBot extends Discord.Client {
     }
 
     createRustplusInstance(guildId, serverIp, appPort, steamId, playerToken) {
-        let rustplus = new RustPlus(guildId, serverIp, appPort, steamId, playerToken);
+        const directFailures = this.rustplusConnectFailures[guildId] || 0;
+        const useFacepunchProxy = RustPlusTransport.shouldUseFacepunchProxy(
+            Config.general.rustplusTransport, directFailures);
+
+        /* Only one instance per guild, otherwise two sockets compete for the same relay connection. */
+        if (this.rustplusInstances[guildId]) {
+            this.rustplusInstances[guildId].deleteThisRustplusInstance();
+        }
+
+        let rustplus = new RustPlus(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy);
 
         /* Add rustplus instance to Object */
         this.rustplusInstances[guildId] = rustplus;

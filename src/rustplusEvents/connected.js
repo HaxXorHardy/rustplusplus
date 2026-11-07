@@ -29,11 +29,20 @@ module.exports = {
     async execute(rustplus, client) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
+        /* A replaced instance must not run the connect flow of the guild. */
+        if (rustplus.isDeleted) return;
+        const current = client.rustplusInstances[rustplus.guildId];
+        if (current && current !== rustplus) return rustplus.deleteThisRustplusInstance();
+
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'connectedToServer'));
 
         const instance = client.getInstance(rustplus.guildId);
         const guildId = rustplus.guildId;
         const serverId = rustplus.serverId;
+
+        /* The endpoint works, so the next connection attempt starts with the direct transport again. */
+        client.rustplusConnectFailures = client.rustplusConnectFailures || new Object();
+        client.rustplusConnectFailures[guildId] = 0;
 
         rustplus.uptimeServer = new Date();
 

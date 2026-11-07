@@ -19,6 +19,7 @@
 */
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const RustPlusTransport = require('../util/rustplusTransport.js');
 
 module.exports = {
     name: 'error',
@@ -26,6 +27,16 @@ module.exports = {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
         rustplus.log(client.intlGet(null, 'errorCap'), err, 'error');
+
+        /*
+            Network failures are counted per guild: after a few failed direct attempts the bot switches to the
+            Facepunch proxy transport, see util/rustplusTransport.js.
+        */
+        if (RustPlusTransport.isConnectionFailure(err)) {
+            client.rustplusConnectFailures = client.rustplusConnectFailures || new Object();
+            client.rustplusConnectFailures[rustplus.guildId] =
+                (client.rustplusConnectFailures[rustplus.guildId] || 0) + 1;
+        }
 
         switch (err.code) {
             case 'ETIMEDOUT': {
@@ -38,6 +49,10 @@ module.exports = {
 
             case 'ECONNREFUSED': {
                 await errorConnRefused(rustplus, client, err);
+            } break;
+
+            case 'ECONNRESET': {
+                errorConnReset(rustplus, client, err);
             } break;
 
             default: {
@@ -65,6 +80,16 @@ function errorNotFound(rustplus, client, err) {
 
 async function errorConnRefused(rustplus, client, err) {
     rustplus.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'connectionRefusedTo', {
+        id: rustplus.serverId
+    }), 'error');
+}
+
+/*
+    The socket was accepted and dropped again ('socket hang up'), which happens while the server is offline or
+    restarting, and when the configured Rust+ app port no longer belongs to the server.
+*/
+function errorConnReset(rustplus, client, err) {
+    rustplus.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'connectionResetTo', {
         id: rustplus.serverId
     }), 'error');
 }

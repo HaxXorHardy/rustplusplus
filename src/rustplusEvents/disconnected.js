@@ -59,6 +59,10 @@ module.exports = {
 
         /* Was the disconnection unexpected? */
         if (client.activeRustplusInstances[guildId]) {
+            /* An instance that was already replaced must not touch the current one. */
+            const current = client.rustplusInstances[guildId];
+            if (current && current !== rustplus) return;
+
             if (!client.rustplusReconnecting[guildId]) {
                 await DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 1);
                 await DiscordMessages.sendServerMessage(guildId, serverId, 2);

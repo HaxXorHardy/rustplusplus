@@ -55,6 +55,11 @@ module.exports = {
         /* Warn users when their stored Rust+ credentials are about to expire or have expired. */
         credentialsExpiryCheckIntervalMs: envInt('RPP_CREDENTIALS_EXPIRY_CHECK_INTERVAL', 3600000), /* 1 hour */
         credentialsExpiryWarningSeconds: envInt('RPP_CREDENTIALS_EXPIRY_WARNING', 3 * 24 * 3600), /* 3 days */
+        /*
+            How the Rust+ websocket is reached: 'auto' uses the authenticated socket of the Rust+ app and falls back
+            to the direct/proxy transports Facepunch removed, 'direct' and 'proxy' force one of them.
+        */
+        rustplusTransport: process.env.RPP_RUSTPLUS_TRANSPORT || 'auto',
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',
