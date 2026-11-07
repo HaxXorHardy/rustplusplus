@@ -221,15 +221,8 @@ async function displaySpecificUser(client, interaction, battlemetricsId, playerI
     description += `__**${onOffString}:**__ ${time !== null ? `[${time[1]}]` : ''}\n`;
 
     const playtimeSeconds = await bmInstance.getTotalTimePlayed(playerId);
-    const serverPlaytimeSeconds = bmInstance.getSessionTimePlayed(playerId);
-
     description += `__**${client.intlGet(guildId, 'timePlayed')}:**__ `;
     description += (typeof (playtimeSeconds) === 'number') ? Timer.secondsToCompactHours(playtimeSeconds) : client.intlGet(guildId, 'empty');
-
-    /* The profile total sums every Rust server, the second number is the time on this one. */
-    if (typeof (serverPlaytimeSeconds) === 'number') {
-        description += ` (${Timer.secondsToCompactHours(serverPlaytimeSeconds)} ${client.intlGet(guildId, 'timePlayedOnThisServer')})`;
-    }
     description += '\n';
 
     const embed = DiscordEmbeds.getEmbed({
@@ -359,8 +352,7 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
         playerCounter += 1;
 
         const status = bmInstance.players[playerId]['status'];
-        const timeValue = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
-        const time = timeValue !== null ? timeValue[1] : '';
+        const time = status ? bmInstance.getOnlineTime(playerId)[1] : bmInstance.getOfflineTime(playerId)[1];
 
         const playtime = bmInstance.getCachedTimePlayed(playerId);
         const playtimeStr = (typeof (playtime) === 'number') ?

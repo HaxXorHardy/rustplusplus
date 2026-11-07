@@ -22,7 +22,6 @@ const Client = require('../structures/clientRegistry.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 
-
 async function warmTeamTimePlayed(rustplus) {
     const instance = Client.client.getInstance(rustplus.guildId);
     const server = instance.serverList[rustplus.serverId];

@@ -23,7 +23,7 @@ const Axios = require('axios');
 const Client = require('./clientRegistry.js');
 const Config = require('../../config');
 const getStaticFilesStorage = require('../util/storage/getStaticFilesStorage.js');
-const Utils = require('../util/utils.js');
+const Utils = require = require('../util/utils.js');
 
 const randomUsernamesData = getStaticFilesStorage().getDatasetObject('RandomUsernames');
 const randomUsernames = Array.isArray(randomUsernamesData.RandomUsernames) ? randomUsernamesData.RandomUsernames : [];
@@ -35,18 +35,6 @@ const NAME_CHANGE_LOG_SIZE = 100;
 const TIME_PLAYED_GAME = 'rust';
 const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
 const TIME_PLAYED_DEFAULT_LIMIT = 100;
-
-/*
-    The time a player has on this server is part of the metadata of the players included in the server request, in
-    seconds. It is not the same number as the global time played of the profile, which sums every Rust server of the
-    player and is therefore useless for a server overview.
-*/
-function getServerTimeFromMetadata(meta) {
-    const metadata = (meta && Array.isArray(meta.metadata)) ? meta.metadata : [];
-    const entry = metadata.find((e) => e && e.key === 'time');
-
-    return (entry && typeof entry.value === 'number') ? Math.round(entry.value) : null;
-}
 
 class Battlemetrics {
 
@@ -406,19 +394,6 @@ class Battlemetrics {
     }
 
     /**
-     *  Format a duration as [seconds, HH:MM].
-     *  @param {number} totalSeconds The duration in seconds.
-     *  @return {Array} index 0: seconds, index 1: The formatted duration.
-     */
-    #formatSeconds(totalSeconds) {
-        const seconds = Math.max(0, Math.floor(totalSeconds));
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-
-        return [seconds, `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`];
-    }
-
-    /**
      *  Format the time from timestamp to now [seconds,HH:MM].
      *  @param {string} timestamp The timestamp from before.
      *  @return {Array} index 0: seconds, index 1: The formatted time, null if invalid.
@@ -724,9 +699,6 @@ class Battlemetrics {
                     this.loginPlayers.push(entity.id);
                 }
             }
-            /* The time on this server is part of the player metadata of the server request (seconds). */
-            this.players[entity.id]['sessionTime'] = getServerTimeFromMetadata(entity.meta);
-
             this.onlinePlayers.push(entity.id);
         }
 
@@ -826,10 +798,12 @@ class Battlemetrics {
      *  @return {Array} index 0: seconds online, index 1: The formatted online time of a player.
      */
     getOnlineTime(playerId) {
-        const player = this.players[playerId];
-        if (!this.lastUpdateSuccessful || !player || typeof player['sessionTime'] !== 'number') return null;
+        if (!this.lastUpdateSuccessful || !this.players.hasOwnProperty(playerId) ||
+            !this.players[playerId]['updatedAt']) {
+            return null;
+        }
 
-        return this.#formatSeconds(player['sessionTime']);
+        return this.#formatTime(this.players[playerId]['updatedAt']);
     }
 
     /**
@@ -853,8 +827,8 @@ class Battlemetrics {
     getOnlinePlayerIdsOrderedByTime() {
         const unordered = [];
         for (const playerId of this.onlinePlayers) {
-            const seconds = this.players[playerId]['sessionTime'];
-            unordered.push([typeof seconds === 'number' ? seconds : 0, playerId]);
+            const seconds = this.#formatTime(this.players[playerId]['updatedAt']);
+            unordered.push([seconds !== null ? seconds[0] : 0, playerId]);
         }
         let ordered = unordered.sort(function (a, b) { return b[0] - a[0] })
         return ordered.map(e => e[1]);
@@ -886,19 +860,6 @@ class Battlemetrics {
         }
 
         return this.#formatTime(this.players[playerId]['logoutDate']);
-    }
-
-    /**
-     *  Get the length of the current session on this server (in seconds).
-     *  Battlemetrics carries it in the metadata of the players of the server request, so no extra call is needed.
-     *  @param {string} playerId The Battlemetrics player id.
-     *  @return {number|null} The seconds of the current session or null when the player is unknown.
-     */
-    getSessionTimePlayed(playerId) {
-        const player = this.players[playerId];
-        if (!player || typeof player.sessionTime !== 'number') return null;
-
-        return player.sessionTime;
     }
 
     /**

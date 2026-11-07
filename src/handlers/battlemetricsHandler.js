@@ -39,7 +39,6 @@ module.exports = {
             await bmInstance.warmTimePlayedCache();
         }
 
-
         for (const guildItem of client.guilds.cache) {
             const guildId = guildItem[0];
             const instance = client.getInstance(guildId);

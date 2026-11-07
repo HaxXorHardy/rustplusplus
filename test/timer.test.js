@@ -67,17 +67,3 @@ Test.describe('Timer.sleep', () => {
         Assert.ok(Date.now() - start >= 10);
     });
 });
-
-Test.describe('Timer.secondsToCompactHours (short values)', () => {
-    Test.it('shows minutes below an hour', () => {
-        Assert.strictEqual(Timer.secondsToCompactHours(45 * 60), '45m');
-        Assert.strictEqual(Timer.secondsToCompactHours(3599), '59m');
-        Assert.strictEqual(Timer.secondsToCompactHours(59), '0m');
-        Assert.strictEqual(Timer.secondsToCompactHours(0), '0m');
-    });
-
-    Test.it('does not produce NaN for values that are no duration', () => {
-        Assert.strictEqual(Timer.secondsToCompactHours(NaN), '-');
-        Assert.strictEqual(Timer.secondsToCompactHours(-1), '-');
-    });
-});
