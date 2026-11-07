@@ -111,15 +111,11 @@ function parsePairingEntries(entries) {
     a new player token when it is paired again, for example after a wipe), `entity` entries add a device. The list is
     newest first, so it is applied oldest first and the newest pairing decides about the player token.
 */
-function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key, options = {}) {
+function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key) {
     const result = { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [], added: [] };
-    const allowedServerIds = Array.isArray(options.allowedServerIds) ? new Set(options.allowedServerIds) : null;
 
     for (const entry of [...(entries || [])].reverse()) {
         if (!entry || !entry.serverId) continue;
-
-        /* A pairing message of a server the account is not paired with anymore is only a leftover. */
-        if (allowedServerIds !== null && !allowedServerIds.has(`${entry.serverId}`)) continue;
 
         /* Alarm notifications have neither an entity nor credentials, they only report an attack. */
         const hasCredentials = entry.playerToken !== undefined && entry.playerToken !== null;
@@ -208,12 +204,9 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
 
                 const intlGet = (key) => client.intlGet(guildId, key);
 
-                /*
-                    The account state is the truth about the pairing. The notification history only holds messages:
-                    a server that the app does not list anymore answers every request with not_found, so adopting it
-                    from the history would only start a connection that cannot work.
-                */
+                /* The account state (app) and the pairing notifications (server) are both evidence of a pairing. */
                 const accountServers = await readAccountServers(client, steamId, auth, fetchSyncFn);
+                const entries = parsePairingEntries(await fetchHistoryFn(auth.token));
 
                 let changed = false;
 
@@ -230,20 +223,23 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                 }
 
                 /* Servers whose pairing is gone are not connected anymore, their entry stays. */
-                if (markUnpairedServers(client, instance, accountServers) !== 0) changed = true;
+                const pairedIds = (accountServers === null && entries.length === 0) ? null :
+                    pairedServerIds(accountServers, entries);
+
+                if (markUnpairedServers(client, instance, pairedIds) !== 0) changed = true;
 
                 const servers = (accountServers === null) ? (auth.servers || []) : accountServers;
 
-                /* The account state is fresh, its tokens are current; the stored snapshot must not overwrite them. */
+                /*
+                    The account state is fresh but not complete: the app does not always list a server that was paired
+                    in-game, and its token can lag behind. So it never overwrites a token, only fills in what is
+                    missing. The history is applied after it and decides about the newest player token.
+                */
                 const synced = RustPlusSync.applySyncServers(instance, steamId, servers, intlGet,
-                    { keepCredentials: accountServers === null });
+                    { keepCredentials: true });
 
-                /* The history renews the credentials of a server and adds devices that the app does not list. */
-                const entries = parsePairingEntries(await fetchHistoryFn(auth.token));
                 const applied = (entries.length === 0) ? emptyPairingResult() :
-                    applyPairingEntries(instance, steamId, entries, intlGet, {
-                        allowedServerIds: (accountServers === null) ? null : accountServers.map((e) => `${e.id}`),
-                    });
+                    applyPairingEntries(instance, steamId, entries, intlGet);
 
                 if (synced.created !== 0 || synced.updated !== 0 || applied.devices !== 0 ||
                     applied.created !== 0 || applied.updated !== 0) {
@@ -307,14 +303,28 @@ async function readAccountServers(client, steamId, auth, fetchSyncFn) {
     }
 }
 
-/*
-    Marks the servers of the instance that the account is not paired with anymore. Their player token is invalid, so
-    the bot stops connecting them instead of ending in a reconnect loop of `not_found` answers.
-*/
-function markUnpairedServers(client, instance, accountServers) {
-    if (accountServers === null) return 0;
+/* The pairing ids that the account state and the notification history know about. */
+function pairedServerIds(accountServers, entries) {
+    const ids = new Set();
 
-    const pairedIds = new Set(accountServers.map((entry) => `${entry.id}`));
+    for (const entry of accountServers || []) {
+        if (entry && entry.id) ids.add(`${entry.id}`);
+    }
+
+    for (const entry of entries || []) {
+        if (entry && entry.serverId) ids.add(`${entry.serverId}`);
+    }
+
+    return ids;
+}
+
+/*
+    Marks the servers of the instance that neither the account state nor the history knows anymore. Their player token
+    is invalid, so the bot stops connecting them instead of ending in a reconnect loop of `not_found` answers.
+*/
+function markUnpairedServers(client, instance, pairedIds) {
+    if (!(pairedIds instanceof Set)) return 0;
+
     let changed = 0;
 
     for (const [key, server] of Object.entries(instance.serverList)) {

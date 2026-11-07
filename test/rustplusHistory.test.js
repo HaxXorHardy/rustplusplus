@@ -338,21 +338,24 @@ Test.describe('RustPlusHistory.refresh', () => {
     });
 
     /*
-        A pairing notification stays in the history after the server was removed in the Rust+ app. Adopting it from
-        there starts a connection that only ends in `not_found` answers, so the account state has to decide.
+        The Rust+ app does not always list a server that was paired in-game (the notification never reached the app),
+        but the pairing notification carries a player token the server accepts. So the history has to be adopted.
     */
-    Test.it('does not adopt a server that the account is not paired with anymore', async (t) => {
+    Test.it('adopts a server from the history even when the app does not list it', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
 
         const instance = { activeServer: null, serverList: {}, trackers: {} };
         const client = fakeClient(instance);
 
-        await RustPlusHistory.refresh(client, async () => [serverPairEntry(1234, 7, '2026-11-07T16:14:33.0000000+00:00')],
+        await RustPlusHistory.refresh(client, async () => [serverPairEntry(1234, 7, '2026-11-07T16:28:10.0000000+00:00')],
             async () => ({ servers: [] }));
 
-        Assert.deepStrictEqual(Object.keys(instance.serverList), []);
-        Assert.strictEqual(instance.activeServer, null);
-        Assert.strictEqual(client.createdRustplusInstances.length, 0);
+        const serverKeys = Object.keys(instance.serverList);
+        Assert.strictEqual(serverKeys.length, 1);
+        Assert.strictEqual(instance.serverList[serverKeys[0]].playerToken, 1234);
+        Assert.notStrictEqual(instance.serverList[serverKeys[0]].paired, false);
+        Assert.strictEqual(instance.activeServer, serverKeys[0]);
+        Assert.strictEqual(client.createdRustplusInstances.length, 1);
     });
 
     Test.it('marks a server whose pairing is gone and stops connecting it', async (t) => {

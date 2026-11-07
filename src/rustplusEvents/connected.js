@@ -23,6 +23,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const Info = require('../structures/Info');
 const Map = require('../structures/Map');
 const PollingHandler = require('../handlers/pollingHandler.js');
+const RustPlusHistory = require('../util/rustplusHistory.js');
 
 module.exports = {
     name: 'connected',
@@ -63,8 +64,24 @@ module.exports = {
                 reason: reason
             }), 'error');
 
-            /* Reconnect through the `disconnected` event, keeping activeServer and the server message. */
-            rustplus.disconnect();
+            /*
+                A player token that the server does not accept anymore (the server was paired again) answers with
+                not_found as well. Read the newest pairing before the reconnect, otherwise the same token is tried
+                again and again.
+            */
+            try {
+                await RustPlusHistory.refresh(client);
+            }
+            catch (e) {
+                rustplus.log(client.intlGet(null, 'warningCap'),
+                    `Could not refresh the Rust+ pairing: ${e && e.message ? e.message : e}`, 'debug');
+            }
+
+            /*
+                Reconnect through the `disconnected` event, keeping activeServer and the server message. A refresh that
+                renewed the token already replaced the instance, then this one is done.
+            */
+            if (client.rustplusInstances[guildId] === rustplus) rustplus.disconnect();
             return;
         }
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'rustplusOperational'));
