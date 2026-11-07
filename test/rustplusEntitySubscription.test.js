@@ -47,28 +47,28 @@ function fakeRustplus(failing = []) {
 }
 
 Test.describe('RustPlus.subscribeEntities', () => {
-    Test.it('subscribes to switches, alarms and storage monitors', async () => {
+    Test.it('subscribes to the alarms of the server', async () => {
         const rustplus = fakeRustplus();
         const instance = fakeInstance({
             switches: { '111': {}, '222': {} },
-            alarms: { '333': {} },
-            storageMonitors: { '444': {} },
+            alarms: { '333': {}, '444': {} },
+            storageMonitors: { '555': {} },
         });
 
         const subscribed = await RustPlus.prototype.subscribeEntities.call(rustplus, instance);
 
-        Assert.strictEqual(subscribed, 4);
-        Assert.deepStrictEqual(rustplus.calls, [['111', true], ['222', true], ['333', true], ['444', true]]);
+        Assert.strictEqual(subscribed, 2);
+        Assert.deepStrictEqual(rustplus.calls, [['333', true], ['444', true]]);
     });
 
-    Test.it('keeps going when a single entity fails', async () => {
+    Test.it('keeps going when a single alarm fails', async () => {
         /* The failure is logged, which needs the translation of the bot instance. */
         const previousClient = Client.client;
         Client.client = { intlGet: () => 'WARNING' };
 
         try {
             const rustplus = fakeRustplus(['222']);
-            const instance = fakeInstance({ switches: { '111': {} }, alarms: { '222': {} } });
+            const instance = fakeInstance({ alarms: { '111': {}, '222': {} } });
 
             Assert.strictEqual(await RustPlus.prototype.subscribeEntities.call(rustplus, instance), 1);
             Assert.deepStrictEqual(rustplus.calls, [['111', true]]);
@@ -78,10 +78,12 @@ Test.describe('RustPlus.subscribeEntities', () => {
         }
     });
 
-    Test.it('does nothing for an unknown server', async () => {
+    Test.it('does nothing for an unknown server or without alarms', async () => {
         const rustplus = fakeRustplus();
 
         Assert.strictEqual(await RustPlus.prototype.subscribeEntities.call(rustplus, fakeInstance(null)), 0);
+        Assert.strictEqual(await RustPlus.prototype.subscribeEntities.call(rustplus,
+            fakeInstance({ switches: { '111': {} } })), 0);
         Assert.deepStrictEqual(rustplus.calls, []);
     });
 });
