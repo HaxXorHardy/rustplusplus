@@ -123,6 +123,42 @@ module.exports = {
         client.pairingHistoryIntervalId = setInterval(refreshPairingHistory,
             Config.general.rustplusHistoryIntervalMs);
 
+        /*
+            Servers and devices that were adopted from the account state (login, notification history) still need
+            their Discord messages, and the only server of a guild is connected right away.
+        */
+        for (const guildId of Object.keys(client.instances)) {
+            const instance = client.getInstance(guildId);
+            const serverIds = Object.keys(instance.serverList || {});
+
+            for (const serverId of serverIds) {
+                const server = instance.serverList[serverId];
+                if (!server || server.messageId !== null) continue;
+
+                try {
+                    await DiscordMessages.sendServerMessage(guildId, serverId);
+                }
+                catch (e) {
+                    client.log(client.intlGet(null, 'warningCap'),
+                        `Could not post the server message of ${serverId}: ${e && e.message ? e.message : e}`,
+                        'warning');
+                }
+            }
+
+            /* Activate the only server of the guild, createRustplusInstancesFromConfig() connects it then. */
+            if (instance.activeServer === null && serverIds.length === 1) {
+                const server = instance.serverList[serverIds[0]];
+
+                if (server && server.guid) {
+                    instance.activeServer = serverIds[0];
+                    client.setInstance(guildId, instance);
+
+                    client.log(client.intlGet(null, 'infoCap'),
+                        `Activating the only server of the guild: ${server.title}`);
+                }
+            }
+        }
+
         client.createRustplusInstancesFromConfig();
     },
 };
