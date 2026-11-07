@@ -352,7 +352,8 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
         playerCounter += 1;
 
         const status = bmInstance.players[playerId]['status'];
-        const time = status ? bmInstance.getOnlineTime(playerId)[1] : bmInstance.getOfflineTime(playerId)[1];
+        const timeValue = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
+        const time = timeValue !== null ? timeValue[1] : '';
 
         const playtime = bmInstance.getCachedTimePlayed(playerId);
         const playtimeStr = (typeof (playtime) === 'number') ?
