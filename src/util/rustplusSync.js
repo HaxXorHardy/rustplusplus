@@ -39,6 +39,14 @@ const ENTITY_TYPES = {
 /* Server key used when the account state has no ip/port for a server (the relay does not need them). */
 const RELAY_SERVER_IP = 'relay';
 
+/* The pairing token is an int32 in the protocol: the history returns it as a string, the account state as a number. */
+function normalizePlayerToken(value) {
+    if (value === null || value === undefined) return null;
+
+    const number = Number(value);
+    return Number.isFinite(number) ? number : value;
+}
+
 /* protobuf.js represents 64 bit numbers as { low, high }; entity ids fit in 32 bit today. */
 function toEntityIdString(entityId) {
     if (entityId === null || entityId === undefined) return null;
@@ -117,7 +125,7 @@ function createServerEntry(data, existing, steamId) {
         appPort: data.port || data.id,
         guid: data.id,
         steamId: steamId ? `${steamId}` : null,
-        playerToken: data.playerToken,
+        playerToken: normalizePlayerToken(data.playerToken),
         description: data.desc || '',
         img: data.headerImage || Constants.DEFAULT_SERVER_IMG,
         url: data.url || Constants.DEFAULT_SERVER_URL,
@@ -143,7 +151,9 @@ function createServerEntry(data, existing, steamId) {
     /* The account state decides about the pairing id, the name and the pairing credentials. */
     if (data.name) entry.title = data.name;
     entry.guid = data.id;
-    if (data.playerToken !== undefined && data.playerToken !== null) entry.playerToken = data.playerToken;
+    if (data.playerToken !== undefined && data.playerToken !== null) {
+        entry.playerToken = normalizePlayerToken(data.playerToken);
+    }
     if (!entry.steamId && steamId) entry.steamId = `${steamId}`;
 
     return entry;
@@ -227,7 +237,7 @@ function normalizeName(name) {
     id, then by name, and created with the relay key when the bot does not know the server yet.
 */
 function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
-    const result = { servers: 0, created: 0, devices: 0 };
+    const result = { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [] };
 
     for (const data of servers || []) {
         if (!data || !data.id) continue;
@@ -243,12 +253,24 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key) {
         const existing = serverId ? instance.serverList[serverId] : null;
         const entry = createServerEntry(data, existing, steamId);
 
+        /* A new pairing of the same server changes the token (and sometimes the pairing id) of the entry. */
+        const credentialsChanged = existing !== null &&
+            (`${existing.guid}` !== `${entry.guid}` ||
+                `${existing.playerToken}` !== `${entry.playerToken}`);
+
         result.devices += addDevices(entry, data, intlGet);
         if (!existing) result.created++;
 
         /* The key of the instance is <ip>-<appPort>, which is the pairing id when no address is known. */
-        instance.serverList[serverId || `${entry.serverIp}-${entry.appPort}`] = entry;
+        const key = serverId || `${entry.serverIp}-${entry.appPort}`;
+
+        instance.serverList[key] = entry;
         result.servers++;
+
+        if (credentialsChanged) {
+            result.updated++;
+            result.updatedKeys.push(key);
+        }
     }
 
     return result;
@@ -258,6 +280,7 @@ module.exports = {
     ENTITY_TYPES: ENTITY_TYPES,
     RELAY_SERVER_IP: RELAY_SERVER_IP,
     toEntityIdString: toEntityIdString,
+    normalizePlayerToken: normalizePlayerToken,
     parseSyncPayload: parseSyncPayload,
     createServerEntry: createServerEntry,
     addDevices: addDevices,

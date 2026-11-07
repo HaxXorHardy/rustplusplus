@@ -114,7 +114,7 @@ Test.describe('RustPlusSync.applySyncServers', () => {
 
         const result = RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet);
 
-        Assert.deepStrictEqual(result, { servers: 1, created: 1, devices: 3 });
+        Assert.deepStrictEqual(result, { servers: 1, created: 1, devices: 3, updated: 0, updatedKeys: [] });
 
         const server = instance.serverList[`relay-${SERVER_ID}`];
         Assert.strictEqual(server.guid, SERVER_ID);
@@ -168,7 +168,7 @@ Test.describe('RustPlusSync.applySyncServers (existing entries)', () => {
         const instance = { serverList: {} };
 
         Assert.deepStrictEqual(RustPlusSync.applySyncServers(instance, STEAM_ID, [{ name: 'no id' }], intlGet),
-            { servers: 0, created: 0, devices: 0 });
+            { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [] });
         Assert.deepStrictEqual(instance.serverList, {});
     });
 });

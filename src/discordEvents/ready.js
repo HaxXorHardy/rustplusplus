@@ -119,7 +119,11 @@ module.exports = {
             }
         };
 
-        refreshPairingHistory();
+        /*
+            Awaited on purpose: a renewed pairing carries the player token the connection needs, so the history is
+            adopted before the server is connected.
+        */
+        await refreshPairingHistory();
         client.pairingHistoryIntervalId = setInterval(refreshPairingHistory,
             Config.general.rustplusHistoryIntervalMs);
 
