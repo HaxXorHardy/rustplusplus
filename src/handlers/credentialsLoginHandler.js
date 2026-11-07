@@ -103,6 +103,20 @@ function restartActiveServer(client, guildId) {
     return true;
 }
 
+/*
+    Clears the "removed in Discord" mark of the given pairing ids. The mark protects a removed server from being
+    adopted again by the automatic refresh, an explicit login overrides it.
+*/
+function forgetDeletedServers(instance, ids) {
+    if (!instance || !instance.deletedServers) return;
+
+    for (const id of ids || []) {
+        if (!id) continue;
+
+        delete instance.deletedServers[`${id}`];
+    }
+}
+
 /* Step 1 of the login: Steam credentials, then either the code prompt or the finish. */
 async function start(client, interaction, accountName, password) {
     const guildId = interaction.guildId;
@@ -237,6 +251,13 @@ async function complete(client, interaction, flow) {
 
         /* Servers and paired devices of the account, FCM credentials are not required for the setup. */
         const instance = client.getInstance(guildId);
+
+        /*
+            An explicit login adopts what the account knows, including a server that was removed in Discord before:
+            the removal only protects against the automatic adoption, not against the user asking for it.
+        */
+        forgetDeletedServers(instance, (data.servers || []).map((entry) => entry && entry.id));
+
         const applied = RustPlusSync.applySyncServers(instance, auth.steamId, data.servers,
             (key) => client.intlGet(guildId, key));
 
@@ -244,8 +265,12 @@ async function complete(client, interaction, flow) {
         let paired = { devices: 0 };
         try {
             const history = await RustPlusHistory.fetchHistory(auth.token);
-            paired = RustPlusHistory.applyPairingEntries(instance, auth.steamId,
-                RustPlusHistory.parsePairingEntries(history), (key) => client.intlGet(guildId, key));
+            const entries = RustPlusHistory.parsePairingEntries(history);
+
+            forgetDeletedServers(instance, entries.map((entry) => entry.serverId));
+
+            paired = RustPlusHistory.applyPairingEntries(instance, auth.steamId, entries,
+                (key) => client.intlGet(guildId, key));
         }
         catch (e) {
             client.log(client.intlGet(null, 'warningCap'),
