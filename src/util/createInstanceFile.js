@@ -229,6 +229,13 @@ module.exports = (client, guild) => {
         RustPlusSync.ensureServerListLiteEntry(instance, serverId, instance.serverList[serverId]);
     }
 
+    /* Lite entries of servers that the instance does not know anymore (left behind by older versions). */
+    for (const serverId of Object.keys(instance.serverListLite)) {
+        if (!Object.prototype.hasOwnProperty.call(instance.serverList, serverId)) {
+            delete instance.serverListLite[serverId];
+        }
+    }
+
     /* Check every serverList for missing keys */
     for (const [serverId, content] of Object.entries(instance.serverList)) {
         /* The pairing id (uuid) of the server, resolved from the Rust+ login file when it is missing. */

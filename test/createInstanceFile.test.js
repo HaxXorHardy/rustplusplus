@@ -138,4 +138,24 @@ Test.describe('createInstanceFile', () => {
         Assert.ok(client.saved.serverListLite[SERVER_ID]['76561198000000012']);
         Assert.deepStrictEqual(client.saved.deletedServers, {});
     });
+
+    Test.it('drops lite entries of servers the instance does not know anymore', () => {
+        writeInstance({
+            firstTime: false,
+            activeServer: SERVER_ID,
+            serverList: {
+                [SERVER_ID]: fakeServer(),
+            },
+            serverListLite: {
+                'undefined-undefined': { '76561198000000013': { serverIp: 'undefined' } },
+                [SERVER_ID]: {},
+            },
+            trackers: {},
+        });
+
+        const client = fakeClient();
+        CreateInstanceFile(client, { id: GUILD_ID });
+
+        Assert.deepStrictEqual(Object.keys(client.saved.serverListLite), [SERVER_ID]);
+    });
 });
