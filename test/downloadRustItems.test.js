@@ -28,9 +28,20 @@ const DownloadRustItems = require('../scripts/downloadRustItems.js');
 
 const EXECUTABLE_NAME = DownloadRustItems.getDepotDownloaderExecutableName();
 
+const tempDirectories = [];
+
 function makeTempDirectory() {
-    return Fs.mkdtempSync(Path.join(Os.tmpdir(), 'rpp-download-items-'));
+    const directory = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'rpp-download-items-'));
+    tempDirectories.push(directory);
+    return directory;
 }
+
+/* The suites only need the files while they run, do not leave them in the temp folder. */
+Test.after(() => {
+    for (const directory of tempDirectories) {
+        Fs.rmSync(directory, { recursive: true, force: true });
+    }
+});
 
 function writeFile(filePath) {
     Fs.mkdirSync(Path.dirname(filePath), { recursive: true });

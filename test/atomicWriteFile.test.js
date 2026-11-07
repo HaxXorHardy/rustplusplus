@@ -26,13 +26,15 @@ const Test = require('node:test');
 
 const AtomicWriteFile = require('../src/util/atomicWriteFile.js');
 
-function makeTempDirectory() {
-    return Fs.mkdtempSync(Path.join(Os.tmpdir(), 'rpp-atomic-'));
+function makeTempDirectory(t) {
+    const directory = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'rpp-atomic-'));
+    t.after(() => Fs.rmSync(directory, { recursive: true, force: true }));
+    return directory;
 }
 
 Test.describe('atomicWriteFile', () => {
-    Test.it('writes the file content', () => {
-        const directory = makeTempDirectory();
+    Test.it('writes the file content', (t) => {
+        const directory = makeTempDirectory(t);
         const target = Path.join(directory, 'instance.json');
 
         AtomicWriteFile(target, JSON.stringify({ a: 1 }));
@@ -40,8 +42,8 @@ Test.describe('atomicWriteFile', () => {
         Assert.strictEqual(Fs.readFileSync(target, 'utf8'), '{"a":1}');
     });
 
-    Test.it('leaves no temporary file behind', () => {
-        const directory = makeTempDirectory();
+    Test.it('leaves no temporary file behind', (t) => {
+        const directory = makeTempDirectory(t);
         const target = Path.join(directory, 'instance.json');
 
         AtomicWriteFile(target, 'payload');
@@ -49,8 +51,8 @@ Test.describe('atomicWriteFile', () => {
         Assert.deepStrictEqual(Fs.readdirSync(directory), ['instance.json']);
     });
 
-    Test.it('replaces existing content instead of appending', () => {
-        const directory = makeTempDirectory();
+    Test.it('replaces existing content instead of appending', (t) => {
+        const directory = makeTempDirectory(t);
         const target = Path.join(directory, 'instance.json');
 
         AtomicWriteFile(target, 'first');
