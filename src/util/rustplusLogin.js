@@ -136,6 +136,14 @@ class SteamLogin {
     async wait() {
         return await this.cookiesPromise;
     }
+
+    /*
+        The refresh token of the finished login (`null` before it). Stored next to the account token, so a later
+        token renewal does not need the password or a Steam Guard confirmation.
+    */
+    getRefreshToken() {
+        return this.session.refreshToken || null;
+    }
 }
 
 /*
@@ -285,8 +293,14 @@ async function fetchServerList(token) {
     }
 }
 
-/* Stores token and server list in credentials/rustplusAuth/<steamId>.json. */
-function storeAuth(steamId, token, servers) {
+/*
+    Stores token, refresh token and server list in credentials/rustplusAuth/<steamId>.json. An already stored
+    refresh token is kept when none is passed in (Steam does not rotate it on every login).
+*/
+function storeAuth(steamId, token, servers, refreshToken = null) {
+    const existing = RustPlusAuth.readAuth(`${steamId}`);
+    const steamRefreshToken = refreshToken || (existing ? existing.steamRefreshToken : null) || null;
+
     const auth = {
         steamId: `${steamId}`,
         token: token,
@@ -295,8 +309,40 @@ function storeAuth(steamId, token, servers) {
         servers: servers,
     };
 
+    if (steamRefreshToken !== null) auth.steamRefreshToken = steamRefreshToken;
+
     RustPlusAuth.writeAuth(`${steamId}`, auth);
     return auth;
+}
+
+/*
+    Fetches a new account token with the stored Steam refresh token: a new LoginSession gets the refresh token,
+    asks Steam for fresh community cookies and runs the Rust+ login again. No password, no Steam Guard.
+*/
+async function renewAuth(steamId, log = () => undefined) {
+    const auth = RustPlusAuth.readAuth(`${steamId}`);
+    if (auth === null) throw new Error('No stored Rust+ login for this account.');
+
+    if (!auth.steamRefreshToken) {
+        throw new Error('No Steam refresh token stored, a new login is required.');
+    }
+
+    log('Rust+ token: renewing with the stored Steam refresh token');
+
+    const session = new SteamSession.LoginSession(SteamSession.EAuthTokenPlatformType.WebBrowser);
+    session.refreshToken = auth.steamRefreshToken;
+
+    const cookies = await session.getWebCookies();
+    const renewed = await loginToRustPlus(cookies, log);
+
+    if (`${renewed.steamId}` !== `${steamId}`) {
+        throw new Error(`The Steam refresh token belongs to ${renewed.steamId}, not ${steamId}.`);
+    }
+
+    const servers = await fetchServerList(renewed.token);
+
+    log(`Rust+ token: renewed for ${renewed.steamId}`);
+    return storeAuth(`${steamId}`, renewed.token, servers, session.refreshToken);
 }
 
 module.exports = {
@@ -304,5 +350,6 @@ module.exports = {
     loginToRustPlus: loginToRustPlus,
     fetchServerList: fetchServerList,
     storeAuth: storeAuth,
+    renewAuth: renewAuth,
     parseSyncPayload: parseSyncPayload,
 };

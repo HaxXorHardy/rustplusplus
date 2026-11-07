@@ -24,6 +24,7 @@ const RustPlusLib = require('@liamcottle/rustplus.js');
 const Translate = require('translate');
 
 const Client = require('./clientRegistry.js');
+const Config = require('../../config');
 const Constants = require('../util/constants.js');
 const Decay = require('../util/decay.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds');
@@ -38,6 +39,7 @@ const Map = require('../util/map.js');
 const getRuntimeDataStorage = require('../util/storage/getRuntimeDataStorage.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusLite = require('../structures/RustPlusLite');
+const RustPlusLogin = require('../util/rustplusLogin.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
 const TeamHandler = require('../handlers/teamHandler.js');
@@ -45,6 +47,9 @@ const Timer = require('../util/timer.js');
 
 const TOKENS_LIMIT = 24;        /* Per player */
 const TOKENS_REPLENISH = 3;     /* Per second */
+
+/* Do not ask Steam for a new token more often than this when the stored refresh token was rejected. */
+const TOKEN_RENEWAL_RETRY_MS = 60 * 60 * 1000;
 
 class RustPlus extends RustPlusLib {
     constructor(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false) {
@@ -61,6 +66,7 @@ class RustPlus extends RustPlusLib {
         this.leaderRustPlusInstance = null;
         this.uptimeServer = null;
         this.transportReconnectScheduled = false;   /* A dropped request already asked for a reconnect. */
+        this.lastTokenRenewalAttemptMs = 0;         /* Throttles the renewal of the account token. */
 
         /* Status flags */
         this.isOperational = false;         /* Connected to the server, and request is verified. */
@@ -490,8 +496,11 @@ class RustPlus extends RustPlusLib {
                 'connection (removed by Facepunch). Use "/credentials login" in Discord to log in with Steam.', 'warn');
         }
         else if (RustPlusAuth.isTokenExpired(auth)) {
-            this.log(Client.client.intlGet(null, 'warningCap'),
-                'The stored Rust+ account token has expired. Use "/credentials login" in Discord again.', 'warn');
+            this.log(Client.client.intlGet(null, auth && auth.steamRefreshToken ? 'infoCap' : 'warningCap'),
+                (auth && auth.steamRefreshToken) ?
+                    'The stored Rust+ account token has expired, it is renewed before connecting.' :
+                    'The stored Rust+ account token has expired. Use "/credentials login" in Discord again.',
+                (auth && auth.steamRefreshToken) ? 'info' : 'warn');
         }
         else if (this.serverGuid === null) {
             this.log(Client.client.intlGet(null, 'warningCap'),
@@ -508,6 +517,54 @@ class RustPlus extends RustPlusLib {
     */
     connect() {
         if (this.serverGuid === null || this.authToken === null) return super.connect();
+
+        /* The stored account token expires after ~14 days, renew it instead of connecting with a dead one. */
+        if (this.shouldRenewAuthToken()) return this.renewAuthTokenAndConnect();
+
+        return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
+    }
+
+    /* A renewal is due when the token expires soon and a refresh token of the Steam login is stored. */
+    shouldRenewAuthToken() {
+        if ((Date.now() - this.lastTokenRenewalAttemptMs) < TOKEN_RENEWAL_RETRY_MS) return false;
+
+        const auth = RustPlusAuth.readAuth(this.playerId);
+        if (auth === null || !auth.steamRefreshToken) return false;
+
+        return RustPlusAuth.isTokenExpiringSoon(auth, Config.general.rustplusTokenRenewBeforeSeconds);
+    }
+
+    /*
+        Fetches a new account token with the stored Steam refresh token (no password and no Steam Guard) and
+        connects with it. A rejected refresh token is only retried after TOKEN_RENEWAL_RETRY_MS.
+    */
+    async renewAuthTokenAndConnect() {
+        this.lastTokenRenewalAttemptMs = Date.now();
+
+        try {
+            const auth = await RustPlusLogin.renewAuth(this.playerId,
+                (text) => this.log(Client.client.intlGet(null, 'infoCap'), text, 'debug'));
+
+            this.authToken = auth.token;
+
+            /* The renewal also refreshes the server list, keep the pairing ids of the instance up to date. */
+            const instance = Client.client.getInstance(this.guildId);
+            if (instance && instance.serverList && RustPlusAuth.applyServerGuids(instance, auth.servers) !== 0) {
+                Client.client.setInstance(this.guildId, instance);
+
+                const server = instance.serverList[this.serverId];
+                if (server && server.guid) this.serverGuid = server.guid;
+            }
+
+            this.log(Client.client.intlGet(null, 'infoCap'), 'Rust+ account token renewed.');
+        }
+        catch (e) {
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                `The Rust+ account token could not be renewed: ${e && e.message ? e.message : e} ` +
+                'Use "/credentials login" in Discord to sign in again.', 'warn');
+
+            return undefined;
+        }
 
         return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
     }

@@ -66,6 +66,20 @@ Test.describe('RustPlusAuth', () => {
         Assert.strictEqual(RustPlusAuth.isTokenExpired(null), false);
     });
 
+    Test.it('knows when the token has to be renewed', () => {
+        const auth = { token: tokenPayload({ exp: 1000 }) };
+
+        Assert.strictEqual(RustPlusAuth.getTokenExpiry(auth), 1000);
+        Assert.strictEqual(RustPlusAuth.getTokenExpiry({ token: 'x', tokenExpiresAt: 5 }), 5);
+        Assert.strictEqual(RustPlusAuth.getTokenExpiry(null), null);
+
+        Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(auth, 100, 950), true);    /* 50s left */
+        Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(auth, 100, 800), false);   /* 200s left */
+        Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(auth, 100, 1200), true);   /* expired */
+        Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(null, 100, 0), false);
+        Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon({ token: 'not-a-token' }, 100, 0), false);
+    });
+
     Test.it('writes the pairing id of every matching server of an instance', () => {
         const instance = {
             serverList: {

@@ -200,6 +200,19 @@ Notes:
 * Without a token the bot falls back to the direct/proxy transports (`RPP_RUSTPLUS_TRANSPORT`), which Facepunch
   disabled - the log says so.
 
+#### The token renews itself
+
+1. The login stores the **Steam refresh token** next to the account token (`steamRefreshToken` in
+   `credentials/rustplusAuth/<steamId>.json`).
+2. `RPP_RUSTPLUS_TOKEN_RENEW_BEFORE` (default `259200` = 3 days) before the token expires, the bot fetches a new one:
+   it asks Steam for fresh community cookies with that refresh token and repeats the Rust+ login.
+   **No password, no Steam Guard prompt** - it happens while connecting, the log shows
+   `Rust+ account token renewed.`
+3. For cron / a bot that is not running: `node scripts/rustplusLogin.js --renew` (all stored accounts) or
+   `--renew=<steamId>`, also without a password.
+4. The refresh token dies when the Steam password is changed or all devices are deauthorized - after that the log
+   says `No Steam refresh token stored, a new login is required.` and `/credentials login` is needed once.
+
 #### How it is built
 
 | File | Task |

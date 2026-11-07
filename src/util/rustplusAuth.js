@@ -30,8 +30,12 @@
             "token": "<base64 payload>.<signature>",
             "tokenExpiresAt": 1795255624,
             "updatedAt": "2026-11-07T09:00:00.000Z",
+            "steamRefreshToken": "<Steam JWT, used to renew the token without a login>",
             "servers": [{ "id": "<server uuid>", "name": "<server name>", "playerToken": 1623465021 }]
         }
+
+    The token lives ~14 days. When it is about to expire the bot renews it with `steamRefreshToken` (no password,
+    no Steam Guard) - see util/rustplusLogin.js and RPP_RUSTPLUS_TOKEN_RENEW_BEFORE.
 */
 
 const Fs = require('fs');
@@ -81,11 +85,29 @@ function resolveServerGuid(auth, serverTitle) {
     return fuzzy ? fuzzy.id || null : null;
 }
 
+/* Expiry of the stored token (unix seconds), taken from the file or from the token payload. */
+function getTokenExpiry(auth) {
+    if (auth && Number.isFinite(auth.tokenExpiresAt)) return auth.tokenExpiresAt;
+    return RustPlusTransport.getAuthTokenExpiry(auth ? auth.token : null);
+}
+
 function isTokenExpired(auth, nowSeconds = Math.floor(Date.now() / 1000)) {
-    const expiresAt = (auth && Number.isFinite(auth.tokenExpiresAt)) ?
-        auth.tokenExpiresAt : RustPlusTransport.getAuthTokenExpiry(auth ? auth.token : null);
+    const expiresAt = getTokenExpiry(auth);
 
     return (expiresAt === null) ? false : expiresAt <= nowSeconds;
+}
+
+/*
+    Should the token be renewed now? True when it expires within `renewBeforeSeconds` (an expired token is always
+    due). Unknown expiries are left alone, there is nothing to plan with.
+*/
+function isTokenExpiringSoon(auth, renewBeforeSeconds, nowSeconds = Math.floor(Date.now() / 1000)) {
+    if (!auth || typeof auth.token !== 'string') return false;
+
+    const expiresAt = getTokenExpiry(auth);
+    if (expiresAt === null) return false;
+
+    return (expiresAt - nowSeconds) <= renewBeforeSeconds;
 }
 
 /*
@@ -115,6 +137,8 @@ module.exports = {
     readAuth: readAuth,
     writeAuth: writeAuth,
     resolveServerGuid: resolveServerGuid,
+    getTokenExpiry: getTokenExpiry,
     isTokenExpired: isTokenExpired,
+    isTokenExpiringSoon: isTokenExpiringSoon,
     applyServerGuids: applyServerGuids,
 };

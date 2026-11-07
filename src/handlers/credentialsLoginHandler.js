@@ -206,7 +206,8 @@ async function complete(client, interaction, flow) {
             (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
         const servers = await RustPlusLogin.fetchServerList(auth.token);
 
-        RustPlusLogin.storeAuth(auth.steamId, auth.token, servers);
+        /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
+        RustPlusLogin.storeAuth(auth.steamId, auth.token, servers, flow.getRefreshToken());
 
         const instance = client.getInstance(guildId);
         const matched = RustPlusAuth.applyServerGuids(instance, servers);

@@ -11,16 +11,20 @@
     Usage:
         node scripts/rustplusLogin.js --account=<name> [--code=<steam guard code>] [--timeout=<seconds>]
         node scripts/rustplusLogin.js            # asks for account name, password and code
+        node scripts/rustplusLogin.js --renew    # renews the stored tokens, no password needed
 
     The password is read from RPP_STEAM_PASSWORD or asked on the terminal. Steam Guard works both ways: the e-mail
     or authenticator code is asked for, a confirmation in the Steam app is only waited for.
 
-    The login stores credentials/rustplusAuth/<steamId>.json with the account token and the server list
-    (server name -> pairing id).
+    The login stores credentials/rustplusAuth/<steamId>.json with the account token, the Steam refresh token (used
+    to renew the account token without a login) and the server list (server name -> pairing id). --renew uses that
+    refresh token, so it also works from cron.
 */
 
+const Fs = require('fs');
 const Readline = require('readline');
 
+const RustPlusAuth = require('../src/util/rustplusAuth.js');
 const RustPlusLogin = require('../src/util/rustplusLogin.js');
 const RustPlusTransport = require('../src/util/rustplusTransport.js');
 
@@ -40,7 +44,38 @@ function log(text) {
     console.log(`  ${text}`);
 }
 
+function readStoredSteamIds() {
+    try {
+        return Fs.readdirSync(RustPlusAuth.AUTH_DIR)
+            .filter((name) => name.endsWith('.json'))
+            .map((name) => name.replace(/\.json$/, ''));
+    }
+    catch (e) {
+        return [];
+    }
+}
+
+/* --renew renews the stored account token with the stored Steam refresh token (no password, no Steam Guard). */
+async function renew() {
+    const requested = getOption('renew');
+    const steamIds = requested ? [requested] : readStoredSteamIds();
+
+    if (steamIds.length === 0) throw new Error('No stored login found in credentials/rustplusAuth.');
+
+    for (const steamId of steamIds) {
+        console.log(`Renewing ${steamId}...`);
+
+        const auth = await RustPlusLogin.renewAuth(steamId, log);
+        const expires = RustPlusTransport.getAuthTokenExpiry(auth.token);
+
+        console.log(`  token expires: ${expires === null ? 'unknown' : new Date(expires * 1000).toISOString()}`);
+        console.log(`  servers: ${auth.servers.length}`);
+    }
+}
+
 async function main() {
+    if (process.argv.slice(2).some((e) => e === '--renew' || e.startsWith('--renew='))) return await renew();
+
     const accountName = getOption('account') || process.env.RPP_STEAM_ACCOUNT || await ask('Steam account name: ');
     const password = process.env.RPP_STEAM_PASSWORD || await ask('Steam password (input is visible): ');
     const timeoutMs = (parseInt(getOption('timeout', '900')) || 900) * 1000;
@@ -77,7 +112,7 @@ async function main() {
 
     console.log('Reading the server list...');
     const servers = await RustPlusLogin.fetchServerList(auth.token);
-    RustPlusLogin.storeAuth(auth.steamId, auth.token, servers);
+    RustPlusLogin.storeAuth(auth.steamId, auth.token, servers, flow.getRefreshToken());
 
     const expires = RustPlusTransport.getAuthTokenExpiry(auth.token);
 
