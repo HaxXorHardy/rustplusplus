@@ -347,7 +347,7 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
     /* Time and playtime go in inline code (monospace) so the numbers line up. */
     let playtimeWidth = 2;
     for (const playerId of playerIds) {
-        const playtimeValue = bmInstance.getServerTimePlayed(playerId);
+        const playtimeValue = bmInstance.getCachedTimePlayed(playerId);
         if (typeof (playtimeValue) === 'number') {
             playtimeWidth = Math.max(playtimeWidth, Timer.secondsToCompactHours(playtimeValue).length);
         }
@@ -362,7 +362,7 @@ async function displaySeveralUsers(client, interaction, battlemetricsId, playerI
         const timeValue = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
         const time = timeValue !== null ? timeValue[1] : '';
 
-        const playtime = bmInstance.getServerTimePlayed(playerId);
+        const playtime = bmInstance.getCachedTimePlayed(playerId);
         const playtimeStr = (typeof (playtime) === 'number') ?
             Timer.secondsToCompactHours(playtime) : '-';
         const playtimePadded = playtimeStr.padStart(playtimeWidth);

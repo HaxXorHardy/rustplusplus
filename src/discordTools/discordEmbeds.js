@@ -883,7 +883,7 @@ module.exports = {
             let playtimeStr = '';
             if (teamBmInstance) {
                 const playerId = teamBmInstance.getPlayerIdByName(player.name);
-                const playtime = (playerId !== null) ? teamBmInstance.getServerTimePlayed(playerId) : null;
+                const playtime = (playerId !== null) ? teamBmInstance.getCachedTimePlayed(playerId) : null;
                 if (typeof (playtime) === 'number') playtimeStr = ` ${Timer.secondsToCompactHours(playtime)}`;
             }
 
@@ -997,7 +997,7 @@ module.exports = {
         /* Time and playtime go in inline code (monospace) so the numbers line up. */
         let playtimeWidth = 2;
         for (const playerId of playerIds) {
-            const playtimeValue = bmInstance.getServerTimePlayed(playerId);
+            const playtimeValue = bmInstance.getCachedTimePlayed(playerId);
             if (typeof (playtimeValue) === 'number') {
                 playtimeWidth = Math.max(playtimeWidth, Timer.secondsToCompactHours(playtimeValue).length);
             }
@@ -1013,7 +1013,7 @@ module.exports = {
             let time = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
             time = time !== null ? time[1] : '';
 
-            const playtime = bmInstance.getServerTimePlayed(playerId);
+            const playtime = bmInstance.getCachedTimePlayed(playerId);
             const playtimeStr = (typeof (playtime) === 'number') ?
                 Timer.secondsToCompactHours(playtime) : '-';
             const playtimePadded = playtimeStr.padStart(playtimeWidth);
