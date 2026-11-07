@@ -25,6 +25,7 @@ const Constants = require('../util/constants.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
+const SteamTimePlayed = require('../util/steamTimePlayed.js');
 const Timer = require('../util/timer');
 const RustPlusSync = require('../util/rustplusSync.js');
 
@@ -885,6 +886,12 @@ module.exports = {
                 const playerId = teamBmInstance.getPlayerIdByName(player.name);
                 const playtime = (playerId !== null) ? teamBmInstance.getCachedTimePlayed(playerId) : null;
                 if (typeof (playtime) === 'number') playtimeStr = ` ${Timer.secondsToCompactHours(playtime)}`;
+            }
+
+            /* Steam counts the runtime of the client, BattleMetrics the server sessions - show both when Steam knows the account. */
+            const steamPlaytime = SteamTimePlayed.getCachedPlaytime(player.steamId);
+            if (steamPlaytime !== null) {
+                playtimeStr += ` (Steam ${Timer.secondsToCompactHours(steamPlaytime.totalMinutes * 60)})`;
             }
 
             const nameMaxLength = Math.max(4, Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_3 - playtimeStr.length - 3);

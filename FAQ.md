@@ -256,6 +256,11 @@ new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.
 | `src/util/rustplusLogin.js` | Steam login (`steam-session`), Rust+ login, `/api/syncData` |
 | `src/util/rustplusLoginPages.js` | HTTP/HTML part of the browser flow (cookie jar, forms, page parsing) |
 | `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`, code modal, reconnect) |
+| `src/util/steamTimePlayed.js` | optional Steam playtime next to the BattleMetrics hours (`RPP_STEAM_API_KEY`) |
+
+With `RPP_STEAM_API_KEY` (free at https://steamcommunity.com/dev/apikey) and a public Steam profile the team
+overview also shows the Rust playtime Steam reports. BattleMetrics counts server sessions, which can be much higher
+(a session that is never closed keeps counting), so both numbers are shown.
 
 The build timestamp the socket sends (`?v=...`) can be overridden with `RPP_RUSTPLUS_BUILD_VERSION` when
 Facepunch ships a new Rust+ app before the bot is updated. A socket that stops answering a ping is dropped after 30 s
