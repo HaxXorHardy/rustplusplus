@@ -869,5 +869,6 @@
     "youAreNotPairedWithServer": "Leader-kommandot fungerar inte eftersom du inte är parad med servern.",
     "credentialsShowEmptyHint": "Inga FCM-uppgifter är sparade. De behövs bara för parkopplingsnotiser och FCM-notiser (larm, laghändelser) - Rust+-anslutningen använder \"/credentials login\". Lägg till dem med \"/credentials add\".",
     "rustplusCredentials": "Rust+ credentials",
-    "credentialsNoLogin": "no Rust+ login stored"
+    "credentialsNoLogin": "no Rust+ login stored",
+    "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below."
 }

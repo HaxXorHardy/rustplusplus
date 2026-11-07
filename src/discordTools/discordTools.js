@@ -162,8 +162,12 @@ module.exports = {
                     return message;
                 }
                 catch (e) {
-                    Client.client.log(Client.client.intlGet(null, 'errorCap'),
-                        Client.client.intlGet(null, 'couldNotFindMessage', { message: messageId }), 'error');
+                    /*
+                        A message that is gone is a normal state (deleted by hand, channel was reset, the id is from an
+                        older container): the caller posts it again, so this is only interesting in the debug log.
+                    */
+                    Client.client.log(Client.client.intlGet(null, 'infoCap'),
+                        Client.client.intlGet(null, 'couldNotFindMessage', { message: messageId }), 'debug');
                 }
             }
         }

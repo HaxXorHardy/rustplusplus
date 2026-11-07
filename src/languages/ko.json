@@ -869,5 +869,6 @@
     "youAreNotPairedWithServer": "서버와 페어링되지 않았기 때문에 리더 명령어가 작동하지 않습니다.",
     "credentialsShowEmptyHint": "저장된 FCM 자격 증명이 없습니다. FCM 자격 증명은 페어링 알림과 FCM 알림(경보, 팀 이벤트)에만 필요합니다. Rust+ 연결은 \"/credentials login\"을 사용합니다. \"/credentials add\"로 추가하세요.",
     "rustplusCredentials": "Rust+ credentials",
-    "credentialsNoLogin": "no Rust+ login stored"
+    "credentialsNoLogin": "no Rust+ login stored",
+    "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below."
 }

@@ -869,5 +869,6 @@
     "youAreNotPairedWithServer": "Leader command does not work because you're not paired with the server.",
     "credentialsShowEmptyHint": "No Rust+ login is stored yet. Run \"/credentials login\" in Discord to sign in with Steam - it stores the account token and adopts the servers and paired devices of the account.",
     "rustplusCredentials": "Rust+ credentials",
-    "credentialsNoLogin": "no Rust+ login stored"
+    "credentialsNoLogin": "no Rust+ login stored",
+    "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below."
 }

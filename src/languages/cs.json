@@ -869,5 +869,6 @@
     "youAreNotPairedWithServer": "Příkaz na vůdce nefunguje, protože nejsi spárován se serverem.",
     "credentialsShowEmptyHint": "Nejsou uloženy žádné FCM přihlašovací údaje. Jsou potřeba jen pro oznámení o párování a FCM oznámení (alarmy, týmové události) - připojení k Rust+ používá \"/credentials login\". Přidejte je pomocí \"/credentials add\".",
     "rustplusCredentials": "Rust+ credentials",
-    "credentialsNoLogin": "no Rust+ login stored"
+    "credentialsNoLogin": "no Rust+ login stored",
+    "smartDeviceNotFoundHint": "The server does not answer for this device: it was destroyed, the server was wiped or it belongs to an older pairing. Pair it again in the Rust+ app and the bot adopts it automatically - or remove it with the button below."
 }

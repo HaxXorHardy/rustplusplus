@@ -445,7 +445,8 @@ module.exports = {
             title: `${entity.name}${grid}`,
             color: Constants.COLOR_INACTIVE,
             description: `**ID**: \`${entityId}\`\n` +
-                `${Client.client.intlGet(guildId, 'statusNotFound')} ${Constants.NOT_FOUND_EMOJI}`,
+                `${Client.client.intlGet(guildId, 'statusNotFound')} ${Constants.NOT_FOUND_EMOJI}\n\n` +
+                Client.client.intlGet(guildId, 'smartDeviceNotFoundHint'),
             thumbnail: `attachment://${entity.image}`,
             footer: { text: `${entity.server}` }
         });
