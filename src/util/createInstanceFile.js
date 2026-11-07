@@ -256,5 +256,18 @@ module.exports = (client, guild) => {
         }
     }
 
+    /*
+        An active server that is no longer part of the server list (a server can be removed while the bot is not
+        connected) would silently disable the connection and make the information channel update fail. Reset it so
+        that the next pairing or login can activate a server again.
+    */
+    if (instance.activeServer !== null &&
+        !Object.prototype.hasOwnProperty.call(instance.serverList, instance.activeServer)) {
+        client.log(client.intlGet(null, 'warningCap'),
+            `The active server ${instance.activeServer} is not in the server list anymore, resetting it.`);
+
+        instance.activeServer = null;
+    }
+
     client.setInstance(guild.id, instance);
 };

@@ -664,14 +664,20 @@ module.exports = async (client, interaction) => {
             await DiscordTools.clearTextChannel(rustplus.guildId, instance.channelId.switchGroups, 100);
             await DiscordTools.clearTextChannel(rustplus.guildId, instance.channelId.storageMonitors, 100);
 
-            instance.activeServer = null;
-            client.setInstance(guildId, instance);
-
             client.resetRustplusVariables(guildId);
 
             rustplus.isDeleted = true;
             rustplus.disconnect();
             delete client.rustplusInstances[guildId];
+        }
+
+        /*
+            The active server must point at an existing entry even when the bot was not connected while deleting,
+            otherwise every later request and the information channel update would fail silently.
+        */
+        if (ids.serverId === instance.activeServer) {
+            instance.activeServer = null;
+            client.setInstance(guildId, instance);
         }
 
         for (const [entityId, content] of Object.entries(server.alarms)) {
