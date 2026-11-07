@@ -24,6 +24,7 @@ const Path = require('node:path');
 const Test = require('node:test');
 
 const CreateInstanceFile = require('../src/util/createInstanceFile.js');
+const InstanceUtils = require('../src/util/instanceUtils.js');
 
 const GUILD_ID = '100000000000000005';
 const SERVER_ID = '1.2.3.4-28015';
@@ -33,7 +34,8 @@ function instancePath() {
 }
 
 function writeInstance(instance) {
-    Fs.writeFileSync(instancePath(), JSON.stringify(instance, null, 2));
+    /* The helper creates the instances directory, a fresh checkout does not have one. */
+    InstanceUtils.writeInstanceFile(GUILD_ID, instance);
 }
 
 function fakeServer() {
