@@ -416,6 +416,41 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(instance.activeServer, serverKey);
         Assert.strictEqual(client.warnings.length, 0);
     });
+
+    Test.it('does not reconnect while the history only replays older pairings', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const instance = {
+            activeServer: `relay-${SERVER_ID}`,
+            serverList: {
+                [`relay-${SERVER_ID}`]: {
+                    title: "Captain's Quarters",
+                    serverIp: 'relay',
+                    appPort: SERVER_ID,
+                    guid: SERVER_ID,
+                    steamId: STEAM_ID,
+                    playerToken: 300,
+                    switches: {}, alarms: {}, storageMonitors: {}, markers: {}, switchGroups: {},
+                    notes: {}, customCameraGroups: {},
+                },
+            },
+            serverListLite: {},
+            deletedServers: {},
+        };
+
+        const client = fakeClient(instance);
+        const history = async () => [
+            serverPairEntry(300, 3, '2026-11-07T16:38:49.2660604+00:00'),
+            serverPairEntry(200, 2, '2026-11-07T16:28:10.6870231+00:00'),
+            serverPairEntry(100, 1, '2026-11-07T16:14:33.2544318+00:00'),
+        ];
+
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.deepStrictEqual(client.createdRustplusInstances, []);
+        Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].playerToken, 300);
+    });
 });
 
 /*
