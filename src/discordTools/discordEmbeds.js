@@ -31,6 +31,26 @@ function isValidUrl(url) {
     return false;
 }
 
+/*
+    The paired Discord user of a server. The bot also runs without FCM credentials, then no user is paired with the
+    steam account and the texts fall back to the bot itself.
+*/
+async function getPairedUser(guildId, server) {
+    if (!server || !server.steamId) return null;
+
+    const credentials = InstanceUtils.readCredentialsFile(guildId);
+    const pairing = (credentials && credentials[server.steamId]) ? credentials[server.steamId] : null;
+    if (!pairing || !pairing.discord_user_id) return null;
+
+    return await DiscordTools.getUserById(guildId, pairing.discord_user_id);
+}
+
+function getUserName(user) {
+    if (user && user.user && user.user.username) return user.user.username;
+    if (Client.client.user && Client.client.user.username) return Client.client.user.username;
+    return '-';
+}
+
 module.exports = {
     getEmbed: function (options = {}) {
         const embed = new Discord.EmbedBuilder();
@@ -71,13 +91,9 @@ module.exports = {
 
     getServerEmbed: async function (guildId, serverId) {
         const instance = Client.client.getInstance(guildId);
-        const credentials = InstanceUtils.readCredentialsFile(guildId);
         const server = instance.serverList[serverId];
-        let hoster = Client.client.intlGet(guildId, 'unknown');
-        if (credentials.hasOwnProperty(server.steamId)) {
-            hoster = await DiscordTools.getUserById(guildId, credentials[server.steamId].discord_user_id);
-            hoster = hoster.user.username;
-        }
+        const pairedUser = await getPairedUser(guildId, server);
+        let hoster = pairedUser ? getUserName(pairedUser) : Client.client.intlGet(guildId, 'unknown');
 
         let description = '';
         if (server.battlemetricsId !== null) {
@@ -502,14 +518,13 @@ module.exports = {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];
         const entity = server.storageMonitors[entityId];
-        const credentials = InstanceUtils.readCredentialsFile(guildId);
-        const user = await DiscordTools.getUserById(guildId, credentials[server.steamId].discord_user_id);
+        const user = await getPairedUser(guildId, server);
         const grid = entity.location !== null ? ` (${entity.location})` : '';
 
         return module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'smartDeviceNotFound', {
                 device: `${entity.name}${grid}`,
-                user: user.user.username
+                user: getUserName(user)
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
@@ -522,15 +537,14 @@ module.exports = {
     getSmartSwitchNotFoundEmbed: async function (guildId, serverId, entityId) {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];
-        const entity = instance.serverList[serverId].switches[entityId];
-        const credentials = InstanceUtils.readCredentialsFile(guildId);
-        const user = await DiscordTools.getUserById(guildId, credentials[server.steamId].discord_user_id);
+        const entity = server.switches[entityId];
+        const user = await getPairedUser(guildId, server);
         const grid = entity.location !== null ? ` (${entity.location})` : '';
 
         return module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'smartDeviceNotFound', {
                 device: `${entity.name}${grid}`,
-                user: user.user.username
+                user: getUserName(user)
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
@@ -544,14 +558,13 @@ module.exports = {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];
         const entity = server.alarms[entityId];
-        const credentials = InstanceUtils.readCredentialsFile(guildId);
-        const user = await DiscordTools.getUserById(guildId, credentials[server.steamId].discord_user_id);
+        const user = await getPairedUser(guildId, server);
         const grid = entity.location !== null ? ` (${entity.location})` : '';
 
         return module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'smartDeviceNotFound', {
                 device: `${entity.name}${grid}`,
-                user: user.user.username
+                user: getUserName(user)
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,

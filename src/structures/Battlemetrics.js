@@ -170,7 +170,8 @@ class Battlemetrics {
      *  @return {string} The Battlemetrics API call string.
      */
     SEARCH_SERVER_NAME_API_CALL(name) {
-        return `https://api.battlemetrics.com/servers?filter[search]=${name}&filter[game]=rust`;
+        /* Server names contain spaces, brackets and pipes, they have to be escaped in the query. */
+        return `https://api.battlemetrics.com/servers?filter[search]=${encodeURIComponent(name)}&filter[game]=rust`;
     }
 
     /**

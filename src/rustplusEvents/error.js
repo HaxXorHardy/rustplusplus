@@ -26,6 +26,12 @@ module.exports = {
     async execute(rustplus, client, err) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
+        /*
+            A replaced instance (renewed pairing, login) is torn down on purpose: the socket errors of that teardown
+            are no errors of the connection.
+        */
+        if (rustplus.isDeleted) return;
+
         rustplus.log(client.intlGet(null, 'errorCap'), err, 'error');
 
         /*

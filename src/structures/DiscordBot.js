@@ -364,6 +364,9 @@ class DiscordBot extends Discord.Client {
             const instance = this.getInstance(guildId);
             if (!instance) return;
 
+            /* A guild that already has an instance (renewed pairing, login) must not get a second one. */
+            if (this.rustplusInstances[guildId]) return;
+
             if (instance.activeServer !== null && instance.serverList.hasOwnProperty(instance.activeServer)) {
                 this.createRustplusInstance(
                     guildId,

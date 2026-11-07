@@ -36,6 +36,7 @@ module.exports = {
 
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'connectedToServer'));
 
+        const instance = client.getInstance(rustplus.guildId);
         const guildId = rustplus.guildId;
         const serverId = rustplus.serverId;
 
@@ -106,6 +107,9 @@ module.exports = {
 
         await DiscordMessages.sendServerMessage(guildId, serverId, null);
 
+        /* A replaced instance must not set up devices, subscribe entities or poll for the guild. */
+        if (client.rustplusInstances[guildId] !== rustplus) return;
+
         /* Setup Smart Devices */
         await require('../discordTools/SetupSwitches')(client, rustplus);
         await require('../discordTools/SetupSwitchGroups')(client, rustplus);
@@ -113,6 +117,9 @@ module.exports = {
         await require('../discordTools/SetupStorageMonitors')(client, rustplus);
         rustplus.isNewConnection = false;
         rustplus.loadMarkers();
+
+        /* The setup awaits Discord calls, so the instance can be replaced meanwhile (renewed pairing). */
+        if (client.rustplusInstances[guildId] !== rustplus) return;
 
         /* Let the server push changes of the paired entities, like the Rust+ app does. */
         const subscribed = await rustplus.subscribeEntities(instance);
