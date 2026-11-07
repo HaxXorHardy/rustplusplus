@@ -513,6 +513,7 @@
     "lighthouse": "Leuchtturm",
     "linkCap": "LINK",
     "location": "Position",
+    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "Gesperrte Kiste auf der großen Ölbohrinsel [{location}] wurde entsperrt.",
     "lockedCrateOilRigUnlockedSetting": "Wenn eine gesperrte Kiste auf einer Ölbohrinsel entsperrt wurde, sende eine Benachrichtigung.",
     "lockedCrateSmallOilRigUnlocked": "Gesperrte Kiste auf der kleinen Ölbohrinsel [{location}] wurde entsperrt.",

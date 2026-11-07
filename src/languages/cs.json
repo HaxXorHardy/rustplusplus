@@ -513,6 +513,7 @@
     "lighthouse": "Lighthouse",
     "linkCap": "LINK",
     "location": "Location",
+    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "Locked Crate na Large Oil Rig v {location} byla odemčena.",
     "lockedCrateOilRigUnlockedSetting": "Když se odemkne Locked Crate na Oil Rigu, pošli notifikaci.",
     "lockedCrateSmallOilRigUnlocked": "Locked Crate na Small Oil Rig v {location} byla odemčena.",

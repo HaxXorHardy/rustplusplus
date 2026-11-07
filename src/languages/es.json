@@ -513,6 +513,7 @@
     "lighthouse": "Faro",
     "linkCap": "ENLACE",
     "location": "Ubicación",
+    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "La Caja de la Petro Grande en {location} acaba de ser desbloqueada.",
     "lockedCrateOilRigUnlockedSetting": "Cuando una Caja Bloqueada en una Plataforma Petrolífera sea desbloqueada, envíe una notificación.",
     "lockedCrateSmallOilRigUnlocked": "La Caja Bloqueada en la Petro Pequeña en {location} ha sido desbloqueada.",
