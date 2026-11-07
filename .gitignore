@@ -23,3 +23,6 @@ scorecard.png
 # local-only quality tooling (not part of the repo)
 scripts/quality-review.ps1
 scripts/review.cmd
+
+# local-only agent notes (infrastructure details, never commit)
+.agents/
