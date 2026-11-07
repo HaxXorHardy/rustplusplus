@@ -167,7 +167,7 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
     A renewed pairing of the active server (new player token) reconnects the instance, otherwise the bot would keep
     asking with credentials the server does not accept (`not_found` on every request).
 */
-async function refresh(client) {
+async function refresh(client, fetchHistoryFn = fetchHistory) {
     const added = [];
 
     for (const guildId of Object.keys(client.instances || {})) {
@@ -177,28 +177,43 @@ async function refresh(client) {
             const server = serverList[instance.activeServer] ||
                 serverList[Object.keys(serverList)[0]];
 
-            if (!server || !server.steamId) continue;
+            /*
+                The account is known by the steam id of a configured server. A guild without any server (everything
+                was removed, or a fresh container that only carries the stored login) would never adopt a server
+                again, so every stored login is asked then.
+            */
+            const steamIds = (server && server.steamId) ? [`${server.steamId}`] : RustPlusAuth.listSteamIds();
 
-            const auth = RustPlusAuth.readAuth(server.steamId);
-            if (auth === null) continue;
+            for (const steamId of steamIds) {
+                const auth = RustPlusAuth.readAuth(steamId);
+                if (auth === null) continue;
 
-            const entries = parsePairingEntries(await fetchHistory(auth.token));
-            if (entries.length === 0) continue;
+                const intlGet = (key) => client.intlGet(guildId, key);
 
-            const applied = applyPairingEntries(instance, server.steamId, entries,
-                (key) => client.intlGet(guildId, key));
+                /* The server list of the account carries the pairing id, the token and the paired devices. */
+                const synced = RustPlusSync.applySyncServers(instance, steamId, auth.servers || [], intlGet);
 
-            if (applied.devices === 0 && applied.created === 0 && applied.updated === 0) continue;
+                /* The history renews the credentials of a server and adds devices that the app does not list. */
+                const entries = parsePairingEntries(await fetchHistoryFn(auth.token));
+                const applied = (entries.length === 0) ? emptyPairingResult() :
+                    applyPairingEntries(instance, steamId, entries, intlGet);
 
-            /* Devices and servers that were adopted now need their Discord messages and their connection. */
-            const firstServerKey = Object.keys(instance.serverList)[0];
-            if (instance.activeServer === null && firstServerKey) instance.activeServer = firstServerKey;
+                if (synced.created === 0 && synced.updated === 0 && applied.devices === 0 &&
+                    applied.created === 0 && applied.updated === 0) {
+                    continue;
+                }
 
-            client.setInstance(guildId, instance);
+                /* Devices and servers that were adopted now need their Discord messages and their connection. */
+                const firstServerKey = Object.keys(instance.serverList)[0];
+                if (instance.activeServer === null && firstServerKey) instance.activeServer = firstServerKey;
 
-            for (const device of applied.added) added.push({ guildId: guildId, ...device });
+                client.setInstance(guildId, instance);
 
-            reconnectRenewedServers(client, guildId, instance, applied.updatedKeys);
+                for (const device of applied.added) added.push({ guildId: guildId, ...device });
+
+                reconnectRenewedServers(client, guildId, instance,
+                    [...synced.updatedKeys, ...applied.updatedKeys]);
+            }
         }
         catch (e) {
             client.log(client.intlGet(null, 'warningCap'),
@@ -207,6 +222,10 @@ async function refresh(client) {
     }
 
     return added;
+}
+
+function emptyPairingResult() {
+    return { servers: 0, created: 0, devices: 0, updated: 0, updatedKeys: [], added: [] };
 }
 
 /* Connects the active server again when its pairing was renewed. */

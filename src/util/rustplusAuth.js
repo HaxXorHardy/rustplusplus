@@ -69,6 +69,24 @@ function writeAuth(steamId, auth) {
     AtomicWriteFile(getAuthFilePath(steamId), JSON.stringify(auth, null, 2));
 }
 
+/*
+    Every steam id with a stored login. A guild that has no server configured does not know which account it belongs
+    to, these are the accounts that can be asked instead.
+*/
+function listSteamIds() {
+    try {
+        if (!Fs.existsSync(AUTH_DIR)) return [];
+
+        return Fs.readdirSync(AUTH_DIR)
+            .filter((file) => file.endsWith('.json'))
+            .map((file) => file.slice(0, -'.json'.length))
+            .filter((steamId) => readAuth(steamId) !== null);
+    }
+    catch (e) {
+        return [];
+    }
+}
+
 function normalizeName(name) {
     return `${name === undefined || name === null ? '' : name}`.trim().toLowerCase();
 }
@@ -115,6 +133,7 @@ module.exports = {
     getAuthFilePath: getAuthFilePath,
     readAuth: readAuth,
     writeAuth: writeAuth,
+    listSteamIds: listSteamIds,
     resolveServerGuid: resolveServerGuid,
     getTokenExpiry: getTokenExpiry,
     isTokenExpired: isTokenExpired,

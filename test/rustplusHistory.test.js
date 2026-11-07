@@ -229,3 +229,99 @@ Test.describe('RustPlusHistory.applyPairingEntries', () => {
         Assert.deepStrictEqual(instance.serverList, {});
     });
 });
+
+/*
+    A guild without any configured server does not know its account. The stored logins have to be asked, otherwise a
+    server that was removed - or a container that only carries the login - would never be adopted again.
+*/
+Test.describe('RustPlusHistory.refresh', () => {
+    const GUILD_ID = '100000000000000006';
+
+    function fakeClient(instance) {
+        const client = {
+            instances: { [GUILD_ID]: {} },
+            saved: 0,
+            rustplusReconnectTimers: {},
+            rustplusReconnecting: {},
+            createdRustplusInstances: [],
+            getInstance: () => instance,
+            setInstance: () => { client.saved += 1; },
+            intlGet: (guildId, key) => key,
+            log: () => undefined,
+            createRustplusInstance: (...args) => client.createdRustplusInstances.push(args),
+        };
+
+        return client;
+    }
+
+    function stubAuth(t, auth) {
+        const rustplusAuthPath = require.resolve('../src/util/rustplusAuth.js');
+        const RustPlusAuth = require(rustplusAuthPath);
+
+        const originalListSteamIds = RustPlusAuth.listSteamIds;
+        const originalReadAuth = RustPlusAuth.readAuth;
+
+        RustPlusAuth.listSteamIds = () => (auth === null ? [] : [STEAM_ID]);
+        RustPlusAuth.readAuth = () => auth;
+
+        t.after(() => {
+            RustPlusAuth.listSteamIds = originalListSteamIds;
+            RustPlusAuth.readAuth = originalReadAuth;
+        });
+    }
+
+    Test.it('adopts the servers of the account when the guild has none', async (t) => {
+        stubAuth(t, {
+            steamId: STEAM_ID,
+            token: 'test-token',
+            servers: [{ id: SERVER_ID, name: "Captain's Quarters", playerToken: 42, devices: [] }],
+        });
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        /* No pairing notifications, the server list of the account is enough to adopt the server. */
+        const added = await RustPlusHistory.refresh(client, async () => []);
+
+        const serverKeys = Object.keys(instance.serverList);
+        Assert.strictEqual(serverKeys.length, 1);
+
+        const server = instance.serverList[serverKeys[0]];
+        Assert.strictEqual(server.guid, SERVER_ID);
+        Assert.strictEqual(server.title, "Captain's Quarters");
+        Assert.strictEqual(server.steamId, STEAM_ID);
+        Assert.strictEqual(server.playerToken, 42);
+
+        /* Without an address the entry is reachable through the relay. */
+        Assert.strictEqual(server.appPort, SERVER_ID);
+
+        Assert.strictEqual(instance.activeServer, serverKeys[0]);
+        Assert.strictEqual(client.saved, 1);
+        Assert.deepStrictEqual(added, []);
+    });
+
+    Test.it('leaves the instance alone when the account has nothing to adopt', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => []);
+
+        Assert.deepStrictEqual(Object.keys(instance.serverList), []);
+        Assert.strictEqual(instance.activeServer, null);
+        Assert.strictEqual(client.saved, 0);
+    });
+
+    Test.it('does nothing when no login is stored at all', async (t) => {
+        stubAuth(t, null);
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => []);
+
+        Assert.deepStrictEqual(Object.keys(instance.serverList), []);
+        Assert.strictEqual(client.saved, 0);
+    });
+});
