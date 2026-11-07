@@ -229,3 +229,50 @@ Test.describe('RustPlusSync.applySyncServers (removed servers)', () => {
         Assert.deepStrictEqual(RustPlusSync.getServerListLiteEntry(null, 'relay-1'), {});
     });
 });
+
+/*
+    The server list of the login is a snapshot. Writing it over an entry that the notification history has already
+    renewed keeps the bot asking with an old player token and makes the instance reconnect on every refresh.
+*/
+Test.describe('RustPlusSync.applySyncServers (keepCredentials)', () => {
+    Test.it('keeps the pairing credentials of a known server', () => {
+        const instance = {
+            serverList: {
+                [`relay-${SERVER_ID}`]: {
+                    title: "Captain's Quarters",
+                    serverIp: 'relay',
+                    appPort: SERVER_ID,
+                    guid: SERVER_ID,
+                    steamId: STEAM_ID,
+                    playerToken: 1792502454,
+                    switches: { [`${SWITCH_ID}`]: { name: 'Front Door', command: `${SWITCH_ID}` } },
+                },
+            },
+        };
+
+        const data = RustPlusSync.parseSyncPayload(syncPayload());
+        const result = RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet,
+            { keepCredentials: true });
+
+        const server = instance.serverList[`relay-${SERVER_ID}`];
+
+        Assert.strictEqual(server.playerToken, 1792502454);
+        Assert.strictEqual(server.guid, SERVER_ID);
+        Assert.strictEqual(server.title, "Captain's Quarters");
+
+        /* Devices of the account are still added, and a changed token is not reported as a renewal. */
+        Assert.ok(server.alarms[`${ALARM_ID}`]);
+        Assert.strictEqual(result.updated, 0);
+        Assert.deepStrictEqual(result.updatedKeys, []);
+    });
+
+    Test.it('takes the credentials when the entry has none yet', () => {
+        const instance = { serverList: { [`relay-${SERVER_ID}`]: { title: 'x', playerToken: null } } };
+
+        const data = RustPlusSync.parseSyncPayload(syncPayload());
+        RustPlusSync.applySyncServers(instance, STEAM_ID, data.servers, intlGet, { keepCredentials: true });
+
+        Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].playerToken, 1623465021);
+        Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].guid, SERVER_ID);
+    });
+});

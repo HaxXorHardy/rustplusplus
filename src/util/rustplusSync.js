@@ -118,7 +118,7 @@ function parseSyncPayload(payload) {
     };
 }
 /* Defaults of a server entry, the shape the rest of the bot expects (see util/fcm/FcmListener.js). */
-function createServerEntry(data, existing, steamId) {
+function createServerEntry(data, existing, steamId, options = {}) {
     const entry = Object.assign({
         title: data.name || 'Rust+ server',
         serverIp: data.ip || RELAY_SERVER_IP,
@@ -148,12 +148,19 @@ function createServerEntry(data, existing, steamId) {
         customCameraGroups: {},
     }, existing || {});
 
-    /* The account state decides about the pairing id, the name and the pairing credentials. */
+    /*
+        The account state decides about the pairing id, the name and the pairing credentials. `keepCredentials` leaves
+        the credentials of a known server alone: the server list of the login is a snapshot that the notification
+        history supersedes, writing it back would keep asking the server with an old player token.
+    */
     if (data.name) entry.title = data.name;
-    entry.guid = data.id;
-    if (data.playerToken !== undefined && data.playerToken !== null) {
+    if (!options.keepCredentials || !existing || !existing.guid) entry.guid = data.id;
+
+    if ((!options.keepCredentials || !existing || existing.playerToken === null || existing.playerToken === undefined) &&
+        data.playerToken !== undefined && data.playerToken !== null) {
         entry.playerToken = normalizePlayerToken(data.playerToken);
     }
+
     if (!entry.steamId && steamId) entry.steamId = `${steamId}`;
 
     return entry;
@@ -260,7 +267,7 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key, op
         }
 
         const existing = serverId ? instance.serverList[serverId] : null;
-        const entry = createServerEntry(data, existing, steamId);
+        const entry = createServerEntry(data, existing, steamId, options);
 
         /* A new pairing of the same server changes the token (and sometimes the pairing id) of the entry. */
         const credentialsChanged = existing !== null &&

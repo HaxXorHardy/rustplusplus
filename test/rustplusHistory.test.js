@@ -241,6 +241,7 @@ Test.describe('RustPlusHistory.refresh', () => {
         const client = {
             instances: { [GUILD_ID]: {} },
             saved: 0,
+            rustplusInstances: {},
             rustplusReconnectTimers: {},
             rustplusReconnecting: {},
             createdRustplusInstances: [],
@@ -298,6 +299,11 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(instance.activeServer, serverKeys[0]);
         Assert.strictEqual(client.saved, 1);
         Assert.deepStrictEqual(added, []);
+
+        /* A server that is adopted while the bot runs is connected right away. */
+        Assert.strictEqual(client.createdRustplusInstances.length, 1);
+        Assert.strictEqual(client.createdRustplusInstances[0][3], STEAM_ID);
+        Assert.strictEqual(client.createdRustplusInstances[0][4], 42);
     });
 
     Test.it('leaves the instance alone when the account has nothing to adopt', async (t) => {

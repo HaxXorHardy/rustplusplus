@@ -204,7 +204,8 @@ async function refresh(client, fetchHistoryFn = fetchHistory) {
                 const intlGet = (key) => client.intlGet(guildId, key);
 
                 /* The server list of the account carries the pairing id, the token and the paired devices. */
-                const synced = RustPlusSync.applySyncServers(instance, steamId, auth.servers || [], intlGet);
+                const synced = RustPlusSync.applySyncServers(instance, steamId, auth.servers || [], intlGet,
+                    { keepCredentials: true });
 
                 /* The history renews the credentials of a server and adds devices that the app does not list. */
                 const entries = parsePairingEntries(await fetchHistoryFn(auth.token));
@@ -218,14 +219,31 @@ async function refresh(client, fetchHistoryFn = fetchHistory) {
 
                 /* Devices and servers that were adopted now need their Discord messages and their connection. */
                 const firstServerKey = Object.keys(instance.serverList)[0];
-                if (instance.activeServer === null && firstServerKey) instance.activeServer = firstServerKey;
+                let activatedKey = null;
+
+                if (instance.activeServer === null && firstServerKey) {
+                    instance.activeServer = firstServerKey;
+                    activatedKey = firstServerKey;
+                }
 
                 client.setInstance(guildId, instance);
 
                 for (const device of applied.added) added.push({ guildId: guildId, ...device });
 
-                reconnectRenewedServers(client, guildId, instance,
-                    [...synced.updatedKeys, ...applied.updatedKeys]);
+                /* Only a pairing notification tells about a new player token, the account snapshot does not. */
+                reconnectRenewedServers(client, guildId, instance, applied.updatedKeys);
+
+                /*
+                    A server that is adopted while the bot runs has no connection: the startup path connects the
+                    servers of the instance only once.
+                */
+                const activatedServer = activatedKey ? instance.serverList[activatedKey] : null;
+                const alreadyConnected = client.rustplusInstances && client.rustplusInstances[guildId];
+
+                if (activatedServer && !alreadyConnected) {
+                    client.createRustplusInstance(guildId, activatedServer.serverIp, activatedServer.appPort,
+                        activatedServer.steamId, activatedServer.playerToken);
+                }
             }
         }
         catch (e) {
