@@ -31,13 +31,15 @@ const Path = require('path');
     @param {string} targetPath
     @param {string} data
     @param {BufferEncoding} [encoding]
+    @param {number|null} [mode] File mode of the target, null keeps the default of the runtime.
 */
-module.exports = function atomicWriteFile(targetPath, data, encoding = /** @type {BufferEncoding} */ ('utf8')) {
+module.exports = function atomicWriteFile(targetPath, data, encoding = /** @type {BufferEncoding} */ ('utf8'), mode = null) {
     Fs.mkdirSync(Path.dirname(targetPath), { recursive: true });
 
     const tempPath = `${targetPath}.tmp`;
 
-    Fs.writeFileSync(tempPath, data, { encoding });
+    /* A file that only the bot has to read (the Rust+ account token) is created with restrictive permissions. */
+    Fs.writeFileSync(tempPath, data, (mode === null) ? { encoding } : { encoding, mode });
 
     try {
         const fd = Fs.openSync(tempPath, 'r+');

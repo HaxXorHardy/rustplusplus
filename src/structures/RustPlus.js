@@ -53,6 +53,9 @@ const TOKENS_REPLENISH = 3;     /* Per second */
 /* Do not ask Steam for a new token more often than this when the stored refresh token was rejected. */
 const TOKEN_RENEWAL_RETRY_MS = 60 * 60 * 1000;
 
+/* How often a running connection checks whether the stored account token has to be renewed. */
+const TOKEN_RENEWAL_CHECK_MS = 60 * 60 * 1000;
+
 class RustPlus extends RustPlusLib {
     constructor(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false) {
         super(serverIp, appPort, steamId, playerToken, useFacepunchProxy);
@@ -71,6 +74,7 @@ class RustPlus extends RustPlusLib {
         this.lastTokenRenewalAttemptMs = 0;         /* Throttles the renewal of the account token. */
         this.authRetryTimer = null;                 /* Retry of a connection whose login/token is not usable. */
         this.authRetryAttempt = 0;                  /* Failed attempts in a row, the retry delay grows with it. */
+        this.lastTokenRenewalCheckMs = 0;           /* Throttles the background renewal of the account token. */
 
         /* Status flags */
         this.isOperational = false;         /* Connected to the server, and request is verified. */
@@ -486,7 +490,7 @@ class RustPlus extends RustPlusLib {
 
         /* Remember the server id from the login file, so it only has to be resolved once. */
         if (server && this.serverGuid === null) {
-            const guid = RustPlusAuth.resolveServerGuid(auth, server.title);
+            const guid = RustPlusAuth.resolveServerGuid(auth, server);
             if (guid !== null) {
                 this.serverGuid = guid;
                 server.guid = guid;
@@ -623,18 +627,7 @@ class RustPlus extends RustPlusLib {
                 (text) => this.log(Client.client.intlGet(null, 'infoCap'), text, 'debug'));
 
             this.authToken = auth.token;
-
-            /* The renewal also refreshes the account state, keep servers, pairing ids and devices up to date. */
-            const instance = Client.client.getInstance(this.guildId);
-            if (instance && instance.serverList) {
-                const applied = RustPlusSync.applySyncServers(instance, this.playerId, auth.servers,
-                    (key) => Client.client.intlGet(this.guildId, key));
-
-                if (applied.servers !== 0) Client.client.setInstance(this.guildId, instance);
-
-                const server = instance.serverList[this.serverId];
-                if (server && server.guid) this.serverGuid = server.guid;
-            }
+            this.applyRenewedAccountState(auth);
 
             this.log(Client.client.intlGet(null, 'infoCap'), 'Rust+ account token renewed.');
         }
@@ -670,6 +663,50 @@ class RustPlus extends RustPlusLib {
         return undefined;
     }
 
+    /*
+        The account token lives ~14 days while a connection can stay up longer. It is renewed in the background so the
+        next connection (relay restart, reconnect after a timeout) never starts with an almost expired token; the token
+        of the running socket is validated once at the handshake and is not touched.
+    */
+    async checkAuthTokenRenewal() {
+        if ((Date.now() - this.lastTokenRenewalCheckMs) < TOKEN_RENEWAL_CHECK_MS) return;
+
+        this.lastTokenRenewalCheckMs = Date.now();
+
+        if (this.isDeleted || !this.shouldRenewAuthToken()) return;
+
+        this.lastTokenRenewalAttemptMs = Date.now();
+
+        try {
+            const auth = await RustPlusLogin.renewAuth(this.playerId,
+                (text) => this.log(Client.client.intlGet(null, 'infoCap'), text, 'debug'));
+
+            this.authToken = auth.token;
+            this.applyRenewedAccountState(auth);
+
+            this.log(Client.client.intlGet(null, 'infoCap'),
+                'Rust+ account token renewed in the background, the running connection keeps its token.');
+        }
+        catch (e) {
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                `The Rust+ account token could not be renewed: ${e && e.message ? e.message : e} ` +
+                'It is retried with the next connection.', 'warn');
+        }
+    }
+
+    /* The renewal also returns a fresh account state, keep servers, pairing ids and devices up to date. */
+    applyRenewedAccountState(auth) {
+        const instance = Client.client.getInstance(this.guildId);
+        if (!instance || !instance.serverList) return;
+
+        const applied = RustPlusSync.applySyncServers(instance, this.playerId, auth.servers,
+            (key) => Client.client.intlGet(this.guildId, key));
+
+        if (applied.servers !== 0) Client.client.setInstance(this.guildId, instance);
+
+        const server = instance.serverList[this.serverId];
+        if (server && server.guid) this.serverGuid = server.guid;
+    }
     /*
         The relay socket can be gone while a request is in flight (relay restart, reconnect). Instead of failing
         deep inside the library with a TypeError on a null socket, ask for a reconnect and fail the request with a

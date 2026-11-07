@@ -66,7 +66,8 @@ function readAuth(steamId) {
 
 function writeAuth(steamId, auth) {
     Fs.mkdirSync(AUTH_DIR, { recursive: true });
-    AtomicWriteFile(getAuthFilePath(steamId), JSON.stringify(auth, null, 2));
+    /* The account token is a credential: the file is not readable for other users of the host. */
+    AtomicWriteFile(getAuthFilePath(steamId), JSON.stringify(auth, null, 2), 'utf8', 0o600);
 }
 
 /*
@@ -91,15 +92,29 @@ function normalizeName(name) {
     return `${name === undefined || name === null ? '' : name}`.trim().toLowerCase();
 }
 
-/* The pairing id (uuid) of a server, the Rust+ web app lists it next to the server name. */
-function resolveServerGuid(auth, serverTitle) {
+/*
+    The pairing id (uuid) of a server. The login file lists the servers by name, but a renamed server (or two
+    servers with the same name) is only told apart by the pairing token the bot already stored. A plain title string
+    is still accepted.
+*/
+function resolveServerGuid(auth, server) {
     if (!auth || !Array.isArray(auth.servers)) return null;
 
-    const exact = auth.servers.find((e) => e.name === serverTitle);
+    const isServer = (server !== null && typeof server === 'object');
+    const playerToken = isServer ? server.playerToken : undefined;
+    const serverTitle = isServer ? server.title : server;
+
+    /* The pairing token is unique per server and does not change when the server is renamed. */
+    if (playerToken !== undefined && playerToken !== null) {
+        const byToken = auth.servers.find((e) => e && `${e.playerToken}` === `${playerToken}`);
+        if (byToken && byToken.id) return `${byToken.id}`;
+    }
+
+    const exact = auth.servers.find((e) => e && e.name === serverTitle);
     if (exact) return exact.id || null;
 
     const normalized = normalizeName(serverTitle);
-    const fuzzy = auth.servers.find((e) => normalizeName(e.name) === normalized);
+    const fuzzy = auth.servers.find((e) => e && normalizeName(e.name) === normalized);
     return fuzzy ? fuzzy.id || null : null;
 }
 

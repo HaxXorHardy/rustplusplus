@@ -80,3 +80,33 @@ Test.describe('RustPlusAuth', () => {
         Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon({ token: 'not-a-token' }, 100, 0), false);
     });
 });
+
+Test.describe("RustPlusAuth.resolveServerGuid (pairing token)", () => {
+    const auth = {
+        servers: [
+            { id: 'uuid-1', name: "Captain's Quarters", playerToken: 111 },
+            { id: 'uuid-2', name: "Captain's Quarters", playerToken: 222 },
+            { id: 'uuid-3', name: 'Renamed Server', playerToken: 333 },
+        ],
+    };
+
+    Test.it("picks the server by its pairing token, not by the name", () => {
+        const server = { title: "Captain's Quarters", playerToken: 222 };
+        Assert.strictEqual(RustPlusAuth.resolveServerGuid(auth, server), 'uuid-2');
+    });
+
+    Test.it("resolves a renamed server", () => {
+        const server = { title: 'Old Name', playerToken: 333 };
+        Assert.strictEqual(RustPlusAuth.resolveServerGuid(auth, server), 'uuid-3');
+    });
+
+    Test.it("falls back to the name when the token is unknown", () => {
+        const server = { title: 'Renamed Server', playerToken: 999 };
+        Assert.strictEqual(RustPlusAuth.resolveServerGuid(auth, server), 'uuid-3');
+    });
+
+    Test.it("still accepts a plain title", () => {
+        Assert.strictEqual(RustPlusAuth.resolveServerGuid(auth, 'Renamed Server'), 'uuid-3');
+        Assert.strictEqual(RustPlusAuth.resolveServerGuid(auth, 'nothing'), null);
+    });
+});

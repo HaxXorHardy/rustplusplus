@@ -51,6 +51,10 @@ module.exports = {
         }
 
         await module.exports.handlers(rustplus, client, info, mapMarkers, teamInfo, time);
+
+        /* Cheap (one file read per hour): keeps the stored account token fresh while the connection runs. */
+        await rustplus.checkAuthTokenRenewal();
+
         rustplus.isFirstPoll = false;
     },
 

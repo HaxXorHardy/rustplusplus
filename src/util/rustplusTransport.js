@@ -100,6 +100,17 @@ const SOCKET_PROTOCOL = 'rustplus.auth.v1';
 const SOCKET_ORIGIN = 'https://app.playrust.com';   /* origin the Rust+ web app sends with the handshake */
 const SOCKET_BUILD_VERSION = '1792502454122';   /* build timestamp of app.playrust.com (2026-10-20T13:20:54Z) */
 
+/*
+    The build timestamp of the Rust+ web app changes with the app, so it can be configured
+    (RPP_RUSTPLUS_BUILD_VERSION) instead of waiting for a release of the bot. The default is the timestamp that was
+    verified against the live relay.
+*/
+function resolveBuildVersion(configured) {
+    const value = `${configured === undefined || configured === null ? '' : configured}`.trim();
+
+    return value === '' ? SOCKET_BUILD_VERSION : value;
+}
+
 function buildSocketUrl(serverGuid, buildVersion = SOCKET_BUILD_VERSION) {
     return `wss://${SOCKET_HOST}/socket/${serverGuid}?v=${buildVersion}`;
 }
@@ -137,6 +148,7 @@ module.exports = {
     isConnectionFailure: isConnectionFailure,
     isRelayAddress: isRelayAddress,
     describeEndpoint: describeEndpoint,
+    resolveBuildVersion: resolveBuildVersion,
     buildSocketUrl: buildSocketUrl,
     buildSocketProtocols: buildSocketProtocols,
     getAuthTokenExpiry: getAuthTokenExpiry,

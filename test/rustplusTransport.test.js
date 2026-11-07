@@ -132,3 +132,15 @@ Test.describe('RustPlusTransport.isRelayAddress', () => {
         Assert.strictEqual(RustPlusTransport.RELAY_SERVER_IP, 'relay');
     });
 });
+Test.describe("RustPlusTransport.resolveBuildVersion", () => {
+    Test.it("keeps the built-in timestamp when nothing is configured", () => {
+        Assert.strictEqual(RustPlusTransport.resolveBuildVersion(''), RustPlusTransport.SOCKET_BUILD_VERSION);
+        Assert.strictEqual(RustPlusTransport.resolveBuildVersion(undefined), RustPlusTransport.SOCKET_BUILD_VERSION);
+        Assert.strictEqual(RustPlusTransport.resolveBuildVersion(null), RustPlusTransport.SOCKET_BUILD_VERSION);
+        Assert.strictEqual(RustPlusTransport.resolveBuildVersion('   '), RustPlusTransport.SOCKET_BUILD_VERSION);
+    });
+
+    Test.it("uses the configured timestamp", () => {
+        Assert.strictEqual(RustPlusTransport.resolveBuildVersion('1800000000000'), '1800000000000');
+    });
+});

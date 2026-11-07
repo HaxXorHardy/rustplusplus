@@ -71,3 +71,14 @@ Test.describe('atomicWriteFile', () => {
         Assert.strictEqual(Fs.readFileSync(target, 'utf8'), 'second');
     });
 });
+
+Test.describe("atomicWriteFile mode", () => {
+    Test.it("creates the file with the given mode", { skip: process.platform === 'win32' }, (t) => {
+        const directory = makeTempDirectory(t);
+        const target = Path.join(directory, 'token.json');
+
+        AtomicWriteFile(target, '{"token":"x"}', 'utf8', 0o600);
+
+        Assert.strictEqual(Fs.statSync(target).mode & 0o777, 0o600);
+    });
+});

@@ -62,6 +62,8 @@ module.exports = {
             to the direct/proxy transports Facepunch removed, 'direct' and 'proxy' force one of them.
         */
         rustplusTransport: process.env.RPP_RUSTPLUS_TRANSPORT || 'auto',
+        /* Build timestamp the Rust+ socket handshake sends (?v=...). Empty = the value of util/rustplusTransport.js. */
+        rustplusBuildVersion: process.env.RPP_RUSTPLUS_BUILD_VERSION || '',
         /* Renew the Rust+ account token this many seconds before it expires (default 3 days). */
         rustplusTokenRenewBeforeSeconds: envInt('RPP_RUSTPLUS_TOKEN_RENEW_BEFORE', 3 * 24 * 3600),
         /* How often the notification history is read to adopt servers/devices that were paired in-game. */

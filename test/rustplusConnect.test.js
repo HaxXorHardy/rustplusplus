@@ -146,3 +146,76 @@ Test.describe('RustPlusLite.connect (relay entries)', () => {
         Assert.strictEqual(rustplus.retriesCancelled, true);
     });
 });
+Test.describe("RustPlus.checkAuthTokenRenewal", () => {
+    const RustPlusLogin = require("../src/util/rustplusLogin.js");
+
+    function stubRenewAuth(t, implementation) {
+        const original = RustPlusLogin.renewAuth;
+        const calls = [];
+
+        RustPlusLogin.renewAuth = async (steamId, log) => {
+            calls.push(steamId);
+            return implementation(steamId, log);
+        };
+
+        t.after(() => { RustPlusLogin.renewAuth = original; });
+
+        return calls;
+    }
+
+    function fakeRenewing(fields) {
+        const instance = fakeInstance(Object.assign({
+            authToken: "old-token",
+            lastTokenRenewalCheckMs: 0,
+            lastTokenRenewalAttemptMs: 0,
+            renewDue: true,
+            applied: [],
+        }, fields));
+
+        instance.applyRenewedAccountState = function (auth) { this.applied.push(auth.token); };
+
+        return instance;
+    }
+
+    Test.it("renews the token in the background when it is due", async (t) => {
+        const calls = stubRenewAuth(t, async () => ({ token: "new-token", servers: [] }));
+
+        const rustplus = fakeRenewing();
+        await RustPlus.prototype.checkAuthTokenRenewal.call(rustplus);
+
+        Assert.deepStrictEqual(calls, [STEAM_ID]);
+        Assert.strictEqual(rustplus.authToken, "new-token");
+        Assert.deepStrictEqual(rustplus.applied, ["new-token"]);
+        Assert.ok(rustplus.logged.some((entry) => entry.text.includes("renewed in the background")));
+    });
+
+    Test.it("checks at most once per interval", async (t) => {
+        const calls = stubRenewAuth(t, async () => ({ token: "new-token", servers: [] }));
+
+        const rustplus = fakeRenewing();
+        await RustPlus.prototype.checkAuthTokenRenewal.call(rustplus);
+        await RustPlus.prototype.checkAuthTokenRenewal.call(rustplus);
+
+        Assert.strictEqual(calls.length, 1);
+    });
+
+    Test.it("does nothing while the token is fresh", async (t) => {
+        const calls = stubRenewAuth(t, async () => ({ token: "new-token", servers: [] }));
+
+        const rustplus = fakeRenewing({ renewDue: false });
+        await RustPlus.prototype.checkAuthTokenRenewal.call(rustplus);
+
+        Assert.deepStrictEqual(calls, []);
+        Assert.strictEqual(rustplus.authToken, "old-token");
+    });
+
+    Test.it("logs a failed renewal instead of throwing", async (t) => {
+        stubRenewAuth(t, async () => { throw new Error("steam says no"); });
+
+        const rustplus = fakeRenewing();
+        await RustPlus.prototype.checkAuthTokenRenewal.call(rustplus);
+
+        Assert.strictEqual(rustplus.authToken, "old-token");
+        Assert.ok(rustplus.logged.some((entry) => entry.level === "warn" && entry.text.includes("steam says no")));
+    });
+});

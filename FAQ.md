@@ -238,8 +238,9 @@ new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.
    `credentials/rustplusAuth/<steamId>.json`).
 2. `RPP_RUSTPLUS_TOKEN_RENEW_BEFORE` (default `259200` = 3 days) before the token expires, the bot fetches a new one:
    it asks Steam for fresh community cookies with that refresh token and repeats the Rust+ login.
-   **No password, no Steam Guard prompt** - it happens while connecting, the log shows
-   `Rust+ account token renewed.`
+   **No password, no Steam Guard prompt**. It runs while connecting and, while the bot is connected, once an hour
+   in the background (the running socket keeps the token it was opened with). The log shows
+   `Rust+ account token renewed.` (background: `... renewed in the background, ...`)
 3. For cron / a bot that is not running: `node scripts/rustplusLogin.js --renew` (all stored accounts) or
    `--renew=<steamId>`, also without a password.
 4. The refresh token dies when the Steam password is changed or all devices are deauthorized - after that the log
@@ -255,6 +256,10 @@ new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.
 | `src/util/rustplusLogin.js` | Steam login (`steam-session`), Rust+ login, `/api/syncData` |
 | `src/util/rustplusLoginPages.js` | HTTP/HTML part of the browser flow (cookie jar, forms, page parsing) |
 | `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`, code modal, reconnect) |
+
+The build timestamp the socket sends (`?v=...`) can be overridden with `RPP_RUSTPLUS_BUILD_VERSION` when
+Facepunch ships a new Rust+ app before the bot is updated. A socket that stops answering a ping is dropped after 30 s
+and reconnected, text frames of the relay (rejections) and a refused handshake are logged.
 
 The login logs every step (`Rust+ login step N: … (cookies: …)`, `page title …, openid fields …`), so a failing
 login shows which page Steam returned instead of a generic error.

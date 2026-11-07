@@ -41,6 +41,8 @@ const Fs = require('fs');
 const Path = require('path');
 
 const RustPlusLib = require('@liamcottle/rustplus.js');
+const RustPlusAuth = require('../src/util/rustplusAuth.js');
+const RustPlusSocket = require('../src/util/rustplusSocket.js');
 const { isResponseFailure, describeResponse } = require('../src/util/responseUtils.js');
 
 function sleep(ms) {
@@ -260,7 +262,20 @@ async function main() {
             rustplus.on('error', (e) => {
                 console.log(`[clan-probe] socket error: ${e && e.message ? e.message : e}`);
             });
-            rustplus.connect();
+            /*
+                Since the Rust+ update a server is only reachable through the authenticated relay socket of the app,
+                the direct ws://<ip>:<port> of the library is gone.
+            */
+            const auth = RustPlusAuth.readAuth(server.steamId);
+
+            if (server.guid && auth && auth.token) {
+                console.log(`[clan-probe] using the authenticated relay socket for ${server.guid}`);
+                RustPlusSocket.connectAuthenticatedSocket(rustplus, server.guid, auth.token);
+            }
+            else {
+                console.log('[clan-probe] no stored login, falling back to the direct connection');
+                rustplus.connect();
+            }
         });
 
         console.log('[clan-probe] connected.');

@@ -31,13 +31,74 @@ const Path = require('path');
 const Protobuf = require('protobufjs');
 const WebSocket = require('ws');
 
+const Config = require('../../config');
 const RustPlusTransport = require('./rustplusTransport.js');
 
 /* The protobuf description of the Rust+ protocol ships with the rustplus.js library. */
 const PROTO_PATH = Path.join(Path.dirname(require.resolve('@liamcottle/rustplus.js')), 'rustplus.proto');
 
+/* A socket that does not answer a ping within this interval is dropped and reconnected. */
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+/* The proto file is parsed once instead of on every connect. */
+let protoRootPromise = null;
+
+function loadProtoRoot() {
+    if (protoRootPromise === null) {
+        protoRootPromise = Protobuf.load(PROTO_PATH).catch((e) => {
+            protoRootPromise = null;
+            throw e;
+        });
+    }
+
+    return protoRootPromise;
+}
+
+/* The relay answers a rejection with a text frame, it never reaches the protobuf decoder. */
+function logTextFrame(rustplus, data) {
+    const text = `${data}`.slice(0, 300);
+
+    if (rustplus && typeof rustplus.log === 'function') {
+        rustplus.log('Relay', `The relay sent a text frame instead of a message: ${text}`, 'warn');
+    }
+}
+
+/*
+    The relay closes idle sockets without telling us. A missed pong means the connection is dead, so the reconnect runs
+    right away instead of waiting for the next request to time out.
+*/
+function startHeartbeat(rustplus, websocket) {
+    let alive = true;
+
+    websocket.on('pong', () => { alive = true; });
+
+    const timer = setInterval(() => {
+        if (websocket.readyState !== WebSocket.OPEN) return;
+
+        if (!alive) {
+            /* terminate() fires close, which runs the reconnect of the instance. */
+            websocket.terminate();
+            return;
+        }
+
+        alive = false;
+        websocket.ping();
+    }, HEARTBEAT_INTERVAL_MS);
+
+    if (typeof timer.unref === 'function') timer.unref();
+
+    rustplus.relayHeartbeatTimer = timer;
+}
+
+function stopHeartbeat(rustplus) {
+    if (rustplus.relayHeartbeatTimer) {
+        clearInterval(rustplus.relayHeartbeatTimer);
+        rustplus.relayHeartbeatTimer = null;
+    }
+}
+
 function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
-    Protobuf.load(PROTO_PATH).then((root) => {
+    loadProtoRoot().then((root) => {
         if (rustplus.websocket) {
             rustplus.disconnect();
         }
@@ -48,16 +109,36 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
         rustplus.emit('connecting');
 
         /* Same handshake as the Rust+ web app: subprotocols, origin and the build timestamp of the app. */
-        rustplus.websocket = new WebSocket(RustPlusTransport.buildSocketUrl(serverGuid),
+        const buildVersion = RustPlusTransport.resolveBuildVersion(Config.general.rustplusBuildVersion);
+        const websocket = new WebSocket(RustPlusTransport.buildSocketUrl(serverGuid, buildVersion),
             RustPlusTransport.buildSocketProtocols(authToken), { origin: RustPlusTransport.SOCKET_ORIGIN });
 
-        rustplus.websocket.on('open', () => rustplus.emit('connected'));
+        rustplus.websocket = websocket;
 
-        rustplus.websocket.on('error', (e) => rustplus.emit('error', e));
+        websocket.on('open', () => {
+            startHeartbeat(rustplus, websocket);
+            rustplus.emit('connected');
+        });
 
-        rustplus.websocket.on('message', (data, isBinary) => {
-            /* The relay may answer with a text frame (e.g. a plain-text rejection), only binary frames are protobuf. */
-            if (!isBinary) return;
+        websocket.on('error', (e) => rustplus.emit('error', e));
+
+        /* A handshake that is answered without an upgrade (expired token, unknown server) never becomes a socket. */
+        websocket.on('unexpected-response', (request, response) => {
+            response.resume();
+
+            const error = new Error(`The relay rejected the handshake with HTTP ${response.statusCode} ` +
+                `${response.statusMessage === undefined ? '' : response.statusMessage}`.trim());
+            error.code = 'ERELAYREJECTED';
+
+            rustplus.emit('error', error);
+        });
+
+        websocket.on('message', (data, isBinary) => {
+            /* Only binary frames are protobuf, a text frame is a plain-text rejection of the relay. */
+            if (!isBinary) {
+                logTextFrame(rustplus, data);
+                return;
+            }
 
             let message = null;
             try {
@@ -81,11 +162,15 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
             rustplus.emit('message', message);
         });
 
-        rustplus.websocket.on('close', () => rustplus.emit('disconnected'));
+        websocket.on('close', () => {
+            stopHeartbeat(rustplus);
+            rustplus.emit('disconnected');
+        });
     }).catch((e) => rustplus.emit('error', e));
 }
 
 module.exports = {
     PROTO_PATH: PROTO_PATH,
+    HEARTBEAT_INTERVAL_MS: HEARTBEAT_INTERVAL_MS,
     connectAuthenticatedSocket: connectAuthenticatedSocket,
 };
