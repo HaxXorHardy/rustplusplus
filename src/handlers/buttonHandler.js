@@ -658,7 +658,8 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        if (rustplus && (rustplus.serverId === ids.serverId || rustplus.serverId === instance.activeServer)) {
+        /* Only the server that is being deleted may end the connection, never another one of the guild. */
+        if (rustplus && (ids.serverId === instance.activeServer || ids.serverId === rustplus.serverId)) {
             await DiscordTools.clearTextChannel(rustplus.guildId, instance.channelId.switches, 100);
             await DiscordTools.clearTextChannel(rustplus.guildId, instance.channelId.switchGroups, 100);
             await DiscordTools.clearTextChannel(rustplus.guildId, instance.channelId.storageMonitors, 100);

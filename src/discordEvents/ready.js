@@ -134,10 +134,32 @@ module.exports = {
         for (const guildId of Object.keys(client.instances)) {
             const instance = client.getInstance(guildId);
             const serverIds = Object.keys(instance.serverList || {});
+            let repaired = false;
 
             for (const serverId of serverIds) {
                 const server = instance.serverList[serverId];
-                if (!server || server.messageId !== null) continue;
+                if (!server) continue;
+
+                /*
+                    An entry of an older version, or a pairing that only carried the pairing id, has no address.
+                    The relay does not need one, so it is rebuilt from the pairing id.
+                */
+                if ((!server.serverIp || !server.appPort) && server.guid) {
+                    server.serverIp = RustPlusSync.RELAY_SERVER_IP;
+                    server.appPort = `${server.guid}`;
+                    repaired = true;
+                }
+
+                if (!server.serverIp || !server.appPort) {
+                    client.log(client.intlGet(null, 'warningCap'),
+                        `The server "${server.title}" (${serverId}) has no address and no pairing id, it is ` +
+                        'skipped. Pair it again in the Rust+ app or use "/credentials login" in Discord.',
+                        'warning');
+                    continue;
+                }
+
+                if (server.messageId) continue;
+                server.messageId = null;
 
                 try {
                     await DiscordMessages.sendServerMessage(guildId, serverId);
@@ -149,11 +171,13 @@ module.exports = {
                 }
             }
 
+            if (repaired) client.setInstance(guildId, instance);
+
             /* Activate the only server of the guild, createRustplusInstancesFromConfig() connects it then. */
             if (instance.activeServer === null && serverIds.length === 1) {
                 const server = instance.serverList[serverIds[0]];
 
-                if (server && server.guid) {
+                if (server && (server.guid || (server.serverIp && server.appPort))) {
                     instance.activeServer = serverIds[0];
                     client.setInstance(guildId, instance);
 

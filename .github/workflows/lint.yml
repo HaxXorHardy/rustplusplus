@@ -16,4 +16,28 @@ jobs:
         node-version: ${{ matrix.node }}
         cache: 'npm'
     - run: npm install
-    - run: npm test
+
+    - name: Type check
+      run: |
+        set -o pipefail
+        npx tsc --noEmit -p . 2>&1 | tee tsc.log
+
+    - name: Type check (JavaScript)
+      run: |
+        set -o pipefail
+        npx tsc -p tsconfig.checkjs.json 2>&1 | tee tsc-checkjs.log
+
+    - name: Tests
+      run: |
+        set -o pipefail
+        node --test "test/**/*.test.js" 2>&1 | tee test.log
+
+    # The step logs are only visible to signed in users, the annotations are readable through the API.
+    - name: Report the failure
+      if: failure()
+      run: |
+        for log in tsc.log tsc-checkjs.log test.log; do
+          if [ -f "$log" ]; then
+            grep -E "error TS|not ok|AssertionError|Error:|# fail|Cannot find" "$log" | tail -n 8 | sed 's/^/::error::/'
+          fi
+        done

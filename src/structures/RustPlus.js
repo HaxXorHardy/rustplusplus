@@ -516,7 +516,23 @@ class RustPlus extends RustPlusLib {
         library transports when no login/token is available.
     */
     connect() {
-        if (this.serverGuid === null || this.authToken === null) return super.connect();
+        if (this.serverGuid === null || this.authToken === null) {
+            /*
+                Without a login the library connects directly with `ws://<ip>:<port>/<token>`. A server that was
+                never paired with an address (an entry of an older version, or a pairing that only carried the
+                pairing id) has none, and the websocket constructor would throw `Invalid URL: ws://undefined:undefined`.
+                Refuse the connection with a message the log can use instead.
+            */
+            if (!this.server || !this.port) {
+                this.log(Client.client.intlGet(null, 'errorCap'),
+                    `The address of the server "${this.serverId}" is unknown, it cannot be connected. ` +
+                    'Use "/credentials login" in Discord: the login reads the servers, their address and the ' +
+                    'pairing id from the Rust+ account.', 'error');
+                return undefined;
+            }
+
+            return super.connect();
+        }
 
         /* The stored account token expires after ~14 days, renew it instead of connecting with a dead one. */
         if (this.shouldRenewAuthToken()) return this.renewAuthTokenAndConnect();
