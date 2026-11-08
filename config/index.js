@@ -76,7 +76,7 @@ module.exports = {
         needAdminPrivileges: envBool('RPP_NEED_ADMIN_PRIVILEGES', true), /* If true, only admins can delete (server, switch..), manage credentials and reset a channel */
     },
     steam: {
-        /* Optional: Steam Web API key, needed for the playtime of a steam account (Rust) next to the BattleMetrics value. */
+        /* Optional: Steam Web API key, read by util/steamTimePlayed.js (Rust playtime as Steam reports it). */
         apiKey: process.env.RPP_STEAM_API_KEY || '',
     },
     battlemetrics: {

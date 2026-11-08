@@ -21,11 +21,6 @@
 const Client = require('../structures/clientRegistry.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
-const SteamTimePlayed = require('../util/steamTimePlayed.js');
-
-async function warmTeamSteamPlaytime(rustplus) {
-    await SteamTimePlayed.warmPlaytimes(rustplus.team.players.map((player) => player.steamId));
-}
 
 async function warmTeamTimePlayed(rustplus) {
     const instance = Client.client.getInstance(rustplus.guildId);
@@ -60,7 +55,6 @@ module.exports = {
             }
 
             await warmTeamTimePlayed(rustplus);
-            await warmTeamSteamPlaytime(rustplus);
             await DiscordMessages.sendUpdateTeamInformationMessage(rustplus);
             await DiscordMessages.ensureInformationMessageOrder(rustplus);
         }

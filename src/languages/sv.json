@@ -513,7 +513,6 @@
     "lighthouse": "Fyren",
     "linkCap": "LÄNK",
     "location": "Plats",
-    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "Låst låda vid den stora oljeplattformen vid {location} har låsts upp.",
     "lockedCrateOilRigUnlockedSetting": "När en låst låda vid oljeplattformen är upplåst, skicka en notifikation.",
     "lockedCrateSmallOilRigUnlocked": "Låst låda vid den lilla oljeplattformen vid {location} has låsts upp.",

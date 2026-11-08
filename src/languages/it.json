@@ -513,7 +513,6 @@
     "lighthouse": "Faro",
     "linkCap": "LINK",
     "location": "Posizione",
-    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "La cassa chiusa sulla Grande Piattaforma Petrolifera a {location} è stata sbloccata.",
     "lockedCrateOilRigUnlockedSetting": "Quando una Cassa chiusa sulla piattaforma petrolifera viene sbloccata, invia una notifica.",
     "lockedCrateSmallOilRigUnlocked": "Cassa chiusa su Piccola piattaforma petrolifera a {location} è stata sbloccata.",

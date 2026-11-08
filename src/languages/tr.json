@@ -513,7 +513,6 @@
     "lighthouse": "Deniz feneri",
     "linkCap": "LINK",
     "location": "Konum",
-    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "{location} - büyük sondaj kulesinde kilitli sandık açıldı.",
     "lockedCrateOilRigUnlockedSetting": "Sondaj kulesinde kilitli sandık açıldığında bildirim gönder.",
     "lockedCrateSmallOilRigUnlocked": "Küçük sondaj kulesi kutusu açıldı. {location}",

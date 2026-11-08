@@ -25,7 +25,6 @@ const Constants = require('../util/constants.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
-const SteamTimePlayed = require('../util/steamTimePlayed.js');
 const Timer = require('../util/timer');
 const RustPlusSync = require('../util/rustplusSync.js');
 
@@ -867,14 +866,12 @@ module.exports = {
         const teamMemberFieldName = Client.client.intlGet(guildId, 'teamMember');
         const statusFieldName = Client.client.intlGet(guildId, 'status');
         const locationFieldName = Client.client.intlGet(guildId, 'location');
-        const steamFieldName = Client.client.intlGet(guildId, 'steam');
         const footer = instance.serverList[rustplus.serverId].title;
 
-        let totalCharacters = title.length + teamMemberFieldName.length + statusFieldName.length + locationFieldName.length + steamFieldName.length + footer.length;
+        let totalCharacters = title.length + teamMemberFieldName.length + statusFieldName.length + locationFieldName.length + footer.length;
         let fieldIndex = 0;
-        let teammateName = [''], teammateStatus = [''], teammateLocation = [''], teammateSteam = [''];
-        let teammateNameCharacters = 0, teammateStatusCharacters = 0, teammateLocationCharacters = 0,
-            teammateSteamCharacters = 0;
+        let teammateName = [''], teammateStatus = [''], teammateLocation = [''];
+        let teammateNameCharacters = 0, teammateStatusCharacters = 0, teammateLocationCharacters = 0;
         const teamBmId = instance.serverList[rustplus.serverId].battlemetricsId;
         const teamBmInstance = (teamBmId !== null && teamBmId !== undefined) ?
             Client.client.battlemetricsInstances[teamBmId] : null;
@@ -889,11 +886,6 @@ module.exports = {
                 const playtime = (playerId !== null) ? teamBmInstance.getCachedTimePlayed(playerId) : null;
                 if (typeof (playtime) === 'number') playtimeStr = ` ${Timer.secondsToCompactHours(playtime)}`;
             }
-
-            /* Steam counts the runtime of the client, BattleMetrics the server sessions - both are shown. */
-            const steamPlaytime = SteamTimePlayed.getCachedPlaytime(player.steamId);
-            const steamStr = (steamPlaytime !== null) ?
-                `${Timer.secondsToCompactHours(steamPlaytime.totalMinutes * 60)}\n` : '-\n';
 
             const nameMaxLength = Math.max(4, Constants.EMBED_FIELD_MAX_WIDTH_LENGTH_3 - playtimeStr.length - 3);
             const displayName = player.name.length <= nameMaxLength ? player.name :
@@ -927,13 +919,12 @@ module.exports = {
                 status += '\n';
             }
 
-            if (totalCharacters + (name.length + status.length + location.length + steamStr.length) >=
+            if (totalCharacters + (name.length + status.length + location.length) >=
                 Constants.EMBED_MAX_TOTAL_CHARACTERS) {
                 break;
             }
 
             if ((teammateNameCharacters + name.length) > Constants.EMBED_MAX_FIELD_VALUE_CHARACTERS ||
-                (teammateSteamCharacters + steamStr.length) > Constants.EMBED_MAX_FIELD_VALUE_CHARACTERS ||
                 (teammateStatusCharacters + status.length) > Constants.EMBED_MAX_FIELD_VALUE_CHARACTERS ||
                 (teammateLocationCharacters + location.length) > Constants.EMBED_MAX_FIELD_VALUE_CHARACTERS) {
                 fieldIndex += 1;
@@ -941,25 +932,21 @@ module.exports = {
                 teammateName.push('');
                 teammateStatus.push('');
                 teammateLocation.push('');
-                teammateSteam.push('');
 
                 teammateNameCharacters = 0;
                 teammateStatusCharacters = 0;
                 teammateLocationCharacters = 0;
-                teammateSteamCharacters = 0;
             }
 
             teammateNameCharacters += name.length;
             teammateStatusCharacters += status.length;
             teammateLocationCharacters += location.length;
-            teammateSteamCharacters += steamStr.length;
 
-            totalCharacters += name.length + status.length + location.length + steamStr.length;
+            totalCharacters += name.length + status.length + location.length;
 
             teammateName[fieldIndex] += name;
             teammateStatus[fieldIndex] += status;
             teammateLocation[fieldIndex] += location;
-            teammateSteam[fieldIndex] += steamStr;
         }
 
         const fields = [];
@@ -977,11 +964,6 @@ module.exports = {
             fields.push({
                 name: i === 0 ? locationFieldName : '\u200B',
                 value: teammateLocation[i] !== '' ? teammateLocation[i] : Client.client.intlGet(guildId, 'empty'),
-                inline: true
-            });
-            fields.push({
-                name: i === 0 ? steamFieldName : '\u200B',
-                value: teammateSteam[i] !== '' ? teammateSteam[i] : Client.client.intlGet(guildId, 'empty'),
                 inline: true
             });
         }

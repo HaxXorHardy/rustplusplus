@@ -21,10 +21,15 @@
 /*
     The Rust playtime of a steam account as Steam reports it: the runtime of the Rust client, which is the number the
     steam profile shows. BattleMetrics counts server sessions instead and can differ a lot (a session that is never
-    closed keeps counting), so both numbers are shown next to each other.
+    closed keeps counting).
+
+    Not used by an embed at the moment - kept for a later use. BattleMetrics reports no steam id for the players of a
+    server, so there is no reliable id to ask Steam for: a name lookup (ResolveVanityURL) matched 10 of 35 names and
+    only 1 of them had a readable playtime. A caller warms the cache with warmPlaytimes(steamIds) and reads it with
+    getCachedPlaytime(steamId).
 
     Optional: without a Steam Web API key (RPP_STEAM_API_KEY, free at https://steamcommunity.com/dev/apikey) or with a
-    private profile nothing is returned and the bot behaves as before.
+    private profile nothing is returned.
 */
 
 const Axios = require('axios');

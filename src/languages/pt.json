@@ -513,7 +513,6 @@
     "lighthouse": "Farol",
     "linkCap": "LINK",
     "location": "Localização",
-    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "A caixa bloqueada da Plataforma de Petróleo Grande em {location} foi desbloqueada.",
     "lockedCrateOilRigUnlockedSetting": "Quando uma Caixa Bloqueada na Plataforma de Petróleo é desbloqueada, envia uma notificação.",
     "lockedCrateSmallOilRigUnlocked": "A caixa bloqueada da Plataforma de Petróleo em {location} foi desbloqueada.",

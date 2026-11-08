@@ -513,7 +513,6 @@
     "lighthouse": "Phare",
     "linkCap": "LIEN",
     "location": "Position",
-    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "La caisse verrouillée de la grande plate-forme pétrolière a été débloquée en {location}.",
     "lockedCrateOilRigUnlockedSetting": "Lorsqu'une caisse verrouillée sur une plate-forme pétrolière est déverrouillée, envoyez une notification.",
     "lockedCrateSmallOilRigUnlocked": "La caisse verrouillée de la petite Oil Rig a été débloqué en {location}.",

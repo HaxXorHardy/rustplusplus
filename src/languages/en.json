@@ -517,7 +517,6 @@
     "lighthouse": "Lighthouse",
     "linkCap": "LINK",
     "location": "Location",
-    "steam": "Steam",
     "lockedCrateLargeOilRigUnlocked": "Locked Crate at Large Oil Rig at {location} has been unlocked.",
     "lockedCrateOilRigUnlockedSetting": "When a Locked Crate at Oil Rig is unlocked, send a notification.",
     "lockedCrateSmallOilRigUnlocked": "Locked Crate at Small Oil Rig at {location} has been unlocked.",

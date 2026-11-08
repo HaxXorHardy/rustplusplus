@@ -256,11 +256,13 @@ new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.
 | `src/util/rustplusLogin.js` | Steam login (`steam-session`), Rust+ login, `/api/syncData` |
 | `src/util/rustplusLoginPages.js` | HTTP/HTML part of the browser flow (cookie jar, forms, page parsing) |
 | `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`, code modal, reconnect) |
-| `src/util/steamTimePlayed.js` | optional Steam playtime next to the BattleMetrics hours (`RPP_STEAM_API_KEY`) |
+| `src/util/steamTimePlayed.js` | Steam playtime as Steam reports it (`RPP_STEAM_API_KEY`), not shown anywhere at the moment |
 
-With `RPP_STEAM_API_KEY` (free at https://steamcommunity.com/dev/apikey) and a public Steam profile the team
-overview also shows the Rust playtime Steam reports. BattleMetrics counts server sessions, which can be much higher
-(a session that is never closed keeps counting), so both numbers are shown.
+`src/util/steamTimePlayed.js` reads the Rust playtime of a steam account (the number the Steam profile shows) and
+caches it for an hour. It is **not** part of an embed right now: BattleMetrics reports no steam id for the players of
+a server, and a name lookup through Steam is guesswork (23 of 35 names resolved, 10 with a matching profile name, 1
+with a readable playtime). It stays in place for a later use - a caller needs `warmPlaytimes(steamIds)` and then
+`getCachedPlaytime(steamId)`.
 
 The build timestamp the socket sends (`?v=...`) can be overridden with `RPP_RUSTPLUS_BUILD_VERSION` when
 Facepunch ships a new Rust+ app before the bot is updated. A socket that stops answering a ping is dropped after 30 s
