@@ -32,7 +32,14 @@ module.exports = {
         */
         if (rustplus.isDeleted) return;
 
-        rustplus.log(client.intlGet(null, 'errorCap'), err, 'error');
+        /*
+            A handshake the relay rejects is part of a normal server restart (HTTP 502 while the server boots). The
+            message names the reason already, dumping the stack trace of it would fill the log with noise.
+        */
+        const handshakeFailure = err !== null && err !== undefined &&
+            (err.code === 'ERELAYREJECTED' || err.code === 'ERELAYTIMEOUT');
+
+        rustplus.log(client.intlGet(null, 'errorCap'), handshakeFailure ? `${err.message}` : err, 'error');
 
         /*
             Network failures are counted per guild: after a few failed direct attempts the bot switches to the
@@ -60,6 +67,13 @@ module.exports = {
             case 'ECONNRESET': {
                 errorConnReset(rustplus, client, err);
             } break;
+
+            /*
+                Reported as a single line above. The reconnect is not scheduled here: closing the rejected socket
+                emits 'disconnected', which runs the reconnect of the instance.
+            */
+            case 'ERELAYREJECTED':
+            case 'ERELAYTIMEOUT': break;
 
             default: {
                 errorOther(rustplus, client, err);

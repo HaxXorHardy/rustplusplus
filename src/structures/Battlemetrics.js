@@ -36,6 +36,23 @@ const NAME_CHANGE_LOG_SIZE = 100;
 const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
 const TIME_PLAYED_DEFAULT_LIMIT = 100;
 
+/*
+    The reason a request failed, as it should appear in the log: the HTTP status of an answered error (429 rate limit,
+    5xx of the API) or the network error code of a request that never got an answer.
+    @param {object} error The error the Axios library rejected with.
+    @returns {string}
+*/
+function describeRequestFailure(error) {
+    if (!error) return 'unknown error';
+
+    const status = (error.response && Number.isFinite(error.response.status)) ? error.response.status : null;
+    if (status !== null) return `HTTP ${status}`;
+
+    if (error.code) return `${error.code}`;
+
+    return `${error.message}`;
+}
+
 class Battlemetrics {
 
     /**
@@ -248,7 +265,14 @@ class Battlemetrics {
             });
         }
         catch (e) {
-            return {};
+            /*
+                The reason of a failed request is what the log needs: 429 means the rate limit was hit, ECONNRESET or
+                ETIMEDOUT mean the API could not be reached. Without it the request just failed for 'no reason'.
+            */
+            return {
+                status: (e && e.response && Number.isFinite(e.response.status)) ? e.response.status : null,
+                reason: describeRequestFailure(e),
+            };
         }
     }
 
@@ -413,7 +437,9 @@ class Battlemetrics {
 
         if (response.status !== 200) {
             Client.client.log(Client.client.intlGet(null, 'errorCap'),
-                Client.client.intlGet(null, 'battlemetricsApiRequestFailed', { api_call: api_call }), 'error');
+                Client.client.intlGet(null, 'battlemetricsApiRequestFailed', {
+                    api_call: `${api_call} (${response.reason === undefined ? 'unknown error' : response.reason})`,
+                }), 'error');
             return null;
         }
 
@@ -477,7 +503,9 @@ class Battlemetrics {
 
         if (response.status !== 200) {
             Client.client.log(Client.client.intlGet(null, 'errorCap'),
-                Client.client.intlGet(null, 'battlemetricsApiRequestFailed', { api_call: search }), 'error');
+                Client.client.intlGet(null, 'battlemetricsApiRequestFailed', {
+                    api_call: `${search} (${response.reason === undefined ? 'unknown error' : response.reason})`,
+                }), 'error');
             return null;
         }
 

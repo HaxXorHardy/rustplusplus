@@ -40,6 +40,9 @@ const PROTO_PATH = Path.join(Path.dirname(require.resolve('@liamcottle/rustplus.
 /* A socket that does not answer a ping within this interval is dropped and reconnected. */
 const HEARTBEAT_INTERVAL_MS = 30000;
 
+/* A handshake that the relay does not answer in this time is dropped and reconnected. */
+const CONNECT_TIMEOUT_MS = 20000;
+
 /* The proto file is parsed once instead of on every connect. */
 let protoRootPromise = null;
 
@@ -67,13 +70,13 @@ function logTextFrame(rustplus, data) {
     The relay closes idle sockets without telling us. A missed pong means the connection is dead, so the reconnect runs
     right away instead of waiting for the next request to time out.
 */
-function startHeartbeat(rustplus, websocket) {
+function startHeartbeat(rustplus, websocket, WebSocketImpl = WebSocket) {
     let alive = true;
 
     websocket.on('pong', () => { alive = true; });
 
     const timer = setInterval(() => {
-        if (websocket.readyState !== WebSocket.OPEN) return;
+        if (websocket.readyState !== WebSocketImpl.OPEN) return;
 
         if (!alive) {
             /* terminate() fires close, which runs the reconnect of the instance. */
@@ -97,7 +100,14 @@ function stopHeartbeat(rustplus) {
     }
 }
 
-function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
+function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
+    const settings = Object.assign({
+        WebSocketImpl: WebSocket,
+        connectTimeoutMs: CONNECT_TIMEOUT_MS,
+    }, options === undefined ? {} : options);
+
+    const WebSocketImpl = settings.WebSocketImpl;
+
     loadProtoRoot().then((root) => {
         if (rustplus.websocket) {
             rustplus.disconnect();
@@ -110,27 +120,76 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
 
         /* Same handshake as the Rust+ web app: subprotocols, origin and the build timestamp of the app. */
         const buildVersion = RustPlusTransport.resolveBuildVersion(Config.general.rustplusBuildVersion);
-        const websocket = new WebSocket(RustPlusTransport.buildSocketUrl(serverGuid, buildVersion),
+        const websocket = new WebSocketImpl(RustPlusTransport.buildSocketUrl(serverGuid, buildVersion),
             RustPlusTransport.buildSocketProtocols(authToken), { origin: RustPlusTransport.SOCKET_ORIGIN });
 
         rustplus.websocket = websocket;
 
+        /*
+            Set when this code closes the socket itself. The teardown of an unfinished handshake answers with its own
+            error ('closed before the connection was established'), the cause was already reported instead.
+        */
+        let closedHere = false;
+
+        /*
+            Close the socket and report why. Only a closed socket emits 'close', and only 'close' starts the reconnect
+            of the instance: a socket that stays in CONNECTING keeps the guild connected forever.
+        */
+        function closeSocket(message, code) {
+            closedHere = true;
+
+            const error = new Error(message);
+            error.code = code;
+
+            rustplus.emit('error', error);
+
+            websocket.terminate();
+        }
+
+        /* The relay answers a handshake it rejects immediately, but it may also accept the socket and go silent. */
+        const connectTimer = setTimeout(() => {
+            if (websocket.readyState !== WebSocketImpl.CONNECTING) return;
+
+            closeSocket('The relay did not answer the handshake in time.', 'ERELAYTIMEOUT');
+        }, settings.connectTimeoutMs);
+
+        if (typeof connectTimer.unref === 'function') connectTimer.unref();
+
+        rustplus.relayConnectTimer = connectTimer;
+
+        function stopConnectTimer() {
+            if (rustplus.relayConnectTimer) {
+                clearTimeout(rustplus.relayConnectTimer);
+                rustplus.relayConnectTimer = null;
+            }
+        }
+
         websocket.on('open', () => {
-            startHeartbeat(rustplus, websocket);
+            stopConnectTimer();
+            startHeartbeat(rustplus, websocket, WebSocketImpl);
             rustplus.emit('connected');
         });
 
-        websocket.on('error', (e) => rustplus.emit('error', e));
+        websocket.on('error', (e) => {
+            /* The teardown of a handshake closed by this code is not an error of the connection. */
+            if (closedHere) return;
 
-        /* A handshake that is answered without an upgrade (expired token, unknown server) never becomes a socket. */
+            rustplus.emit('error', e);
+        });
+
+        /*
+            A handshake that is answered with an HTTP error instead of an upgrade (relay restart, rejected token,
+            unknown server id). ws aborts such a handshake only when no listener is registered here, so the socket has
+            to be closed explicitly: without terminate() it stays in CONNECTING, never emits 'close' and the instance
+            never reconnects.
+        */
         websocket.on('unexpected-response', (request, response) => {
             response.resume();
 
-            const error = new Error(`The relay rejected the handshake with HTTP ${response.statusCode} ` +
-                `${response.statusMessage === undefined ? '' : response.statusMessage}`.trim());
-            error.code = 'ERELAYREJECTED';
+            const status = `${response.statusCode} ` +
+                `${response.statusMessage === undefined ? '' : response.statusMessage}`.trim();
 
-            rustplus.emit('error', error);
+            closeSocket(`The relay rejected the handshake with HTTP ${status}.`, 'ERELAYREJECTED');
         });
 
         websocket.on('message', (data, isBinary) => {
@@ -163,6 +222,7 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
         });
 
         websocket.on('close', () => {
+            stopConnectTimer();
             stopHeartbeat(rustplus);
             rustplus.emit('disconnected');
         });
@@ -172,5 +232,6 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken) {
 module.exports = {
     PROTO_PATH: PROTO_PATH,
     HEARTBEAT_INTERVAL_MS: HEARTBEAT_INTERVAL_MS,
+    CONNECT_TIMEOUT_MS: CONNECT_TIMEOUT_MS,
     connectAuthenticatedSocket: connectAuthenticatedSocket,
 };
