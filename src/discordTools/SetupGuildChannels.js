@@ -41,11 +41,19 @@ module.exports = async (client, guild, category) => {
         'storageMonitors', client, guild, category);
     await addTextChannel(client.intlGet(guild.id, 'channelNameActivity'), 'activity', client, guild, category);
     await addTextChannel(client.intlGet(guild.id, 'channelNameTrackers'), 'trackers', client, guild, category);
+
+    /*
+        The server-log channel is not created with the permissions of the other channels: it is only readable
+        and writable for the bot and the administrators (see PermissionHandler.getPermissionsLogChannel).
+    */
+    await addTextChannel(client.intlGet(guild.id, 'channelNameServerlog'), 'log', client, guild, category, false,
+        PermissionHandler.getPermissionsLogChannel(client, guild));
 };
 
-async function addTextChannel(name, idName, client, guild, parent, permissionWrite = false) {
+async function addTextChannel(name, idName, client, guild, parent, permissionWrite = false,
+    permissionOverwrites = null) {
     const instance = client.getInstance(guild.id);
-    const perms = PermissionHandler.getPermissionsReset(client, guild, permissionWrite);
+    const perms = permissionOverwrites ?? PermissionHandler.getPermissionsReset(client, guild, permissionWrite);
 
     let channel = null;
     if (instance.channelId[idName] !== null) {

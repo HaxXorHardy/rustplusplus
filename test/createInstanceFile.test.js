@@ -158,4 +158,24 @@ Test.describe('createInstanceFile', () => {
 
         Assert.deepStrictEqual(Object.keys(client.saved.serverListLite), [SERVER_ID]);
     });
+
+    /*
+        An instance written before the server-log channel existed has no channelId.log. Without the key the relay
+        could never post into the channel, so the migration adds it as null (the channel is created on setup).
+    */
+    Test.it('adds the missing server-log channel id', () => {
+        writeInstance({
+            firstTime: false,
+            activeServer: null,
+            serverList: {},
+            trackers: {},
+            channelId: { category: '1', information: '2', servers: '3' },
+        });
+
+        const client = fakeClient();
+        CreateInstanceFile(client, { id: GUILD_ID });
+
+        Assert.strictEqual(client.saved.channelId.log, null);
+        Assert.strictEqual(client.saved.channelId.information, '2');
+    });
 });

@@ -93,6 +93,58 @@ module.exports = {
         return perms;
     },
 
+    /*
+        The server-log channel is only for the bot and the administrators.
+
+        Members and roles with the Administrator permission bypass channel overwrites, so no admin role has to
+        be listed here: denying @everyone and the bot role is enough to keep the channel to the bot and the
+        administrators. Adding every admin role as an allow would hit the overwrite limit of a channel on a
+        bigger server.
+    */
+    getPermissionsLogChannel: function (client, guild) {
+        const instance = client.getInstance(guild.id);
+
+        const perms = [];
+
+        perms.push({
+            id: guild.roles.everyone.id,
+            deny: [
+                Discord.PermissionFlagsBits.ViewChannel,
+                Discord.PermissionFlagsBits.SendMessages,
+                Discord.PermissionFlagsBits.ReadMessageHistory
+            ]
+        });
+
+        if (instance.role !== null) {
+            perms.push({
+                id: instance.role,
+                deny: [Discord.PermissionFlagsBits.ViewChannel, Discord.PermissionFlagsBits.SendMessages]
+            });
+        }
+
+        for (const discordId of instance.blacklist['discordIds']) {
+            perms.push({
+                id: discordId,
+                deny: [Discord.PermissionFlagsBits.ViewChannel, Discord.PermissionFlagsBits.SendMessages]
+            });
+        }
+
+        const botId = client.user?.id;
+        if (botId) {
+            perms.push({
+                id: botId,
+                allow: [
+                    Discord.PermissionFlagsBits.ViewChannel,
+                    Discord.PermissionFlagsBits.SendMessages,
+                    Discord.PermissionFlagsBits.ReadMessageHistory,
+                    Discord.PermissionFlagsBits.EmbedLinks
+                ]
+            });
+        }
+
+        return perms;
+    },
+
     getPermissionsRemoved: function (client, guild) {
         const instance = client.getInstance(guild.id);
 
@@ -140,10 +192,17 @@ module.exports = {
             const writePerm = (name === 'commands' || name === 'teamchat');
 
             const channel = DiscordTools.getTextChannelById(guild.id, id);
-            if (channel) {
-                const perms = module.exports.getPermissionsReset(client, guild, writePerm);
-                await setPermissionOverwrites(client, channel, perms);
-            }
+            if (!channel) continue;
+
+            /*
+                The log channel has its own overwrites (bot and administrators only). Resetting them like the
+                other channels would make the log readable for everybody again.
+            */
+            const perms = (name === 'log') ?
+                module.exports.getPermissionsLogChannel(client, guild) :
+                module.exports.getPermissionsReset(client, guild, writePerm);
+
+            await setPermissionOverwrites(client, channel, perms);
         }
     },
 }

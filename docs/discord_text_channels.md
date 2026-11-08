@@ -15,6 +15,7 @@
 * [**Storagemonitors**](discord_text_channels.md#storagemonitors-channel)
 * [**Activity**](discord_text_channels.md#activity-channel)
 * [**Trackers**](discord_text_channels.md#trackers-channel)
+* [**Serverlog**](discord_text_channels.md#serverlog-channel)
 
 
 ## Information Channel
@@ -71,6 +72,8 @@ There are a few buttons for each server. The `CONNECT` button lets you start a c
 ## Settings Channel
 
 > The Settings Channel contain a bunch of different settings for rustplusplus. There are settings for language, voice gender, command prefix, trademark visibility, allow in-game commands, mute in-game, in-game teammate notifications, command delay, Smart Alarm notifications, enable leader command, battlemetrics notifications, wipe detection, vending machine subscription and event notifications.
+
+The `Which lines should the bot post to the server-log channel?` dropdown decides what the bot writes into the [Serverlog Channel](discord_text_channels.md#serverlog-channel): `OFF` (nothing, the channel stays empty), `ERROR` (only errors), `INFO` (information, warnings and errors) or `FULL` (everything, including the debug lines that require `RPP_DEBUG=true`). The default is `ERROR`. The change is live, a restart is not needed.
 
 ![Discord Text Channel Settings](images/channels/settings_channel.png)
 
@@ -153,3 +156,27 @@ By clicking the `ADD PLAYER` button, you can add a player to the tracker by prov
 
 ![CREATE TRACKER](images/channels/tracker_create.png)
 ![Discord Text Channel Trackers](images/channels/trackers_channel.png)
+
+
+## Serverlog Channel
+
+> The Serverlog Channel mirrors the log of the bot for this server. The lines are the same ones that are written to the `logs/<guildId>.log` file of the container, including the timestamp, so the channel can be read without access to the host.
+
+**Who can see it?** Only the bot and the administrators. The channel denies `View Channel`, `Send Messages` and `Read Message History` for `@everyone` (and for the role the bot manages, if one is set up) and allows them for the bot only. Members and roles with the **Administrator** permission bypass channel overwrites in Discord, so they always have access - they do not need an own overwrite entry.
+
+**How much is posted?** The `Which lines should the bot post to the server-log channel?` dropdown in the [Settings Channel](discord_text_channels.md#settings-channel) switches between `OFF`, `ERROR`, `INFO` (default) and `FULL`:
+
+| Level | What is posted |
+| --- | --- |
+| `OFF` | nothing, the channel stays empty |
+| `ERROR` | errors only |
+| `INFO` | information, warnings and errors |
+| `FULL` | everything, including the debug lines (`RPP_DEBUG=true` required) |
+
+The setting is read for every line, so a change applies to the next line without a restart.
+
+**A start line** (`INFO: rustplusplus <version> started`) is posted when the bot starts and when it joins a new server. It is a lifecycle marker, not a log line, so it is posted even with the level `ERROR` - only `OFF` silences it.
+
+**Rate limit:** the lines are batched (at most ten lines or 1800 characters per message) and sent one message at a time, so a reconnect loop cannot flood the channel. When more lines are produced than the channel can take, the oldest ones are dropped and the channel reports how many lines were lost.
+
+`/reset discord` deletes the channel and creates a new one, and the bot automatically continues in the new channel - nothing has to be configured again.

@@ -35,11 +35,13 @@ const SetupGuildChannels = require('../discordTools/SetupGuildChannels.js');
 const SetupSettingsMenu = require('../discordTools/SetupSettingsMenu.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Items = require('./Items');
+const LogChannelRelay = require('../util/logChannelRelay.js');
 const Logger = require('./Logger.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 const RustLabs = require('../structures/RustLabs');
 const RustPlus = require('../structures/RustPlus');
 const RustPlusTransport = require('../util/rustplusTransport.js');
+const Version = require('../../package.json').version;
 
 class DiscordBot extends Discord.Client {
     constructor(props) {
@@ -247,6 +249,13 @@ class DiscordBot extends Discord.Client {
         await SetupSettingsMenu(this, guild);
 
         if (firstTime) await PermissionHandler.resetPermissionsAllChannels(this, guild);
+
+        /*
+            Lifecycle marker of the server-log channel. setupGuild() runs on startup (ready.js) and when the bot
+            joins a guild (guildCreate.js), so the line marks the channel of the current process.
+        */
+        LogChannelRelay.pushStartLine(guild.id,
+            `${this.intlGet(null, 'infoCap')}: rustplusplus ${Version} started`);
 
         this.resetRustplusVariables(guild.id);
     }

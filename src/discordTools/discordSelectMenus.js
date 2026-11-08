@@ -25,6 +25,7 @@ const Path = require('path');
 const Client = require('../structures/clientRegistry.js');
 const Constants = require('../util/constants.js');
 const Languages = require('../util/languages.js');
+const LogLevels = require('../util/logLevels.js');
 const { CHANNELS, normalizeChannel } = require('../util/inGameChat.js');
 
 module.exports = {
@@ -169,6 +170,41 @@ module.exports = {
                         label: Client.client.intlGet(guildId, 'inGameChatChannelClan'),
                         description: Client.client.intlGet(guildId, 'inGameChatChannelClanDesc'),
                         value: CHANNELS.CLAN
+                    }]
+            }));
+    },
+
+    /*
+        Level of the server-log channel. The values are the ids of util/logLevels.js, so the relay understands
+        them directly.
+    */
+    getServerLogLevelSelectMenu: function (guildId, logLevel) {
+        const level = LogLevels.normalizeLogLevel(logLevel);
+
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getSelectMenu({
+                customId: 'ServerLogLevel',
+                placeholder: Client.client.intlGet(guildId, 'serverLogLevelCurrent', { level: level }),
+                options: [
+                    {
+                        label: Client.client.intlGet(guildId, 'serverLogLevelOff'),
+                        description: Client.client.intlGet(guildId, 'serverLogLevelOffDesc'),
+                        value: 'off'
+                    },
+                    {
+                        label: Client.client.intlGet(guildId, 'serverLogLevelError'),
+                        description: Client.client.intlGet(guildId, 'serverLogLevelErrorDesc'),
+                        value: 'error'
+                    },
+                    {
+                        label: Client.client.intlGet(guildId, 'serverLogLevelInfo'),
+                        description: Client.client.intlGet(guildId, 'serverLogLevelInfoDesc'),
+                        value: 'info'
+                    },
+                    {
+                        label: Client.client.intlGet(guildId, 'serverLogLevelFull'),
+                        description: Client.client.intlGet(guildId, 'serverLogLevelFullDesc'),
+                        value: 'full'
                     }]
             }));
     },

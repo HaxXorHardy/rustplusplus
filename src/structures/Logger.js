@@ -23,6 +23,7 @@ const Winston = require("winston");
 
 const Config = require('../../config');
 const formatLogValue = require('../util/formatLogValue');
+const LogChannelRelay = require('../util/logChannelRelay');
 
 class Logger {
     constructor(logFilePath, type) {
@@ -105,6 +106,13 @@ class Logger {
                         Colors.white(`${this.serverName} `) +
                         ((level === 'error') ? Colors.red(line) : ((level === 'debug') ? Colors.gray(line) : Colors.yellow(line)))
                     );
+
+                    /*
+                        Mirror the line into the server-log channel of this guild. The channel decides on its own
+                        whether the configured level allows the line (see util/logChannelRelay.js), and it reads
+                        the channel id from the instance, so a channel recreated by /reset discord is used.
+                    */
+                    LogChannelRelay.push(this.guildId, `${time} | ${line}`, level);
                 }
             } break;
 

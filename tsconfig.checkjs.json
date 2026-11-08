@@ -19,6 +19,7 @@
     "src/util/formatLogValue.js",
     "src/util/trackerInputParser.js",
     "src/util/rustplusTransport.js",
+    "src/util/logLevels.js",
     "src/util/storage/RuntimeDataStorage.js",
     "src/util/storage/getRuntimeDataStorage.js",
     "src/structures/clientRegistry.js"

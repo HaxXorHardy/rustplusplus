@@ -34,6 +34,7 @@ const SetupAlarms = require('../discordTools/SetupAlarms.js');
 const SetupStorageMonitors = require('../discordTools/SetupStorageMonitors.js');
 const SetupTrackers = require('../discordTools/SetupTrackers.js');
 const InstanceUtils = require('../util/instanceUtils.js');
+const LogChannelRelay = require('../util/logChannelRelay.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 
 /* Catches that must not abort a reset: the category may be missing or the bot may lack Manage Roles.
@@ -122,6 +123,13 @@ module.exports = {
 
         switch (interaction.options.getSubcommand()) {
             case 'discord': {
+                /*
+                    Everything that is still queued belongs to the channel that is about to be deleted: drop it
+                    instead of posting it into the recreated channel. The relay resolves the channel id on every
+                    flush, so it follows the new channel afterwards.
+                */
+                LogChannelRelay.reset(guild.id);
+
                 await RemoveGuildChannels(client, guild);
 
                 /*
@@ -154,6 +162,10 @@ module.exports = {
                 await SetupTrackers(client, guild);
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
+
+                /* Marker line: it proves that the relay already switched to the recreated channel. */
+                LogChannelRelay.pushStartLine(guild.id,
+                    `${client.intlGet(null, 'infoCap')}: ${client.intlGet(null, 'serverLogChannelsRecreated')}`);
 
                 client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'slashCommandValueChange', {
                     id: `${verifyId}`,

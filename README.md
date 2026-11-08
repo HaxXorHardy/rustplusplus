@@ -37,6 +37,7 @@ A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/r
 * Head over to the [Information Text Channel](docs/images/information_channel.png) to see all sorts of information about the server, ongoing events and team member status.
 * Communicate with teammates from [Discord to In-Game](docs/discord_text_channels.md#teamchat-channel) and vice versa.
 * Keep track of other teams on the server with the [Battlemetrics Player Tracker](docs/discord_text_channels.md#trackers-channel).
+* Follow what the bot is doing in the [Serverlog Channel](docs/discord_text_channels.md#serverlog-channel), which is only visible for the bot and the administrators (level selectable: `OFF`, `ERROR`, `INFO`, `FULL`).
 * Alot of [QoL Commands](docs/commands.md) that can be used In-Game or from Discord.
 * View the [Full list of features](docs/full_list_features.md).
 

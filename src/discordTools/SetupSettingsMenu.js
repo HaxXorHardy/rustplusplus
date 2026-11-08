@@ -50,6 +50,7 @@ module.exports = async (client, guild, forced = false) => {
     else {
         await ensureInGameChatChannelSetting(client, guild, channel);
         await ensureInformationDisplaySettings(client, guild, channel);
+        await ensureServerLogLevelSetting(client, guild, channel);
     }
 
     await removeDisabledInformationMessages(client, guild);
@@ -288,6 +289,24 @@ async function setupGeneralSettings(client, guildId, channel) {
     await client.messageSend(channel, {
         embeds: [DiscordEmbeds.getEmbed({
             color: Constants.COLOR_SETTINGS,
+            title: client.intlGet(guildId, 'serverLogLevelSetting'),
+            thumbnail: `attachment://settings_logo.png`,
+            fields: [
+                {
+                    name: client.intlGet(guildId, 'noteCap'),
+                    value: client.intlGet(guildId, 'serverLogLevelNote'),
+                    inline: true
+                }]
+        })],
+        components: [DiscordSelectMenus.getServerLogLevelSelectMenu(guildId,
+            instance.generalSettings.serverLogLevel)],
+        files: [new Discord.AttachmentBuilder(
+            Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+    });
+
+    await client.messageSend(channel, {
+        embeds: [DiscordEmbeds.getEmbed({
+            color: Constants.COLOR_SETTINGS,
             title: client.intlGet(guildId, 'subscribeToChangesBattlemetrics'),
             thumbnail: `attachment://settings_logo.png`
         })],
@@ -379,6 +398,51 @@ async function ensureInGameChatChannelSetting(client, guild, channel) {
     catch (e) {
         client.log(client.intlGet(null, 'errorCap'),
             `Could not add the In-Game Chat Channel setting: ${e}. Use /reset settings instead.`, 'warn');
+    }
+}
+
+/*
+    The server-log level was added after the settings channel was introduced, so it is added here when it is
+    missing (same pattern as ensureInGameChatChannelSetting).
+*/
+async function ensureServerLogLevelSetting(client, guild, channel) {
+    const instance = client.getInstance(guild.id);
+
+    try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+        const message = messages.find((message) => message.components.some((row) =>
+            row.components.some((component) => component.customId === 'ServerLogLevel')));
+
+        if (message) {
+            if (message.embeds.length !== 0 &&
+                message.embeds[0].title === client.intlGet(guild.id, 'serverLogLevelSetting')) {
+                return;
+            }
+
+            await message.delete().catch(() => undefined);
+        }
+
+        await client.messageSend(channel, {
+            embeds: [DiscordEmbeds.getEmbed({
+                color: Constants.COLOR_SETTINGS,
+                title: client.intlGet(guild.id, 'serverLogLevelSetting'),
+                thumbnail: `attachment://settings_logo.png`,
+                fields: [
+                    {
+                        name: client.intlGet(guild.id, 'noteCap'),
+                        value: client.intlGet(guild.id, 'serverLogLevelNote'),
+                        inline: true
+                    }]
+            })],
+            components: [DiscordSelectMenus.getServerLogLevelSelectMenu(guild.id,
+                instance.generalSettings.serverLogLevel)],
+            files: [new Discord.AttachmentBuilder(
+                Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+        });
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'errorCap'),
+            `Could not add the Server Log Level setting: ${e}. Use /reset settings instead.`, 'warn');
     }
 }
 

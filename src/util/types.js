@@ -64,7 +64,8 @@
  * @property {{category: (string|null), information: (string|null), servers: (string|null),
  *   settings: (string|null), commands: (string|null), teamchat: (string|null),
  *   switches: (string|null), switchGroups: (string|null), storageMonitors: (string|null),
- *   alarms: (string|null), activity: (string|null), trackers: (string|null)}} channelId
+ *   alarms: (string|null), activity: (string|null), trackers: (string|null),
+ *   log: (string|null)}} channelId
  * @property {GeneralSettings} generalSettings
  * @property {Object<string, NotificationSetting>} notificationSettings
  * @property {Object<string, ServerEntry>} serverList
