@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.documentation="https://github.com/HaxXorHardy/rus
 LABEL org.opencontainers.image.licenses="GPL-3.0-or-later"
 LABEL org.opencontainers.image.authors="HaxXorHardy (https://github.com/HaxXorHardy) - based on FaiThiX (https://github.com/faithix) and Alexander Emanuelsson / alexemanuelol (https://github.com/alexemanuelol)"
 
-RUN apt-get update && apt-get install -y graphicsmagick && apt-get clean
+RUN apt-get update && apt-get install -y graphicsmagick ffmpeg && apt-get clean
 
 WORKDIR /app
 
