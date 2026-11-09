@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Interruptor Inteligente - Valor: {value}.",
     "makeSureApplicationsCommandsEnabled": "Certifique-se de que o applications.commands está marcado ao criar o URL de convite.",
     "map": "Mapa",
-    "mapSalt": "Sal do Mapa",
     "mapSeed": "Semente do Mapa",
     "mapSize": "Tamanho do mapa",
     "mapWipeDetectedNotifySetting": "Quando o Wipe do Mapa for detectada, {group} deve ser notificado?",

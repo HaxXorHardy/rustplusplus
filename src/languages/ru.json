@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Умный Переключатель - Значение: {value}.",
     "makeSureApplicationsCommandsEnabled": "Убедитесь, что при создании URL приглашения бота, вы установили флажок applications.commands.",
     "map": "Название карты",
-    "mapSalt": "Salt карты",
     "mapSeed": "Seed карты",
     "mapSize": "Size карты",
     "mapWipeDetectedNotifySetting": "При обнаружении новой карты, отправлять уведомление {group}?",

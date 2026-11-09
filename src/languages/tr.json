@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Smart Switch - Değer: {value}.",
     "makeSureApplicationsCommandsEnabled": "botu davet ederken applications.commands işaretli olduğundan emin olun.",
     "map": "Harita",
-    "mapSalt": "Harita Özel",
     "mapSeed": "Harita Tohumu",
     "mapSize": "Harita Boyutu",
     "mapWipeDetectedNotifySetting": "Wipe tespit edildiğinde {group} grubu bildirim alsın mı?",

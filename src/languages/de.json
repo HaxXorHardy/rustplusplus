@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Intelligenter Schalter - Wert: {value}.",
     "makeSureApplicationsCommandsEnabled": "Stelle sicher, dass applications.command beim Erstellen der Einladungs-URL angehakt ist.",
     "map": "Karte",
-    "mapSalt": "Map Salt",
     "mapSeed": "Map Seed",
     "mapSize": "Kartengröße",
     "mapWipeDetectedNotifySetting": "Soll {group} benachrichtigt werden, wenn Wipe der Karte erkannt wird?",

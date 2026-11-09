@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Smart Switch - Värde: {value}.",
     "makeSureApplicationsCommandsEnabled": "Se till att applications.commands är markerat när du skapar inbjudningsadressen.",
     "map": "Karta",
-    "mapSalt": "Kartsalt",
     "mapSeed": "Kartfrö",
     "mapSize": "Kartstorlek",
     "mapWipeDetectedNotifySetting": "När Kartan rensas, ska {group} bli notifierade?",

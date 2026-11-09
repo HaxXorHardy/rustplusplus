@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Smart Switch - Valore: {value}.",
     "makeSureApplicationsCommandsEnabled": "Assicurati che applications.commands sia selezionato quando crei l'URL di invito.",
     "map": "Mappa",
-    "mapSalt": "Map Salt",
     "mapSeed": "Seed della Mappa",
     "mapSize": "Dimensioni della Mappa",
     "mapWipeDetectedNotifySetting": "Quando viene rilevato il Wipe della mappa, {group} dovrebbe essere avvisato?",

@@ -531,7 +531,6 @@
     "loggedInAs": "LOGGED IN AS: {name}",
     "makeSureApplicationsCommandsEnabled": "Make sure applications.commands is checked when creating the invite URL.",
     "map": "Map",
-    "mapSalt": "Map Salt",
     "mapSeed": "Map Seed",
     "mapSize": "Map Size",
     "mapWipeDetectedNotifySetting": "When Map Wipe is detected, should {group} be notified?",

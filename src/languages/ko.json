@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Smart Switch - 값: {value}.",
     "makeSureApplicationsCommandsEnabled": "초대 URL을 생성할 때 applications.commands가 선택되어 있는지 확인합니다.",
     "map": "지도",
-    "mapSalt": "지도 솔트",
     "mapSeed": "지도 시드",
     "mapSize": "지도 크기",
     "mapWipeDetectedNotifySetting": "맵 초기화가 감지되면 {group}에게 알릴까요?",

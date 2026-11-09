@@ -757,7 +757,6 @@ module.exports = {
         const wipeFieldName = Client.client.intlGet(guildId, 'wipe');
         const mapSizeFieldName = Client.client.intlGet(guildId, 'mapSize');
         const mapSeedFieldName = Client.client.intlGet(guildId, 'mapSeed');
-        const mapSaltFieldName = Client.client.intlGet(guildId, 'mapSalt');
         const mapFieldName = Client.client.intlGet(guildId, 'map');
         const nameFieldName = Client.client.intlGet(guildId, 'name');
 
@@ -787,7 +786,6 @@ module.exports = {
         embed.addFields(
             { name: mapSizeFieldName, value: `\`${rustplus.info.mapSize}\``, inline: true },
             { name: mapSeedFieldName, value: `\`${rustplus.info.seed}\``, inline: true },
-            { name: mapSaltFieldName, value: `\`${rustplus.info.salt}\``, inline: true },
             { name: mapFieldName, value: `\`${rustplus.info.map}\``, inline: true });
 
         const connect = instance.serverList[rustplus.serverId].connect;

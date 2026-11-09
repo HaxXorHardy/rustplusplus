@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Smart Switch - Hodnota: {value}.",
     "makeSureApplicationsCommandsEnabled": "Při vytváření URL pozvánky se ujisti, že je zaškrtnuto applications.commands.",
     "map": "Map",
-    "mapSalt": "Map Salt",
     "mapSeed": "Map Seed",
     "mapSize": "Map Size",
     "mapWipeDetectedNotifySetting": "Když je detekován wipe mapy, má být upozorněna skupina {group}?",

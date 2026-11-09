@@ -527,7 +527,6 @@
     "logSmartSwitchValueChange": "Commutateur intelligent - Valeur : {value}.",
     "makeSureApplicationsCommandsEnabled": "Assurez-vous que les commandes des applications sont cochées lors de la création de l'URL d'invitation.",
     "map": "Map",
-    "mapSalt": "Map Salt",
     "mapSeed": "Map Seed",
     "mapSize": "Map Size",
     "mapWipeDetectedNotifySetting": "Lorsque Map Wipe est détecté, {group} doit-il être averti ?",

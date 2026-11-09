@@ -33,7 +33,6 @@ class Info {
         this._maxPlayers = info.maxPlayers;
         this._queuedPlayers = info.queuedPlayers;
         this._seed = info.seed;
-        this._salt = info.salt;
 
         this._correctedMapSize = info.mapSize;
     }
@@ -59,8 +58,6 @@ class Info {
     set queuedPlayers(queuedPlayers) { this._queuedPlayers = queuedPlayers; }
     get seed() { return this._seed; }
     set seed(seed) { this._seed = seed; }
-    get salt() { return this._salt; }
-    set salt(salt) { this._salt = salt; }
     get correctedMapSize() { return this._correctedMapSize; }
     set correctedMapSize(correctedMapSize) { this._correctedMapSize = correctedMapSize; }
 
@@ -75,7 +72,6 @@ class Info {
     isMaxPlayersChanged(info) { return ((this.maxPlayers) !== (info.maxPlayers)); }
     isQueuedPlayersChanged(info) { return ((this.queuedPlayers) !== (info.queuedPlayers)); }
     isSeedChanged(info) { return ((this.seed) !== (info.seed)); }
-    isSaltChanged(info) { return ((this.salt) !== (info.salt)); }
 
     /* Other checkers */
     isMaxPlayersIncreased(info) { return ((this.maxPlayers) < (info.maxPlayers)); }
@@ -93,7 +89,6 @@ class Info {
         this.maxPlayers = info.maxPlayers;
         this.queuedPlayers = info.queuedPlayers;
         this.seed = info.seed;
-        this.salt = info.salt;
 
         this.correctedMapSize = info.mapSize;
     }
