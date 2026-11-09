@@ -68,6 +68,12 @@ module.exports = {
         rustplusTokenRenewBeforeSeconds: envInt('RPP_RUSTPLUS_TOKEN_RENEW_BEFORE', 3 * 24 * 3600),
         /* How often the notification history is read to adopt servers/devices that were paired in-game. */
         rustplusHistoryIntervalMs: envInt('RPP_RUSTPLUS_HISTORY_INTERVAL', 5 * 60 * 1000), /* 5 min */
+        /*
+            How often the account state (the server list of the app) is read. The history is the source of truth for
+            new pairings and is read on every refresh, so a short history interval (a few seconds) stays cheap: this
+            slower snapshot is cached in between (see util/rustplusHistory.js).
+        */
+        rustplusSyncDataIntervalMs: envInt('RPP_RUSTPLUS_SYNCDATA_INTERVAL', 5 * 60 * 1000), /* 5 min */
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',

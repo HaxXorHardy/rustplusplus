@@ -18,7 +18,9 @@ If you're getting the error below, try running `npm i -g npm`. This should allow
 ## I've paired a device but no Discord message appears
 
 The bot does not use FCM anymore. It reads the **notification history of the Rust+ account** (`POST /api/history/read`)
-every `RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes) and adopts the paired server or device from it. The log shows:
+every `RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes, lower it to a few seconds to see a pairing almost instantly)
+and adopts the paired server or device from it. The account state (`POST /api/syncData`) is only a slow snapshot and is
+cached for `RPP_RUSTPLUS_SYNCDATA_INTERVAL` (default 5 minutes), so a short history interval stays cheap. The log shows:
 
 * `Rust+ pairing of <server> renewed, reconnecting with the new player token.` - the pairing was adopted.
 * `Paired device <id> was adopted from the notification history.` - a switch/alarm/storage monitor was adopted.
@@ -229,8 +231,9 @@ the same list the app and app.playrust.com show). It contains everything:
 ```
 
 `util/rustplusHistory.js` reads that history, `/credentials login` adopts the devices right away and
-`RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes) keeps doing it while the bot runs - the Discord message of the
-new switch/alarm is posted as well. **No tapping in the app, no FCM credentials.**
+`RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes, a few seconds make a pairing appear almost instantly) keeps doing
+it while the bot runs - the Discord message of the new switch/alarm is posted as well. **No tapping in the app, no FCM
+credentials.**
 
 #### The token renews itself
 

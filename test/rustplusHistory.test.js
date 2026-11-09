@@ -22,6 +22,7 @@ const Assert = require('node:assert');
 const Test = require('node:test');
 
 const RustPlusHistory = require('../src/util/rustplusHistory.js');
+const Config = require('../config');
 
 const STEAM_ID = '76561198000000300';
 const SERVER_ID = '6f2a1c3d-4b5e-4978-8a9b-0c1d2e3f4a5b';
@@ -257,6 +258,9 @@ Test.describe('RustPlusHistory.refresh', () => {
     }
 
     function stubAuth(t, auth) {
+        /* The account state is cached per steam id, a test must not see the state of the previous one. */
+        RustPlusHistory.resetAccountStateCache();
+
         const rustplusAuthPath = require.resolve('../src/util/rustplusAuth.js');
         const RustPlusAuth = require(rustplusAuthPath);
 
@@ -487,6 +491,54 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(instance.activeServer, null);
         Assert.strictEqual(client.saved, 0);
         Assert.deepStrictEqual(client.createdRustplusInstances, []);
+    });
+
+    /*
+        A short history interval (a few seconds) must not double the requests against the Facepunch API: the account
+        state is a slow snapshot and is cached, the history itself is read on every run.
+    */
+    Test.it('reads the account state once within the sync interval', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        let calls = 0;
+        const fetchSync = async () => { calls += 1; return { servers: [] }; };
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => [], fetchSync);
+        await RustPlusHistory.refresh(client, async () => [], fetchSync);
+
+        Assert.strictEqual(calls, 1);
+    });
+
+    Test.it('reads the account state again after the sync interval', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const base = Date.now();
+        const originalNow = Date.now;
+        Date.now = () => base;
+
+        t.after(() => {
+            Date.now = originalNow;
+        });
+
+        let calls = 0;
+        const fetchSync = async () => { calls += 1; return { servers: [] }; };
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => [], fetchSync);
+        await RustPlusHistory.refresh(client, async () => [], fetchSync);
+
+        Assert.strictEqual(calls, 1);
+
+        Date.now = () => base + Config.general.rustplusSyncDataIntervalMs + 1000;
+
+        await RustPlusHistory.refresh(client, async () => [], fetchSync);
+
+        Assert.strictEqual(calls, 2);
     });
 });
 

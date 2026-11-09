@@ -31,6 +31,7 @@
 
 const Axios = require('axios');
 
+const Config = require('../../config');
 const RustPlusLoginPages = require('./rustplusLoginPages.js');
 const RustPlusAuth = require('./rustplusAuth.js');
 const RustPlusLogin = require('./rustplusLogin.js');
@@ -348,11 +349,34 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
     return added;
 }
 
+/*
+    The account state of the app is a slow snapshot: the history carries the pairings themselves, so a short history
+    interval does not have to ask for the server list on every run. Cached per steam id for
+    Config.general.rustplusSyncDataIntervalMs.
+*/
+const accountStateCache = new Map();   /* steamId -> { servers, at } */
+
+function resetAccountStateCache() {
+    accountStateCache.clear();
+}
+
+function cachedAccountServers(steamId, now) {
+    const cached = accountStateCache.get(`${steamId}`);
+    if (!cached) return null;
+
+    return ((now - cached.at) < Config.general.rustplusSyncDataIntervalMs) ? cached.servers : null;
+}
+
 /* The servers of the Rust+ account, or null when the state could not be read (then nothing is changed). */
-async function readAccountServers(client, steamId, auth, fetchSyncFn) {
+async function readAccountServers(client, steamId, auth, fetchSyncFn, now = Date.now()) {
+    const cached = cachedAccountServers(steamId, now);
+    if (cached !== null) return cached;
+
     try {
         const sync = await fetchSyncFn(auth.token);
         if (!sync || !Array.isArray(sync.servers)) return null;
+
+        accountStateCache.set(`${steamId}`, { servers: sync.servers, at: now });
 
         return sync.servers;
     }
@@ -442,4 +466,5 @@ module.exports = {
     parsePairingEntries: parsePairingEntries,
     applyPairingEntries: applyPairingEntries,
     refresh: refresh,
+    resetAccountStateCache: resetAccountStateCache,
 };
