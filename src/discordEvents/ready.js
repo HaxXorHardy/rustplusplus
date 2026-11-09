@@ -29,6 +29,27 @@ const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const SetupServerList = require('../discordTools/SetupServerList.js');
+const StorageMonitorHandler = require('../handlers/storageMonitorHandler.js');
+
+/*
+    Storage monitors are polled every 30 polls (about five minutes at the default polling interval), so a monitor that
+    is adopted in between would say "not connected" for minutes. Ask for the state of the connected server right away;
+    the handler also posts the message of every monitor, so the caller must not post it a second time.
+
+    Returns false when the guild is not connected to that server, the caller posts the message then.
+*/
+async function refreshStorageMonitors(client, device) {
+    const rustplus = client.rustplusInstances ? client.rustplusInstances[device.guildId] : null;
+
+    if (!rustplus || !rustplus.isOperational || rustplus.serverId !== device.serverKey) return false;
+
+    /* The next monitor cycle is due now, the handler resets the counter after it ran. */
+    rustplus.storageMonitorIntervalCounter = 29;
+
+    await StorageMonitorHandler.handler(rustplus, client);
+
+    return true;
+}
 
 module.exports = {
     name: 'clientReady',
@@ -95,6 +116,7 @@ module.exports = {
         */
         const refreshPairingHistory = async () => {
             const added = await RustPlusHistory.refresh(client);
+            const refreshedStorageMonitors = new Set();
 
             for (const device of added) {
                 if (!device.serverKey) continue;
@@ -107,8 +129,22 @@ module.exports = {
                         await DiscordMessages.sendSmartAlarmMessage(device.guildId, device.serverKey, device.entityId);
                     }
                     else if (device.entityType === RustPlusSync.ENTITY_TYPES.STORAGE_MONITOR) {
-                        await DiscordMessages.sendStorageMonitorMessage(device.guildId, device.serverKey,
-                            device.entityId);
+                        /*
+                            A monitor that is adopted while the bot runs has no items/capacity yet, its message would
+                            say "not connected" until the monitor cycle runs - and that cycle only runs every 30 polls
+                            (about five minutes). Read the state first, the handler posts the messages of the server.
+                        */
+                        const key = `${device.guildId}|${device.serverKey}`;
+                        const refreshed = refreshedStorageMonitors.has(key) ?
+                            true : await refreshStorageMonitors(client, device);
+
+                        if (refreshed) {
+                            refreshedStorageMonitors.add(key);
+                        }
+                        else {
+                            await DiscordMessages.sendStorageMonitorMessage(device.guildId, device.serverKey,
+                                device.entityId);
+                        }
                     }
 
                     client.log(client.intlGet(null, 'infoCap'),
@@ -199,4 +235,5 @@ module.exports = {
 
         client.createRustplusInstancesFromConfig();
     },
+    refreshStorageMonitors: refreshStorageMonitors,
 };

@@ -290,3 +290,50 @@ Test.describe('DiscordEmbeds.getStorageMonitorEmbed', () => {
     });
 });
 
+
+/*
+    Storage monitors are polled every 30 polls (about five minutes), an adopted monitor would keep its "not connected"
+    state that long. The message of an adopted monitor is posted after the state was read (discordEvents/ready.js).
+*/
+Test.describe('ready.refreshStorageMonitors', () => {
+    const Ready = require('../src/discordEvents/ready.js');
+    const StorageMonitorHandler = require('../src/handlers/storageMonitorHandler.js');
+
+    const originalHandler = StorageMonitorHandler.handler;
+
+    Test.afterEach(() => {
+        StorageMonitorHandler.handler = originalHandler;
+    });
+
+    function fakeClient(rustplus) {
+        return { rustplusInstances: rustplus === null ? {} : { guildId: rustplus } };
+    }
+
+    Test.it('reads the monitors of the connected server right away', async () => {
+        let calls = 0;
+        StorageMonitorHandler.handler = async () => { calls += 1; };
+
+        const rustplus = { serverId: 'relay-a', isOperational: true, storageMonitorIntervalCounter: 0 };
+        const refreshed = await Ready.refreshStorageMonitors(fakeClient(rustplus),
+            { guildId: 'guildId', serverKey: 'relay-a' });
+
+        Assert.strictEqual(refreshed, true);
+        Assert.strictEqual(rustplus.storageMonitorIntervalCounter, 29);
+        Assert.strictEqual(calls, 1);
+    });
+
+    Test.it('leaves the message to the caller when the server is not connected', async () => {
+        StorageMonitorHandler.handler = async () => {
+            throw new Error('the handler must not run');
+        };
+
+        const device = { guildId: 'guildId', serverKey: 'relay-a' };
+
+        Assert.strictEqual(await Ready.refreshStorageMonitors(fakeClient(null), device), false);
+        Assert.strictEqual(await Ready.refreshStorageMonitors(
+            fakeClient({ serverId: 'relay-b', isOperational: true }), device), false);
+        Assert.strictEqual(await Ready.refreshStorageMonitors(
+            fakeClient({ serverId: 'relay-a', isOperational: false }), device), false);
+    });
+});
+
