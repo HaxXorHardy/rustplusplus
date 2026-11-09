@@ -21,6 +21,8 @@
 const Assert = require('node:assert');
 const Test = require('node:test');
 
+const Client = require('../src/structures/clientRegistry.js');
+const DiscordEmbeds = require('../src/discordTools/discordEmbeds.js');
 const DiscordMessages = require('../src/discordTools/discordMessages.js');
 const DiscordTools = require('../src/discordTools/discordTools.js');
 const RemoveServerDevices = require('../src/discordTools/RemoveServerDevices.js');
@@ -84,6 +86,15 @@ Test.describe('SetupServerList.postMissingServerMessages', () => {
         Assert.ok(client.logs.some((text) => text.includes('missing access')));
     });
 
+    Test.it('needs an address or a pairing id to be listed', () => {
+        Assert.strictEqual(SetupServerList.needsServerMessage(null), false);
+        Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: '1', guid: 'a' }), false);
+        Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: null }), false);
+        Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: null, guid: 'a' }), true);
+        Assert.strictEqual(
+            SetupServerList.needsServerMessage({ messageId: null, serverIp: 'relay', appPort: 'a' }), true);
+    });
+});
 
 /* Only the devices of the connected server are listed, the messages of the previous server have to go. */
 Test.describe('RemoveServerDevices', () => {
@@ -153,20 +164,12 @@ Test.describe('RemoveServerDevices', () => {
     });
 });
 
-    Test.it('needs an address or a pairing id to be listed', () => {
-        Assert.strictEqual(SetupServerList.needsServerMessage(null), false);
-        Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: '1', guid: 'a' }), false);
-        Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: null }), false);
-        Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: null, guid: 'a' }), true);
 
 /*
     Items, capacity and expiry of a storage monitor are only known for the connected server. The monitor of another
     server of the guild has to render the not connected state, a missing data set used to throw instead.
 */
 Test.describe('DiscordEmbeds.getStorageMonitorEmbed', () => {
-    const Client = require('../src/structures/clientRegistry.js');
-    const DiscordEmbeds = require('../src/discordTools/discordEmbeds.js');
-
     Test.afterEach(() => {
         Client.client = null;
     });
@@ -221,7 +224,3 @@ Test.describe('DiscordEmbeds.getStorageMonitorEmbed', () => {
     });
 });
 
-        Assert.strictEqual(
-            SetupServerList.needsServerMessage({ messageId: null, serverIp: 'relay', appPort: 'a' }), true);
-    });
-});
