@@ -255,12 +255,12 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
     return result;
 }
 
-/* The time of the newest death that was already reported for this account, 0 when none was. */
+/* The time of the newest death that was already reported for this account, null when none was reported yet. */
 function getReportedDeath(instance, steamId) {
     const reported = (instance.historyDeaths || {})[`${steamId}`];
     const value = Number(reported);
 
-    return Number.isFinite(value) ? value : 0;
+    return Number.isFinite(value) ? value : null;
 }
 
 function setReportedDeath(instance, steamId, at) {
@@ -343,21 +343,33 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                 /*
                     A death notification is reported once as a direct message (the job of the removed FCM listener).
                     The newest reported one is remembered per account, so the replay of the history does not repeat it.
+                    The first run only records the newest one: the history keeps old deaths and nobody wants them as a
+                    direct message days later.
                 */
                 const reportedDeath = getReportedDeath(instance, steamId);
-                const newDeaths = entries
+                const deathEntries = entries
                     .filter((entry) => entry.kind === 'death')
                     .map((entry) => ({ entry: entry, at: entry.date ? Date.parse(entry.date) : NaN }))
-                    .filter((death) => Number.isFinite(death.at) && death.at > reportedDeath);
+                    .filter((death) => Number.isFinite(death.at));
 
-                if (newDeaths.length !== 0) {
-                    /* Oldest first, the user should read them in the order they happened. */
-                    for (const death of [...newDeaths].reverse()) {
-                        deaths.push({ guildId: guildId, steamId: steamId, death: death.entry });
+                if (reportedDeath === null) {
+                    if (deathEntries.length !== 0) {
+                        setReportedDeath(instance, steamId, Math.max(...deathEntries.map((death) => death.at)));
+                        changed = true;
                     }
+                }
+                else {
+                    const newDeaths = deathEntries.filter((death) => death.at > reportedDeath);
 
-                    setReportedDeath(instance, steamId, Math.max(...newDeaths.map((death) => death.at)));
-                    changed = true;
+                    if (newDeaths.length !== 0) {
+                        /* Oldest first, the user should read them in the order they happened. */
+                        for (const death of [...newDeaths].reverse()) {
+                            deaths.push({ guildId: guildId, steamId: steamId, death: death.entry });
+                        }
+
+                        setReportedDeath(instance, steamId, Math.max(...newDeaths.map((death) => death.at)));
+                        changed = true;
+                    }
                 }
 
                 if (accountServers !== null) {

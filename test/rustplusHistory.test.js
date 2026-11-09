@@ -530,28 +530,36 @@ Test.describe('RustPlusHistory.refresh', () => {
 
     /*
         The removed FCM listener sent a direct message for every death of the account. The history keeps the same
-        notification, so the refresh has to report it - once, even though the history is replayed every run.
+        notification, so the refresh reports it - once, even though the history is replayed every run. The first run
+        only records the newest death, the history would otherwise deliver days of old deaths as direct messages.
     */
-    Test.it('reports a death of the account once', async (t) => {
+    Test.it('reports a death once and only after the recorded one', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
 
         const instance = { activeServer: null, serverList: {}, trackers: {} };
         const client = fakeClient(instance);
         const history = async () => [deathEntry('You were killed by JS8', '2026-11-09T02:06:11.5464213+00:00')];
 
+        /* First run: the death is already there, it is recorded but not reported. */
         const first = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
 
-        Assert.strictEqual(first.deaths.length, 1);
-        Assert.strictEqual(first.deaths[0].guildId, GUILD_ID);
-        Assert.strictEqual(first.deaths[0].steamId, STEAM_ID);
-        Assert.strictEqual(first.deaths[0].death.text, 'You were killed by JS8');
-        Assert.strictEqual(first.deaths[0].death.serverName, "Captain's Quarters");
+        Assert.deepStrictEqual(first.deaths, []);
         Assert.strictEqual(instance.historyDeaths[STEAM_ID], Date.parse('2026-11-09T02:06:11.5464213+00:00'));
 
-        /* The same entry is in the history on the next run, it must not be reported again. */
+        /* A later death is reported, the same entry is not reported again. */
+        instance.historyDeaths[STEAM_ID] = Date.parse('2026-11-09T01:00:00+00:00');
+
         const second = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
 
-        Assert.deepStrictEqual(second.deaths, []);
+        Assert.strictEqual(second.deaths.length, 1);
+        Assert.strictEqual(second.deaths[0].guildId, GUILD_ID);
+        Assert.strictEqual(second.deaths[0].steamId, STEAM_ID);
+        Assert.strictEqual(second.deaths[0].death.text, 'You were killed by JS8');
+        Assert.strictEqual(second.deaths[0].death.serverName, "Captain's Quarters");
+
+        const third = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.deepStrictEqual(third.deaths, []);
     });
 
     /*
