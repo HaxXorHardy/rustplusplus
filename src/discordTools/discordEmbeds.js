@@ -297,9 +297,17 @@ module.exports = {
         const rustplus = Client.client.rustplusInstances[guildId];
         const grid = entity.location !== null ? ` (${entity.location})` : '';
 
+        /*
+            Items, capacity and expiry are only polled for the storage monitors of the connected server. A monitor of
+            another server (a guild can have several), or one that is not set up yet, has no data yet and is shown with
+            the not connected state instead of throwing on the missing data.
+        */
+        const storage = (rustplus && rustplus.serverId === serverId) ?
+            (rustplus.storageMonitors || {})[entityId] : null;
+
         let description = `**ID** \`${entityId}\``;
 
-        if (!rustplus) {
+        if (!storage) {
             return module.exports.getEmbed({
                 title: `${entity.name}${grid}`,
                 color: Constants.COLOR_DEFAULT,
@@ -310,7 +318,7 @@ module.exports = {
             });
         }
 
-        if (rustplus && rustplus.storageMonitors[entityId].capacity === 0) {
+        if (storage.capacity === 0) {
             return module.exports.getEmbed({
                 title: `${entity.name}${grid}`,
                 color: Constants.COLOR_DEFAULT,
@@ -326,9 +334,9 @@ module.exports = {
             `\`${entity.type !== null ? Client.client.intlGet(guildId, entity.type) :
                 Client.client.intlGet(guildId, 'unknown')}\``;
 
-        const items = rustplus.storageMonitors[entityId].items;
-        const expiry = rustplus.storageMonitors[entityId].expiry;
-        const capacity = rustplus.storageMonitors[entityId].capacity;
+        const items = Array.isArray(storage.items) ? storage.items : [];
+        const expiry = storage.expiry;
+        const capacity = storage.capacity;
 
         description += `\n**${Client.client.intlGet(guildId, 'slots')}** `;
         description += `\`(${items.length}/${capacity})\``

@@ -158,6 +158,69 @@ Test.describe('RemoveServerDevices', () => {
         Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: '1', guid: 'a' }), false);
         Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: null }), false);
         Assert.strictEqual(SetupServerList.needsServerMessage({ messageId: null, guid: 'a' }), true);
+
+/*
+    Items, capacity and expiry of a storage monitor are only known for the connected server. The monitor of another
+    server of the guild has to render the not connected state, a missing data set used to throw instead.
+*/
+Test.describe('DiscordEmbeds.getStorageMonitorEmbed', () => {
+    const Client = require('../src/structures/clientRegistry.js');
+    const DiscordEmbeds = require('../src/discordTools/discordEmbeds.js');
+
+    Test.afterEach(() => {
+        Client.client = null;
+    });
+
+    function stubClient(rustplus) {
+        const instance = {
+            serverList: {
+                'relay-a': {
+                    title: 'A',
+                    storageMonitors: {
+                        '4242': {
+                            name: 'TC',
+                            image: 'storage_monitor.png',
+                            server: 'A',
+                            location: null,
+                            type: 'toolCupboard',
+                            upkeep: null,
+                        },
+                    },
+                },
+            },
+        };
+
+        Client.client = {
+            items: { getName: (id) => `${id}` },
+            rustplusInstances: { guildId: rustplus },
+            getInstance: () => instance,
+            setInstance: () => undefined,
+            intlGet: (guildId, key) => key,
+        };
+
+        return instance;
+    }
+
+    Test.it('shows a monitor of another server as not connected', () => {
+        stubClient({ serverId: 'relay-b', storageMonitors: {} });
+
+        const embed = DiscordEmbeds.getStorageMonitorEmbed('guildId', 'relay-a', '4242');
+
+        Assert.ok(embed.data.description.includes('statusNotConnectedToServer'));
+    });
+
+    Test.it('shows the slots of a connected monitor', () => {
+        stubClient({
+            serverId: 'relay-a',
+            storageMonitors: { '4242': { capacity: 24, expiry: 0, items: [{ itemId: 'wood', quantity: 5 }] } },
+        });
+
+        const embed = DiscordEmbeds.getStorageMonitorEmbed('guildId', 'relay-a', '4242');
+
+        Assert.ok(embed.data.description.includes('(1/24)'));
+    });
+});
+
         Assert.strictEqual(
             SetupServerList.needsServerMessage({ messageId: null, serverIp: 'relay', appPort: 'a' }), true);
     });
