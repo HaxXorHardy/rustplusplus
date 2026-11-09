@@ -1038,8 +1038,9 @@ module.exports = {
             playerCounter += 1;
 
             const status = bmInstance.players[playerId]['status'];
-            let time = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
-            time = time !== null ? time[1] : '';
+            const timeValue = status ? bmInstance.getOnlineTime(playerId) : bmInstance.getOfflineTime(playerId);
+            /* A placeholder keeps the column width when no session or logout is reported yet. */
+            const time = timeValue !== null ? timeValue[1] : '--:--';
 
             const playtime = bmInstance.getCachedTimePlayed(playerId);
             const playtimeStr = (typeof (playtime) === 'number') ?

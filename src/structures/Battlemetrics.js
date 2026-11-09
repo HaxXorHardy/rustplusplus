@@ -813,11 +813,16 @@ class Battlemetrics {
 
     /**
      *  Get the online time (the length of the current session) of a player.
+     *
+     *  lastUpdateSuccessful is deliberately not checked here. The flag only says that the latest request failed, not
+     *  that the data is unusable: the session of the last successful request is one cycle old at worst, which is much
+     *  better than blanking the time of every player because of a single error response.
+     *
      *  @param {string} playerId The id of the player to get online time from.
      *  @return {Array} index 0: seconds online, index 1: The formatted online time of a player.
      */
     getOnlineTime(playerId) {
-        if (!this.lastUpdateSuccessful || !this.players.hasOwnProperty(playerId) ||
+        if (!this.players.hasOwnProperty(playerId) ||
             typeof (this.players[playerId]['sessionTime']) !== 'number') {
             return null;
         }
@@ -827,12 +832,14 @@ class Battlemetrics {
 
     /**
      *  Get the offline time of a player.
+     *
+     *  See getOnlineTime() for why lastUpdateSuccessful is not part of the check.
+     *
      *  @param {string} playerId The id of the player to get offline time from.
      *  @return {Array} index 0: seconds offline, index 1: The formatted offline time of a player.
      */
     getOfflineTime(playerId) {
-        if (!this.lastUpdateSuccessful || !this.players.hasOwnProperty(playerId) ||
-            !this.players[playerId]['logoutDate']) {
+        if (!this.players.hasOwnProperty(playerId) || !this.players[playerId]['logoutDate']) {
             return null;
         }
 
@@ -865,20 +872,6 @@ class Battlemetrics {
         }
         let ordered = unordered.sort(function (a, b) { return a[0] - b[0] })
         return ordered.map(e => e[1]);
-    }
-
-    /**
-     *  Get the offline time from a player.
-     *  @param {string} playerId The id of the player to get offline time from.
-     *  @return {Array} index 0: seconds offline, index 1: The formatted offline time of a player.
-     */
-    getOfflineTime(playerId) {
-        if (!this.lastUpdateSuccessful || !this.players.hasOwnProperty(playerId) ||
-            !this.players[playerId]['logoutDate']) {
-            return null;
-        }
-
-        return this.#formatTime(this.players[playerId]['logoutDate']);
     }
 
     /**
