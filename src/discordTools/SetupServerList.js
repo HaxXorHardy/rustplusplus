@@ -49,7 +49,7 @@ async function postMissingServerMessages(client, guildId) {
         }
         catch (e) {
             client.log(client.intlGet(null, 'warningCap'),
-                `Could not post the server message of ${serverId}: ${e && e.message ? e.message : e}`, 'warning');
+                `Could not post the server message of ${serverId}: ${e && e.message ? e.message : e}`, 'warn');
         }
     }
 

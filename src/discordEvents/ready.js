@@ -133,7 +133,7 @@ module.exports = {
                     }
                 }
                 catch (e) {
-                    client.log(client.intlGet(null, 'warningCap'), e, 'warning');
+                    client.log(client.intlGet(null, 'warningCap'), e, 'warn');
                 }
             }
         };
