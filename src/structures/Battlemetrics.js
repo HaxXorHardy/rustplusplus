@@ -35,6 +35,8 @@ const PLAYER_CONNECTION_LOG_SIZE = 100;
 const NAME_CHANGE_LOG_SIZE = 100;
 const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
 const TIME_PLAYED_DEFAULT_LIMIT = 100;
+const SESSION_START_DEFAULT_LIMIT = 10;
+const SESSION_START_RETRY_MS = 10 * 60 * 1000; /* 10 minutes */
 
 /*
     The reason a request failed, as it should appear in the log: the HTTP status of an answered error (429 rate limit,
@@ -87,6 +89,9 @@ class Battlemetrics {
 
         this._timePlayedCache = new Object();    /* { [playerId]: { seconds, fetchedAt } } */
         this._timePlayedPending = new Object();
+
+        this._sessionStartPending = new Object();   /* { [playerId]: true } */
+        this._sessionStartTried = new Object();     /* { [playerId]: timestamp of the last failed lookup } */
 
         /* Init API parameter variables */
 
@@ -217,6 +222,22 @@ class Battlemetrics {
      */
     GET_PLAYER_API_CALL(id) {
         return `https://api.battlemetrics.com/players/${id}?include=server`;
+    }
+
+    /**
+     *  Construct the Battlemetrics API call for getting the sessions of a player on a server.
+     *
+     *  The server request only carries the current session in its player metadata when Battlemetrics tracks the server
+     *  with its own agent. The session history reports the same sessions for every server, so it is the source for the
+     *  servers without that metadata.
+     *
+     *  @param {number} playerId The id of the player.
+     *  @param {number} serverId The id of the server.
+     *  @return {string} The Battlemetrics API call string.
+     */
+    GET_PLAYER_SESSIONS_API_CALL(playerId, serverId) {
+        return `https://api.battlemetrics.com/players/${playerId}/relationships/sessions` +
+            `?filter[servers]=${serverId}&page[size]=5&fields[session]=start,stop`;
     }
 
     /**
@@ -714,6 +735,7 @@ class Battlemetrics {
                 if (this.players[entity.id]['status'] === false) {
                     this.players[entity.id]['status'] = true;
                     this.players[entity.id]['onlineSince'] = time;
+                    delete this._sessionStartTried[entity.id];  /* A new session, look its start up again. */
                     this.#updateConnectionLog(entity.id, { type: 0, time: time }); /* 0 = Login event */
                     this.loginPlayers.push(entity.id);
                 }
@@ -730,6 +752,7 @@ class Battlemetrics {
             this.players[id]['status'] = false;
             this.players[id]['logoutDate'] = time;
             this.players[id]['onlineSince'] = null;
+            delete this._sessionStartTried[id];
             this.#updateConnectionLog(id, { type: 1, time: time }); /* 1 = Logout event */
             this.logoutPlayers.push(id);
         }
@@ -739,6 +762,10 @@ class Battlemetrics {
         }
 
         this.update(data);
+
+        /* Servers without session data in the response get it from the session history (rate limited). */
+        await this.warmSessionStarts();
+
         return true;
     }
 
@@ -951,6 +978,26 @@ class Battlemetrics {
     }
 
     /**
+     *  Fetch the start of the current session of a player on this server.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {string|null} The ISO timestamp the running session started at, null when there is none.
+     */
+    async fetchSessionStart(playerId) {
+        const data = await this.request(this.GET_PLAYER_SESSIONS_API_CALL(playerId, this.id));
+        if (!data || !Array.isArray(data.data)) return null;
+
+        for (const entity of data.data) {
+            if (entity.type !== 'session') continue;
+            if (!entity.attributes || entity.attributes.stop !== null) continue;
+            if (typeof (entity.attributes.start) !== 'string') continue;
+
+            return entity.attributes.start;
+        }
+
+        return null;
+    }
+
+    /**
      *  Find the Battlemetrics player id of a player based on the name in the players list.
      *  @param {string} name The name of the player.
      *  @return {string|null} The Battlemetrics player id or null.
@@ -998,6 +1045,56 @@ class Battlemetrics {
      */
     async warmTimePlayedCache(maxPerCall = TIME_PLAYED_DEFAULT_LIMIT) {
         await this.#warmTimePlayed(this.onlinePlayers.slice(), maxPerCall);
+    }
+
+    /**
+     *  Complete the start of the sessions this instance does not know yet (rate limited).
+     *
+     *  Only players without a known start are looked up: the metadata of the server request is the most exact source,
+     *  and a login this instance saw itself is more precise than the session history, which Battlemetrics samples.
+     *
+     *  @param {number} maxPerCall Maximum number of fetches per call.
+     */
+    async #warmSessionStarts(maxPerCall) {
+        if (!Config.battlemetrics.enabled || this.lastUpdateSuccessful !== true) return;
+
+        let fetched = 0;
+        for (const playerId of this.onlinePlayers) {
+            if (fetched >= maxPerCall) break;
+
+            const player = this.players[playerId];
+            if (!player) continue;
+            if (typeof (player['sessionTime']) === 'number') continue;
+            if (player['onlineSince']) continue;
+            if (this._sessionStartPending.hasOwnProperty(playerId)) continue;
+
+            const tried = this._sessionStartTried[playerId];
+            if (tried && (Date.now() - tried) < SESSION_START_RETRY_MS) continue;
+
+            this._sessionStartPending[playerId] = true;
+            try {
+                const start = await this.fetchSessionStart(playerId);
+                if (start !== null) {
+                    this.players[playerId]['onlineSince'] = start;
+                    delete this._sessionStartTried[playerId];
+                }
+                else {
+                    this._sessionStartTried[playerId] = Date.now();
+                }
+            }
+            finally {
+                delete this._sessionStartPending[playerId];
+            }
+            fetched += 1;
+        }
+    }
+
+    /**
+     *  Complete the start of the sessions of the currently online players (rate limited).
+     *  @param {number} maxPerCall Maximum number of fetches per call.
+     */
+    async warmSessionStarts(maxPerCall = SESSION_START_DEFAULT_LIMIT) {
+        await this.#warmSessionStarts(maxPerCall);
     }
 
     /**
