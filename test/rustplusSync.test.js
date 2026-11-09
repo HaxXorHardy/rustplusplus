@@ -316,3 +316,68 @@ Test.describe('RustPlusSync deleted devices', () => {
         Assert.deepStrictEqual(Object.keys(RustPlusSync.getDeletedDevices(instance, null)), []);
     });
 });
+
+/*
+    The pairing id of a server can change (the server pairs the account again). The removals of the devices are stored
+    per pairing id, so they have to survive that - otherwise everything that was removed in Discord comes back.
+*/
+Test.describe('RustPlusSync.migrateDeletedDevices', () => {
+    Test.it('moves the removals to the new pairing id', () => {
+        const instance = { deletedDevices: { old: { '116236': 1794058229000 } } };
+
+        Assert.strictEqual(RustPlusSync.migrateDeletedDevices(instance, 'old', 'new'), true);
+
+        Assert.deepStrictEqual(instance.deletedDevices, { new: { '116236': 1794058229000 } });
+    });
+
+    Test.it('keeps a removal that was made for the new id', () => {
+        const instance = { deletedDevices: { old: { a: 1 }, new: { b: 2 } } };
+
+        RustPlusSync.migrateDeletedDevices(instance, 'old', 'new');
+
+        Assert.deepStrictEqual(instance.deletedDevices, { new: { b: 2, a: 1 } });
+    });
+
+    Test.it('does nothing without a mark or without a change', () => {
+        Assert.strictEqual(RustPlusSync.migrateDeletedDevices({}, 'old', 'new'), false);
+        Assert.strictEqual(
+            RustPlusSync.migrateDeletedDevices({ deletedDevices: { old: { a: 1 } } }, 'old', 'old'), false);
+        Assert.strictEqual(
+            RustPlusSync.migrateDeletedDevices({ deletedDevices: { old: { a: 1 } } }, null, 'new'), false);
+        Assert.strictEqual(
+            RustPlusSync.migrateDeletedDevices({ deletedDevices: { old: { a: 1 } } }, 'old', null), false);
+    });
+
+    Test.it('keeps the removals when a known server gets a new pairing id', () => {
+        const NEW_ID = '11111111-2222-3333-4444-555555555555';
+        const instance = {
+            serverList: {
+                [`relay-${SERVER_ID}`]: {
+                    title: "Captain's Quarters",
+                    guid: SERVER_ID,
+                    steamId: STEAM_ID,
+                    playerToken: 1,
+                    switches: {},
+                    alarms: {},
+                    storageMonitors: {},
+                },
+            },
+            deletedDevices: { [SERVER_ID]: { [`${SWITCH_ID}`]: Date.now() } },
+        };
+
+        RustPlusSync.applySyncServers(instance, STEAM_ID, [{
+            id: NEW_ID,
+            name: "Captain's Quarters",
+            playerToken: 2,
+            devices: [{ id: `${SWITCH_ID}`, type: 1, name: 'Switch' }],
+        }], intlGet);
+
+        const server = instance.serverList[`relay-${SERVER_ID}`];
+
+        Assert.strictEqual(server.guid, NEW_ID);
+        Assert.deepStrictEqual(Object.keys(server.switches), []);
+        Assert.ok(instance.deletedDevices[NEW_ID][`${SWITCH_ID}`] > 0);
+        Assert.strictEqual(instance.deletedDevices[SERVER_ID], undefined);
+    });
+});
+

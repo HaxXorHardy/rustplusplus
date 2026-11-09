@@ -28,6 +28,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusSync = require('../util/rustplusSync.js');
+const SetupServerList = require('../discordTools/SetupServerList.js');
 
 module.exports = {
     name: 'clientReady',
@@ -117,6 +118,24 @@ module.exports = {
                     client.log(client.intlGet(null, 'warningCap'), e, 'warning');
                 }
             }
+
+            /*
+                A server that is adopted while the bot runs has no message in the servers channel, so it would not be
+                listed in Discord (and cannot be connected, the button lives on that message).
+            */
+            for (const guildId of Object.keys(client.instances || {})) {
+                try {
+                    const posted = await SetupServerList.postMissingServerMessages(client, guildId);
+
+                    for (const serverId of posted) {
+                        client.log(client.intlGet(null, 'infoCap'),
+                            `Server ${serverId} was adopted, its message was posted to the servers channel.`);
+                    }
+                }
+                catch (e) {
+                    client.log(client.intlGet(null, 'warningCap'), e, 'warning');
+                }
+            }
         };
 
         /*
@@ -157,21 +176,12 @@ module.exports = {
                         'warning');
                     continue;
                 }
-
-                if (server.messageId) continue;
-                server.messageId = null;
-
-                try {
-                    await DiscordMessages.sendServerMessage(guildId, serverId);
-                }
-                catch (e) {
-                    client.log(client.intlGet(null, 'warningCap'),
-                        `Could not post the server message of ${serverId}: ${e && e.message ? e.message : e}`,
-                        'warning');
-                }
             }
 
             if (repaired) client.setInstance(guildId, instance);
+
+            /* Every server of the instance has to be listed, also one that was adopted while the bot was down. */
+            await SetupServerList.postMissingServerMessages(client, guildId);
 
             /* Activate the only server of the guild, createRustplusInstancesFromConfig() connects it then. */
             if (instance.activeServer === null && serverIds.length === 1) {

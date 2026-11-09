@@ -19,11 +19,20 @@
 */
 
 const DiscordMessages = require('./discordMessages.js');
+const DiscordTools = require('./discordTools.js');
 
 module.exports = async (client, rustplus) => {
     const instance = client.getInstance(rustplus.guildId);
     const guildId = rustplus.guildId;
     const serverId = rustplus.serverId;
+
+    /*
+        Only the alarms of the connected server are listed. Without this the alarms of the previous server stayed in
+        the channel after a server switch, with buttons of a server that is not connected anymore.
+    */
+    if (rustplus.isNewConnection) {
+        await DiscordTools.clearTextChannel(guildId, instance.channelId.alarms, 100);
+    }
 
     for (const entityId in instance.serverList[serverId].alarms) {
         const entity = instance.serverList[serverId].alarms[entityId];

@@ -19,14 +19,44 @@
 */
 
 const DiscordMessages = require('./discordMessages.js');
-const DiscordTools = require('./discordTools.js');
 
-module.exports = async (client, guild) => {
-    const instance = client.getInstance(guild.id);
+/*
+    Posts the message of every server that has none in the servers channel.
 
-    await DiscordTools.clearTextChannel(guild.id, instance.channelId.servers, 100);
+    A server is adopted while the bot runs when it is paired in-game (see util/rustplusHistory.js). That path has no
+    Discord message of its own: the servers channel only listed what was posted at startup, on a login or on a connect,
+    so a server that was paired while the bot was running never appeared in the list. The startup and the pairing
+    refresh both run this, so the list heals itself instead of waiting for a restart.
+*/
 
-    for (const serverId in instance.serverList) {
-        await DiscordMessages.sendServerMessage(guild.id, serverId);
+/* The address or the pairing id the embed reads, without either of them there is nothing to show. */
+function needsServerMessage(server) {
+    if (!server || server.messageId) return false;
+
+    return Boolean(server.guid || (server.serverIp && server.appPort));
+}
+
+async function postMissingServerMessages(client, guildId) {
+    const instance = client.getInstance(guildId);
+    const posted = [];
+
+    for (const serverId in (instance.serverList || {})) {
+        if (!needsServerMessage(instance.serverList[serverId])) continue;
+
+        try {
+            await DiscordMessages.sendServerMessage(guildId, serverId);
+            posted.push(serverId);
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Could not post the server message of ${serverId}: ${e && e.message ? e.message : e}`, 'warning');
+        }
     }
+
+    return posted;
+}
+
+module.exports = {
+    needsServerMessage: needsServerMessage,
+    postMissingServerMessages: postMissingServerMessages,
 };

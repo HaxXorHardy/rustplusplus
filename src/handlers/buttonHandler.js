@@ -23,6 +23,7 @@ const Discord = require('discord.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
+const RemoveServerDevices = require('../discordTools/RemoveServerDevices.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordModals = require('../discordTools/discordModals.js');
@@ -436,6 +437,14 @@ module.exports = async (client, interaction) => {
         client.resetRustplusVariables(guildId);
 
         if (instance.activeServer !== null) {
+            /*
+                Only the devices of the connected server are listed, the messages of the previous server have to go
+                before the new one is connected. Its server message stays, it is only rewritten below.
+            */
+            if (instance.activeServer !== ids.serverId) {
+                await RemoveServerDevices(client, guildId, instance.activeServer);
+            }
+
             await DiscordMessages.sendServerMessage(guildId, instance.activeServer, null);
         }
 
@@ -607,6 +616,9 @@ module.exports = async (client, interaction) => {
             rustplus.disconnect();
             delete client.rustplusInstances[guildId];
         }
+
+        /* A server that is not connected anymore has no devices to show. */
+        await RemoveServerDevices(client, guildId, ids.serverId);
 
         await DiscordMessages.sendServerMessage(guildId, ids.serverId, null, interaction);
     }

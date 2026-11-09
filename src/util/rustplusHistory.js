@@ -154,8 +154,10 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
         if (entry.entityId === null && !hasCredentials) continue;
 
         /*
-            A pairing of a server that was removed in Discord brings it back - but only when the pairing is newer than
-            the deletion, otherwise the history would undo every deletion again and again.
+            A pairing of a server that was removed in Discord brings the server back - but only when the pairing is
+            newer than the deletion, otherwise the history would undo every deletion again and again. The devices keep
+            their own markers: a device that was removed in Discord only comes back when it is paired again, not when
+            the server is paired again (see the entity branch below).
         */
         const deletedAt = instance.deletedServers ? instance.deletedServers[entry.serverId] : null;
         if (deletedAt) {
@@ -164,9 +166,6 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
             if (!Number.isFinite(pairedAt) || pairedAt <= deletedAt) continue;
 
             delete instance.deletedServers[entry.serverId];
-
-            /* A new pairing of the server also brings back the devices that were removed in Discord. */
-            if (instance.deletedDevices) delete instance.deletedDevices[entry.serverId];
         }
 
         /*
@@ -300,9 +299,13 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                     changed = true;
                 }
 
+                /*
+                    Only a run that adopted something activates a server. A guild whose connection was ended in Discord
+                    (activeServer === null by the disconnect button) stays disconnected: the user decided that, the
+                    refresh must not connect it again every five minutes.
+                */
                 if (!changed) continue;
 
-                /* Devices and servers that were adopted now need their Discord messages and their connection. */
                 const firstServerKey = Object.keys(instance.serverList)
                     .find((key) => instance.serverList[key] && instance.serverList[key].paired !== false);
                 let activatedKey = null;
@@ -310,8 +313,12 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                 if (instance.activeServer === null && firstServerKey) {
                     instance.activeServer = firstServerKey;
                     activatedKey = firstServerKey;
+
+                    client.log(client.intlGet(null, 'infoCap'),
+                        `Activating "${instance.serverList[firstServerKey].title}", the guild had no active server.`);
                 }
 
+                /* Devices and servers that were adopted now need their Discord messages and their connection. */
                 client.setInstance(guildId, instance);
 
                 for (const device of applied.added) added.push({ guildId: guildId, ...device });

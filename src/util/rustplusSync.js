@@ -201,6 +201,32 @@ function clearDeletedDevice(instance, serverGuid, entityId) {
     return true;
 }
 
+/*
+    A server can pair the account again with a new pairing id. The removals of the devices are stored per pairing id,
+    so they are moved along: a device that was removed in Discord stays removed until it is paired again, no matter
+    which pairing id the server has now.
+*/
+function migrateDeletedDevices(instance, oldGuid, newGuid) {
+    const from = `${oldGuid === undefined || oldGuid === null ? '' : oldGuid}`;
+    const to = `${newGuid === undefined || newGuid === null ? '' : newGuid}`;
+
+    if (from === '' || to === '' || from === to) return false;
+    if (!instance.deletedDevices || !instance.deletedDevices[from]) return false;
+
+    if (Object.keys(instance.deletedDevices[from]).length === 0) {
+        delete instance.deletedDevices[from];
+        return false;
+    }
+
+    if (!instance.deletedDevices[to]) instance.deletedDevices[to] = {};
+
+    /* A mark of the new pairing id was made later, it wins over the moved one. */
+    instance.deletedDevices[to] = Object.assign({}, instance.deletedDevices[from], instance.deletedDevices[to]);
+    delete instance.deletedDevices[from];
+
+    return true;
+}
+
 /* Adds the paired entities of the account state that the entry does not know yet. */
 function addDevices(server, data, intlGet, deleted = null) {
     let added = 0;
@@ -308,6 +334,14 @@ function applySyncServers(instance, steamId, servers, intlGet = (key) => key, op
         const existing = serverId ? instance.serverList[serverId] : null;
         const entry = createServerEntry(data, existing, steamId, options);
 
+        /*
+            The pairing id of a known server can change. The device removals are stored per pairing id, so they are
+            moved along before the devices of the account are adopted.
+        */
+        if (existing && `${existing.guid}` !== `${entry.guid}`) {
+            migrateDeletedDevices(instance, existing.guid, entry.guid);
+        }
+
         /* A new pairing of the same server changes the token (and sometimes the pairing id) of the entry. */
         const credentialsChanged = existing !== null &&
             (`${existing.guid}` !== `${entry.guid}` ||
@@ -373,6 +407,7 @@ module.exports = {
     getDeletedDevices: getDeletedDevices,
     markDeviceDeleted: markDeviceDeleted,
     clearDeletedDevice: clearDeletedDevice,
+    migrateDeletedDevices: migrateDeletedDevices,
     applySyncServers: applySyncServers,
     ensureServerListLiteEntry: ensureServerListLiteEntry,
     getServerListLiteEntry: getServerListLiteEntry,

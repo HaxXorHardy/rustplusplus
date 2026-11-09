@@ -451,6 +451,43 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.deepStrictEqual(client.createdRustplusInstances, []);
         Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].playerToken, 300);
     });
+
+    /*
+        Ending the connection in Discord sets activeServer to null. The refresh must not connect the guild again on
+        every run, the user pressed the button - only a run that adopts something may activate a server.
+    */
+    Test.it('leaves a guild that was disconnected in Discord disconnected', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const serverKey = `relay-${SERVER_ID}`;
+        const instance = {
+            activeServer: null,
+            serverList: {
+                [serverKey]: {
+                    title: "Captain's Quarters",
+                    serverIp: 'relay',
+                    appPort: SERVER_ID,
+                    guid: SERVER_ID,
+                    steamId: STEAM_ID,
+                    playerToken: 42,
+                    switches: {}, alarms: {}, storageMonitors: {}, markers: {}, switchGroups: {},
+                    notes: {}, customCameraGroups: {},
+                },
+            },
+            serverListLite: {},
+            deletedServers: {},
+        };
+
+        const client = fakeClient(instance);
+
+        /* The account state cannot be read, so nothing is adopted and nothing may be activated. */
+        const added = await RustPlusHistory.refresh(client, async () => [], async () => null);
+
+        Assert.deepStrictEqual(added, []);
+        Assert.strictEqual(instance.activeServer, null);
+        Assert.strictEqual(client.saved, 0);
+        Assert.deepStrictEqual(client.createdRustplusInstances, []);
+    });
 });
 
 /*
@@ -589,3 +626,35 @@ Test.describe('RustPlusHistory.applyPairingEntries (removed devices)', () => {
         Assert.strictEqual(instance.deletedDevices[SERVER_ID]['116582'], undefined);
     });
 });
+
+/*
+    A device that was removed in Discord stays removed when the server is paired again, only the device itself brings
+    it back. The server keeps its own marker, so a removed server still comes back with a newer pairing.
+*/
+Test.describe('RustPlusHistory.applyPairingEntries (server paired again)', () => {
+    Test.it('keeps a removed device removed while the server comes back', () => {
+        const deletedServerAt = Date.parse('2026-11-07T12:00:00+00:00');
+        const removedAt = Date.parse('2026-11-07T14:00:00+00:00');
+
+        const instance = {
+            serverList: {},
+            deletedServers: { [SERVER_ID]: deletedServerAt },
+            deletedDevices: { [SERVER_ID]: { '116582': removedAt } },
+        };
+
+        const entries = RustPlusHistory.parsePairingEntries([
+            serverPairEntry(1947563374, 3, '2026-11-07T13:00:00.0000000+00:00'),
+            pairEntry('116582', 1, 'Smart Switch', 'Smart Switch'),
+        ]);
+
+        const result = RustPlusHistory.applyPairingEntries(instance, STEAM_ID, entries, intlGet);
+
+        Assert.strictEqual(result.created, 1);
+        Assert.strictEqual(SERVER_ID in instance.deletedServers, false);
+
+        const server = instance.serverList['91.229.114.90-28111'];
+        Assert.deepStrictEqual(Object.keys(server.switches), []);
+        Assert.strictEqual(instance.deletedDevices[SERVER_ID]['116582'], removedAt);
+    });
+});
+
