@@ -555,6 +555,79 @@ Test.describe('RustPlusHistory.refresh', () => {
     });
 
     /*
+        A token that the API rejects (403, e.g. because the account logged in somewhere else) is renewed with the stored
+        Steam refresh token and the read is repeated. Without a renewal the account is left alone for a while instead
+        of asking every few seconds.
+    */
+    Test.it('renews a rejected token and retries the read', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+        let renewals = 0;
+
+        RustPlusLogin.renewAuth = async () => {
+            renewals += 1;
+            return { steamId: STEAM_ID, token: 'new-token', servers: [] };
+        };
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        const tokens = [];
+        const history = async (token) => {
+            tokens.push(token);
+            if (token === 'old-token') {
+                const error = new Error('History request failed with status 403.');
+                error.status = 403;
+                throw error;
+            }
+
+            return [];
+        };
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+        const result = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.strictEqual(renewals, 1);
+        Assert.deepStrictEqual(tokens, ['old-token', 'new-token']);
+        Assert.deepStrictEqual(result.deaths, []);
+    });
+
+    Test.it('stops asking while the token cannot be renewed', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+
+        RustPlusLogin.renewAuth = async () => {
+            throw new Error('No Steam refresh token stored, a new login is required.');
+        };
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        let historyReads = 0;
+        const history = async () => {
+            historyReads += 1;
+
+            const error = new Error('History request failed with status 403.');
+            error.status = 403;
+            throw error;
+        };
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        /* The second run is skipped by the backoff, the account is not asked again yet. */
+        Assert.strictEqual(historyReads, 1);
+    });
+
+    /*
         A short history interval (a few seconds) must not double the requests against the Facepunch API: the account
         state is a slow snapshot and is cached, the history itself is read on every run.
     */

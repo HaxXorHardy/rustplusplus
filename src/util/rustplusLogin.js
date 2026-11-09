@@ -275,7 +275,12 @@ async function fetchSyncData(token) {
     });
 
     if (response.status === 204) return { currentServerId: null, servers: [] };
-    if (response.status !== 200) throw new Error(`Sync request failed with status ${response.status}.`);
+    if (response.status !== 200) {
+        /* The status lets the caller tell a rejected token (401/403) from a temporary failure. */
+        const error = new Error(`Sync request failed with status ${response.status}.`);
+        error.status = response.status;
+        throw error;
+    }
 
     try {
         return RustPlusSync.parseSyncPayload(response.data.payload);
