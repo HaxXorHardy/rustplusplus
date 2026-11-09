@@ -21,6 +21,7 @@
 const Discord = require('discord.js');
 
 const Constants = require('../util/constants.js');
+const CustomIds = require('../util/customIds.js');
 const Client = require('../structures/clientRegistry.js');
 
 const SUCCESS = Discord.ButtonStyle.Success;
@@ -33,7 +34,19 @@ module.exports = {
     getButton: function (options = {}) {
         const button = new Discord.ButtonBuilder();
 
-        if (options.hasOwnProperty('customId')) button.setCustomId(options.customId);
+        if (options.hasOwnProperty('customId')) {
+            /*
+                A longer id makes @sapphire/shapeshift throw "Invalid string length", which hides the real cause. Name
+                the button instead, the caller can shorten its identifier (see util/customIds.js).
+            */
+            const customId = `${options.customId}`;
+            if (customId.length > CustomIds.CUSTOM_ID_MAX_LENGTH) {
+                throw new Error(`The custom id of button "${customId}" is ${customId.length} characters long, ` +
+                    `Discord allows ${CustomIds.CUSTOM_ID_MAX_LENGTH}.`);
+            }
+
+            button.setCustomId(options.customId);
+        }
         if (options.hasOwnProperty('label')) button.setLabel(options.label);
         if (options.hasOwnProperty('style')) button.setStyle(options.style);
         if (options.hasOwnProperty('url') && options.url !== '') button.setURL(options.url);
@@ -239,7 +252,7 @@ module.exports = {
     getStorageMonitorToolCupboardButtons: function (guildId, serverId, entityId) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].storageMonitors[entityId];
-        const identifier = JSON.stringify({ "serverId": serverId, "entityId": entityId });
+        const identifier = CustomIds.identifier([serverId, entityId]);
 
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({
@@ -265,7 +278,7 @@ module.exports = {
     },
 
     getStorageMonitorContainerButton: function (guildId, serverId, entityId) {
-        const identifier = JSON.stringify({ "serverId": serverId, "entityId": entityId });
+        const identifier = CustomIds.identifier([serverId, entityId]);
 
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({

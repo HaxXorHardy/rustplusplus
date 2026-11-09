@@ -20,6 +20,7 @@
 
 const Discord = require('discord.js');
 
+const CustomIds = require('../util/customIds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
@@ -853,7 +854,8 @@ module.exports = async (client, interaction) => {
         await interaction.showModal(modal);
     }
     else if (interaction.customId.startsWith('StorageMonitorToolCupboardEveryone')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorToolCupboardEveryone', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorToolCupboardEveryone',
+            ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
 
         if (!server || (server && !server.storageMonitors.hasOwnProperty(ids.entityId))) {
@@ -872,7 +874,8 @@ module.exports = async (client, interaction) => {
         await DiscordMessages.sendStorageMonitorMessage(guildId, ids.serverId, ids.entityId, interaction);
     }
     else if (interaction.customId.startsWith('StorageMonitorToolCupboardInGame')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorToolCupboardInGame', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorToolCupboardInGame',
+            ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
 
         if (!server || (server && !server.storageMonitors.hasOwnProperty(ids.entityId))) {
@@ -891,7 +894,7 @@ module.exports = async (client, interaction) => {
         await DiscordMessages.sendStorageMonitorMessage(guildId, ids.serverId, ids.entityId, interaction);
     }
     else if (interaction.customId.startsWith('StorageMonitorEdit')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorEdit', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorEdit', ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
 
         if (!server || (server && !server.storageMonitors.hasOwnProperty(ids.entityId))) {
@@ -903,7 +906,8 @@ module.exports = async (client, interaction) => {
         await interaction.showModal(modal);
     }
     else if (interaction.customId.startsWith('StorageMonitorToolCupboardDelete')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorToolCupboardDelete', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorToolCupboardDelete',
+            ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
@@ -924,7 +928,7 @@ module.exports = async (client, interaction) => {
         client.setInstance(guildId, instance);
     }
     else if (interaction.customId.startsWith('StorageMonitorRecycle')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorRecycle', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorRecycle', ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
 
         if (!server || (server && !server.storageMonitors.hasOwnProperty(ids.entityId))) {
@@ -961,7 +965,8 @@ module.exports = async (client, interaction) => {
         }, 30000);
     }
     else if (interaction.customId.startsWith('StorageMonitorContainerDelete')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorContainerDelete', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorContainerDelete',
+            ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {

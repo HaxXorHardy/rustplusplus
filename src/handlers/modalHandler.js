@@ -24,6 +24,7 @@ const Battlemetrics = require('../structures/Battlemetrics');
 const Config = require('../../config');
 const Constants = require('../util/constants.js');
 const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
+const CustomIds = require('../util/customIds.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Keywords = require('../util/keywords.js');
@@ -274,7 +275,7 @@ module.exports = async (client, interaction) => {
         await DiscordMessages.sendSmartAlarmMessage(interaction.guildId, ids.serverId, ids.entityId);
     }
     else if (interaction.customId.startsWith('StorageMonitorEdit')) {
-        const ids = JSON.parse(interaction.customId.replace('StorageMonitorEdit', ''));
+        const ids = CustomIds.parse(interaction.customId, 'StorageMonitorEdit', ['serverId', 'entityId']);
         const server = instance.serverList[ids.serverId];
         const storageMonitorName = interaction.fields.getTextInputValue('StorageMonitorName');
 

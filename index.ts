@@ -23,8 +23,9 @@ const Bootstrap = require('./src/bootstrap.js');
 const client = Bootstrap.start();
 
 process.on('unhandledRejection', error => {
+    /* Always with the stack: without it the cause of a rejection cannot be found (see the storage monitor custom id). */
     client.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'unhandledRejection', {
-        error: client.logger.formatError(error)
+        error: client.logger.formatError(error, true)
     }), 'error');
 });
 

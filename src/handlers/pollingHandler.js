@@ -30,6 +30,20 @@ const Time = require('../structures/Time');
 const TimeHandler = require('../handlers/timeHandler.js');
 const VendingMachines = require('../handlers/vendingMachineHandler.js');
 
+/*
+    Runs one handler of the poll. A failing handler must not stop the others and must not end as an unhandled rejection
+    on every poll (the poll runs every few seconds).
+*/
+async function runHandler(rustplus, client, label, handler) {
+    try {
+        await handler();
+    }
+    catch (e) {
+        rustplus.log(client.intlGet(null, 'warningCap'),
+            `The handler for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+    }
+}
+
 module.exports = {
     pollingHandler: async function (rustplus, client) {
         /* Poll information such as info, mapMarkers, teamInfo and time */
@@ -59,19 +73,22 @@ module.exports = {
     },
 
     handlers: async function (rustplus, client, info, mapMarkers, teamInfo, time) {
-        await TeamHandler.handler(rustplus, client, teamInfo.teamInfo);
+        await runHandler(rustplus, client, 'the team', () => TeamHandler.handler(rustplus, client, teamInfo.teamInfo));
         rustplus.team.updateTeam(teamInfo.teamInfo);
 
-        await SmartSwitchHandler.handler(rustplus, client, time.time);
-        TimeHandler.handler(rustplus, client, time.time);
-        await VendingMachines.handler(rustplus, client, mapMarkers.mapMarkers);
+        await runHandler(rustplus, client, 'the smart switches',
+            () => SmartSwitchHandler.handler(rustplus, client, time.time));
+        await runHandler(rustplus, client, 'the time', () => TimeHandler.handler(rustplus, client, time.time));
+        await runHandler(rustplus, client, 'the vending machines',
+            () => VendingMachines.handler(rustplus, client, mapMarkers.mapMarkers));
 
         rustplus.time.updateTime(time.time);
         rustplus.info.updateInfo(info.info);
         rustplus.mapMarkers.updateMapMarkers(mapMarkers.mapMarkers);
 
-        await InformationHandler.handler(rustplus);
-        await StorageMonitorHandler.handler(rustplus, client);
-        await SmartAlarmHandler.handler(rustplus, client);
+        await runHandler(rustplus, client, 'the information', () => InformationHandler.handler(rustplus));
+        await runHandler(rustplus, client, 'the storage monitors',
+            () => StorageMonitorHandler.handler(rustplus, client));
+        await runHandler(rustplus, client, 'the smart alarms', () => SmartAlarmHandler.handler(rustplus, client));
     },
 };

@@ -25,6 +25,21 @@ const Map = require('../structures/Map');
 const PollingHandler = require('../handlers/pollingHandler.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 
+/*
+    Runs one device setup step. A failure is logged and must not abort the steps after it: when a single message could
+    not be built, the guild lost the alarms and storage monitors of that server as well (and the rejection ended as an
+    unhandled one that stopped the whole connect flow).
+*/
+async function runSetup(client, rustplus, label, setupPath) {
+    try {
+        await require(setupPath)(client, rustplus);
+    }
+    catch (e) {
+        rustplus.log(client.intlGet(null, 'warningCap'),
+            `The setup of ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+    }
+}
+
 module.exports = {
     name: 'connected',
     async execute(rustplus, client) {
@@ -128,10 +143,10 @@ module.exports = {
         if (client.rustplusInstances[guildId] !== rustplus) return;
 
         /* Setup Smart Devices */
-        await require('../discordTools/SetupSwitches')(client, rustplus);
-        await require('../discordTools/SetupSwitchGroups')(client, rustplus);
-        await require('../discordTools/SetupAlarms')(client, rustplus);
-        await require('../discordTools/SetupStorageMonitors')(client, rustplus);
+        await runSetup(client, rustplus, 'the smart switches', '../discordTools/SetupSwitches');
+        await runSetup(client, rustplus, 'the switch groups', '../discordTools/SetupSwitchGroups');
+        await runSetup(client, rustplus, 'the smart alarms', '../discordTools/SetupAlarms');
+        await runSetup(client, rustplus, 'the storage monitors', '../discordTools/SetupStorageMonitors');
         rustplus.isNewConnection = false;
         rustplus.loadMarkers();
 
