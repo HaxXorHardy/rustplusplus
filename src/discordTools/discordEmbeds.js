@@ -759,6 +759,7 @@ module.exports = {
         const mapSeedFieldName = Client.client.intlGet(guildId, 'mapSeed');
         const mapSaltFieldName = Client.client.intlGet(guildId, 'mapSalt');
         const mapFieldName = Client.client.intlGet(guildId, 'map');
+        const nameFieldName = Client.client.intlGet(guildId, 'name');
 
         const embed = module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'serverInfo'),
@@ -766,6 +767,7 @@ module.exports = {
             thumbnail: 'attachment://server_info_logo.png',
             footer: { text: instance.serverList[rustplus.serverId].title },
             fields: [
+                { name: nameFieldName, value: `\`${instance.serverList[rustplus.serverId].title}\``, inline: false },
                 { name: playersFieldName, value: `\`${rustplus.getCommandPop(true)}\``, inline: true },
                 { name: timeFieldName, value: `\`${time[0]}\``, inline: true },
                 { name: wipeFieldName, value: `\`${rustplus.getCommandWipe(true)}\``, inline: true }],
@@ -788,13 +790,14 @@ module.exports = {
             { name: mapSaltFieldName, value: `\`${rustplus.info.salt}\``, inline: true },
             { name: mapFieldName, value: `\`${rustplus.info.map}\``, inline: true });
 
-        if (instance.serverList[rustplus.serverId].connect !== null) {
-            embed.addFields({
-                name: Client.client.intlGet(guildId, 'connect'),
-                value: `\`${instance.serverList[rustplus.serverId].connect}\``,
-                inline: false
-            });
-        }
+        const connect = instance.serverList[rustplus.serverId].connect;
+
+        embed.addFields({
+            name: Client.client.intlGet(guildId, 'connect'),
+            value: `\`${(connect === null || connect === undefined) ?
+                Client.client.intlGet(guildId, 'unavailable') : connect}\``,
+            inline: false
+        });
 
         return embed;
     },

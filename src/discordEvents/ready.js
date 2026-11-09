@@ -28,6 +28,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusSync = require('../util/rustplusSync.js');
+const ServerAddressHandler = require('../handlers/serverAddressHandler.js');
 const SetupServerList = require('../discordTools/SetupServerList.js');
 const StorageMonitorHandler = require('../handlers/storageMonitorHandler.js');
 
@@ -180,6 +181,13 @@ module.exports = {
                 A server that is adopted while the bot runs has no message in the servers channel, so it would not be
                 listed in Discord (and cannot be connected, the button lives on that message).
             */
+
+            /*
+                The address of a server is not part of the pairing, so the connect field of its messages stays empty.
+                The server list of the game knows it, fill it in before the messages are posted or written again.
+            */
+            await ServerAddressHandler.handler(client);
+
             for (const guildId of Object.keys(client.instances || {})) {
                 try {
                     const posted = await SetupServerList.postMissingServerMessages(client, guildId);

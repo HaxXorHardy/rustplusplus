@@ -110,9 +110,12 @@ module.exports = async (client, interaction) => {
                 /* Keep the existing Battlemetrics ID while the integration is disabled. */
             }
             else if (client.battlemetricsInstances.hasOwnProperty(battlemetricsId)) {
-                const bmInstance = client.battlemetricsInstances[battlemetricsId];
+                /*
+                    The connect string is not taken from Battlemetrics: its port is the query port of the server, the
+                    game connects to the game port. It comes from the server list of the game instead (see
+                    handlers/serverAddressHandler.js).
+                */
                 server.battlemetricsId = battlemetricsId;
-                server.connect = `connect ${bmInstance.server_ip}:${bmInstance.server_port}`;
             }
             else {
                 const bmInstance = new Battlemetrics(battlemetricsId);
@@ -120,7 +123,6 @@ module.exports = async (client, interaction) => {
                 if (bmInstance.lastUpdateSuccessful) {
                     client.battlemetricsInstances[battlemetricsId] = bmInstance;
                     server.battlemetricsId = battlemetricsId;
-                    server.connect = `connect ${bmInstance.server_ip}:${bmInstance.server_port}`;
                 }
             }
         }
