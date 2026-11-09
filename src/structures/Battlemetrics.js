@@ -679,6 +679,9 @@ class Battlemetrics {
                 this.players[entity.id]['connectionLog'] = [];
                 this.players[entity.id]['logoutDate'] = null;
 
+                /* A player that is online on the first evaluation was already online before this instance existed. */
+                this.players[entity.id]['onlineSince'] = firstTime ? null : time;
+
                 if (!firstTime) this.#updateConnectionLog(entity.id, { type: 0, time: time }); /* 0 = Login event */
 
                 this.newPlayers.push(entity.id);
@@ -710,6 +713,7 @@ class Battlemetrics {
                 this.players[entity.id]['url'] = this.GET_BATTLEMETRICS_PLAYER_URL(entity.id);
                 if (this.players[entity.id]['status'] === false) {
                     this.players[entity.id]['status'] = true;
+                    this.players[entity.id]['onlineSince'] = time;
                     this.#updateConnectionLog(entity.id, { type: 0, time: time }); /* 0 = Login event */
                     this.loginPlayers.push(entity.id);
                 }
@@ -725,6 +729,7 @@ class Battlemetrics {
         for (const id of offlinePlayers) {
             this.players[id]['status'] = false;
             this.players[id]['logoutDate'] = time;
+            this.players[id]['onlineSince'] = null;
             this.#updateConnectionLog(id, { type: 1, time: time }); /* 1 = Logout event */
             this.logoutPlayers.push(id);
         }
@@ -812,6 +817,29 @@ class Battlemetrics {
     }
 
     /**
+     *  The length of the current session (seconds) of a player.
+     *
+     *  Battlemetrics reports it as the 'time' metadata of the server request. Some servers have no session data in the
+     *  API at all (Battlemetrics does not expose it for every server), so the login this instance observed itself is
+     *  used as a fallback. A player that was already online when this instance started has no known session start.
+     *
+     *  @param {string} playerId The id of the player to get the session length from.
+     *  @return {number|null} The length of the current session in seconds, null when it is not known.
+     */
+    #getSessionSeconds(playerId) {
+        if (!this.players.hasOwnProperty(playerId)) return null;
+
+        const sessionTime = this.players[playerId]['sessionTime'];
+        if (typeof (sessionTime) === 'number') return sessionTime;
+
+        const onlineSince = this.players[playerId]['onlineSince'];
+        if (!onlineSince) return null;
+
+        const seconds = this.#formatTime(onlineSince)[0];
+        return Number.isFinite(seconds) ? seconds : null;
+    }
+
+    /**
      *  Get the online time (the length of the current session) of a player.
      *
      *  lastUpdateSuccessful is deliberately not checked here. The flag only says that the latest request failed, not
@@ -822,12 +850,9 @@ class Battlemetrics {
      *  @return {Array} index 0: seconds online, index 1: The formatted online time of a player.
      */
     getOnlineTime(playerId) {
-        if (!this.players.hasOwnProperty(playerId) ||
-            typeof (this.players[playerId]['sessionTime']) !== 'number') {
-            return null;
-        }
+        const seconds = this.#getSessionSeconds(playerId);
 
-        return BattlemetricsTime.formatSeconds(this.players[playerId]['sessionTime']);
+        return seconds !== null ? BattlemetricsTime.formatSeconds(seconds) : null;
     }
 
     /**
@@ -853,8 +878,8 @@ class Battlemetrics {
     getOnlinePlayerIdsOrderedByTime() {
         const unordered = [];
         for (const playerId of this.onlinePlayers) {
-            const seconds = this.players[playerId]['sessionTime'];
-            unordered.push([typeof (seconds) === 'number' ? seconds : 0, playerId]);
+            const seconds = this.#getSessionSeconds(playerId);
+            unordered.push([seconds !== null ? seconds : 0, playerId]);
         }
         let ordered = unordered.sort(function (a, b) { return b[0] - a[0] })
         return ordered.map(e => e[1]);

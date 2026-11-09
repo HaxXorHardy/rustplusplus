@@ -123,6 +123,62 @@ Test.describe('Battlemetrics.getOnlineTime', () => {
     });
 });
 
+/*
+    Battlemetrics does not report the session length for every server (the 'time' metadata of the server request is
+    missing there), so the login this instance observed itself is the fallback for those servers.
+*/
+Test.describe('Battlemetrics.getOnlineTime without a battlemetrics session', () => {
+    Test.it('falls back to the login this instance observed', () => {
+        const bmInstance = fakeBattlemetrics({
+            '15046681': {
+                id: '15046681', name: 'Sickboy', status: true, sessionTime: null,
+                onlineSince: new Date(Date.now() - (7860 * 1000)).toISOString(),
+            },
+        });
+
+        const time = bmInstance.getOnlineTime('15046681');
+
+        Assert.ok(Math.abs(time[0] - 7860) <= 2, `expected about 7860 seconds, got ${time[0]}`);
+        Assert.strictEqual(time[1], '02:11');
+    });
+
+    Test.it('prefers the session that battlemetrics reports', () => {
+        const bmInstance = fakeBattlemetrics({
+            '15046681': {
+                id: '15046681', name: 'Sickboy', status: true, sessionTime: 600,
+                onlineSince: new Date(Date.now() - (7860 * 1000)).toISOString(),
+            },
+        });
+
+        Assert.deepStrictEqual(bmInstance.getOnlineTime('15046681'), [600, '00:10']);
+    });
+
+    Test.it('returns null for a player that was already online when the instance started', () => {
+        const bmInstance = fakeBattlemetrics({
+            '15046681': { id: '15046681', name: 'Sickboy', status: true, sessionTime: null, onlineSince: null },
+        });
+
+        Assert.strictEqual(bmInstance.getOnlineTime('15046681'), null);
+    });
+
+    Test.it('orders the online players by the fallback session length', () => {
+        const bmInstance = fakeBattlemetrics({
+            '15046681': {
+                id: '15046681', name: 'Short', status: true, sessionTime: null,
+                onlineSince: new Date(Date.now() - (600 * 1000)).toISOString(),
+            },
+            '15046682': {
+                id: '15046682', name: 'Long', status: true, sessionTime: null,
+                onlineSince: new Date(Date.now() - (7200 * 1000)).toISOString(),
+            },
+            '15046683': { id: '15046683', name: 'Unknown', status: true, sessionTime: null, onlineSince: null },
+        });
+
+        Assert.deepStrictEqual(bmInstance.getOnlinePlayerIdsOrderedByTime(),
+            ['15046682', '15046681', '15046683']);
+    });
+});
+
 Test.describe('Battlemetrics.getOfflineTime', () => {
     Test.it('reports the time since the player logged out', () => {
         const bmInstance = fakeBattlemetrics({
