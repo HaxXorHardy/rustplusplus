@@ -149,7 +149,7 @@ module.exports = {
                     await DiscordMessages.sendUpdateMapInformationMessage(rustplus);
                 }
 
-                await SetupServerList(client, guild);
+                await SetupServerList.postServerMessages(client, guild.id);
                 await SetupSettingsMenu(client, guild, true);
 
                 if (rustplus && rustplus.isOperational) {
@@ -195,7 +195,7 @@ module.exports = {
             case 'servers': {
                 await resetCategoryPermissions(client, guild, instance);
 
-                await SetupServerList(client, guild);
+                await SetupServerList.postServerMessages(client, guild.id);
 
                 await PermissionHandler.resetPermissionsAllChannels(client, guild);
 

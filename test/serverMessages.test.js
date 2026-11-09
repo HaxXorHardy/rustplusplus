@@ -96,6 +96,72 @@ Test.describe('SetupServerList.postMissingServerMessages', () => {
     });
 });
 
+/*
+    /reset rebuilds the servers channel. The stored message ids are dead afterwards, so every server has to be posted
+    again - also the ones that still carry a message id (commands/reset.js).
+*/
+Test.describe('SetupServerList.postServerMessages', () => {
+    const originalSendServerMessage = DiscordMessages.sendServerMessage;
+    const originalClearTextChannel = DiscordTools.clearTextChannel;
+
+    Test.afterEach(() => {
+        DiscordMessages.sendServerMessage = originalSendServerMessage;
+        DiscordTools.clearTextChannel = originalClearTextChannel;
+    });
+
+    function fakeInstance() {
+        return {
+            channelId: { servers: 'servers-channel' },
+            serverList: {
+                'relay-a': { title: 'A', guid: 'a', messageId: '111', switches: {}, alarms: {}, storageMonitors: {} },
+                'relay-b': { title: 'B', guid: 'b', messageId: null, switches: {}, alarms: {}, storageMonitors: {} },
+            },
+        };
+    }
+
+    Test.it('empties the channel and posts every server', async () => {
+        const cleared = [];
+        const posted = [];
+
+        DiscordTools.clearTextChannel = async (guildId, channelId) => cleared.push(`${guildId}:${channelId}`);
+        DiscordMessages.sendServerMessage = async (guildId, serverId) => posted.push(serverId);
+
+        const count = await SetupServerList.postServerMessages(fakeClient(fakeInstance()), 'guildId');
+
+        Assert.deepStrictEqual(cleared, ['guildId:servers-channel']);
+        Assert.deepStrictEqual(posted, ['relay-a', 'relay-b']);
+        Assert.strictEqual(count, 2);
+    });
+
+    Test.it('keeps going when a message cannot be posted', async () => {
+        DiscordTools.clearTextChannel = async () => undefined;
+        DiscordMessages.sendServerMessage = async (guildId, serverId) => {
+            if (serverId === 'relay-a') throw new Error('missing access');
+        };
+
+        const client = fakeClient(fakeInstance());
+        const count = await SetupServerList.postServerMessages(client, 'guildId');
+
+        Assert.strictEqual(count, 1);
+        Assert.ok(client.logs.some((text) => text.includes('missing access')));
+    });
+
+    Test.it('survives an instance without servers', async () => {
+        const cleared = [];
+
+        DiscordTools.clearTextChannel = async (guildId, channelId) => cleared.push(channelId);
+        DiscordMessages.sendServerMessage = async () => {
+            throw new Error('nothing should be posted');
+        };
+
+        const count = await SetupServerList.postServerMessages(
+            fakeClient({ channelId: { servers: 'servers-channel' }, serverList: {} }), 'guildId');
+
+        Assert.strictEqual(count, 0);
+        Assert.deepStrictEqual(cleared, ['servers-channel']);
+    });
+});
+
 /* Only the devices of the connected server are listed, the messages of the previous server have to go. */
 Test.describe('RemoveServerDevices', () => {
     const originalDeleteMessageById = DiscordTools.deleteMessageById;
