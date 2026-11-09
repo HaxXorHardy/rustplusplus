@@ -724,6 +724,26 @@ module.exports = {
         });
     },
 
+    /*
+        The death notification of the account history ("You were killed by ...") as a direct message. It carries what
+        the notification holds, the server the death happened on goes into the footer.
+    */
+    getDeathDirectMessageEmbed: function (guildId, death) {
+        const options = {
+            color: Constants.COLOR_INACTIVE,
+            timestamp: true,
+            author: {
+                name: `${death.text !== null ? death.text : Client.client.intlGet(guildId, 'deathCap')}`,
+                iconURL: Constants.DEFAULT_SERVER_IMG,
+            },
+        };
+
+        if (death.serverName) options.footer = { text: `${death.serverName}` };
+        if (death.playerId) options.author.url = `${Constants.STEAM_PROFILES_URL}${death.playerId}`;
+
+        return module.exports.getEmbed(options);
+    },
+
     getUpdateServerInformationEmbed: function (rustplus) {
         const guildId = rustplus.guildId;
         const instance = Client.client.getInstance(guildId);

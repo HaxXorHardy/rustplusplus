@@ -160,6 +160,21 @@ module.exports = async (client, interaction) => {
             components: [DiscordButtons.getInGameTeammateNotificationsButtons(guildId)]
         });
     }
+    else if (interaction.customId === 'InGameTeammateDeathDm') {
+        instance.generalSettings.deathNotifyDm = !instance.generalSettings.deathNotifyDm;
+        client.setInstance(guildId, instance);
+
+        if (rustplus) rustplus.generalSettings.deathNotifyDm = instance.generalSettings.deathNotifyDm;
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.deathNotifyDm}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getInGameTeammateNotificationsButtons(guildId)]
+        });
+    }
     else if (interaction.customId === 'SmartAlarmNotifyInGame') {
         instance.generalSettings.smartAlarmNotifyInGame = !instance.generalSettings.smartAlarmNotifyInGame;
         client.setInstance(guildId, instance);

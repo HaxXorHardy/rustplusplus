@@ -337,3 +337,81 @@ Test.describe('ready.refreshStorageMonitors', () => {
     });
 });
 
+
+/* The direct message of a death goes to the Discord users that registered a steam account of the guild. */
+Test.describe('InstanceUtils.getRegisteredDiscordUserIds', () => {
+    const InstanceUtils = require('../src/util/instanceUtils.js');
+
+    const originalReadCredentialsFile = InstanceUtils.readCredentialsFile;
+
+    Test.afterEach(() => {
+        InstanceUtils.readCredentialsFile = originalReadCredentialsFile;
+    });
+
+    Test.it('lists the hoster first and drops duplicates', () => {
+        InstanceUtils.readCredentialsFile = () => ({
+            hoster: '76561198000000100',
+            '76561198000000100': { discord_user_id: '111' },
+            '76561198000000101': { discord_user_id: '222' },
+            '76561198000000102': { discord_user_id: '111' },
+        });
+
+        Assert.deepStrictEqual(InstanceUtils.getRegisteredDiscordUserIds('guildId'), ['111', '222']);
+    });
+
+    Test.it('is empty without a registered user', () => {
+        InstanceUtils.readCredentialsFile = () => ({ hoster: null });
+
+        Assert.deepStrictEqual(InstanceUtils.getRegisteredDiscordUserIds('guildId'), []);
+    });
+});
+
+/* The message the removed FCM listener sent: the death notification of the account history. */
+Test.describe('DiscordMessages.sendDeathDirectMessage', () => {
+    const Client = require('../src/structures/clientRegistry.js');
+    const InstanceUtils = require('../src/util/instanceUtils.js');
+
+    const originalGetUserIds = InstanceUtils.getRegisteredDiscordUserIds;
+    const originalGetUserById = DiscordTools.getUserById;
+
+    Test.afterEach(() => {
+        InstanceUtils.getRegisteredDiscordUserIds = originalGetUserIds;
+        DiscordTools.getUserById = originalGetUserById;
+        Client.client = null;
+    });
+
+    Test.it('sends the death to every registered user', async () => {
+        const sent = [];
+
+        InstanceUtils.getRegisteredDiscordUserIds = () => ['111', '222'];
+        DiscordTools.getUserById = async (guildId, userId) => ({ userId: userId });
+        Client.client = {
+            intlGet: (guildId, key) => key,
+            log: () => undefined,
+            messageSend: async (user) => { sent.push(user.userId); return { id: 'dm' }; },
+        };
+
+        const count = await DiscordMessages.sendDeathDirectMessage('guildId', {
+            text: 'You were killed by JS8',
+            serverName: "Captain's Quarters",
+            playerId: '76561198000000100',
+        });
+
+        Assert.strictEqual(count, 2);
+        Assert.deepStrictEqual(sent, ['111', '222']);
+    });
+
+    Test.it('reports when no user is registered', async () => {
+        const logs = [];
+
+        InstanceUtils.getRegisteredDiscordUserIds = () => [];
+        Client.client = {
+            intlGet: (guildId, key) => key,
+            log: (title, text) => logs.push(`${text}`),
+        };
+
+        Assert.strictEqual(await DiscordMessages.sendDeathDirectMessage('guildId', { text: 'You were killed' }), 0);
+        Assert.ok(logs.some((text) => text.includes('/credentials login')));
+    });
+});
+

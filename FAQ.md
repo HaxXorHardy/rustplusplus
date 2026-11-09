@@ -219,6 +219,19 @@ in the account state is keyed `relay-<uuid>`, which is exactly what the authenti
 Alarms, deaths and team events are detected by polling the connected server (see the notification settings);
 they no longer depend on push notifications of the app. Everything else is read from the account itself:
 
+#### The death notification as a direct message
+
+The FCM listener used to send a **direct message** for every death of the account. The history carries the same
+notification (`"type": "death"`), so the bot reports it again: the direct message goes to every Discord user that
+registered a steam account with `/credentials login` (the hoster first, see `credentials/<guildId>.json`).
+
+* the toggle **DEATH DM** in the notification settings switches it on and off (on by default),
+* it works while the bot runs and after a restart - a death that happened while the bot was offline is reported on the
+  next refresh, because the history keeps it,
+* every death is reported once; the newest reported one is stored per account in the instance (`historyDeaths`),
+* without a registered user the log says `No Discord user is registered for the Rust+ account ...`, then a login is
+  needed before a message can be sent.
+
 #### Newly paired devices are adopted automatically
 
 Pairing a device in-game only puts a **notification** into the history of the account (`POST /api/history/read`,

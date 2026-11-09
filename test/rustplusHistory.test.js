@@ -87,6 +87,26 @@ function serverPairEntry(playerToken, notificationId, date) {
     };
 }
 
+/*
+    A death notification of the account ("You were killed by ..."). It carries no pairing data, the app shows `title`
+    and the server it happened on comes with the payload.
+*/
+function deathEntry(title, date) {
+    return {
+        notificationId: 42,
+        date: date,
+        title: title,
+        body: "Captain's Quarters | Solo/Duo/Trio/Quad | Bi-weekly",
+        channel: 1001,
+        data: JSON.stringify({
+            type: 'death',
+            name: "Captain's Quarters",
+            playerId: STEAM_ID,
+            playerToken: -395561831,
+        }),
+    };
+}
+
 Test.describe('RustPlusHistory.parsePairingEntries', () => {
     Test.it('reads the pairing payload of the history', () => {
         const entries = RustPlusHistory.parsePairingEntries([
@@ -119,6 +139,20 @@ Test.describe('RustPlusHistory.parsePairingEntries', () => {
     Test.it('skips entries without usable data', () => {
         Assert.deepStrictEqual(RustPlusHistory.parsePairingEntries(null), []);
         Assert.deepStrictEqual(RustPlusHistory.parsePairingEntries([{ data: 'not-json' }, {}, { data: '{}' }]), []);
+    });
+
+    /* A death carries no pairing data, it is kept for the direct message of the account owner. */
+    Test.it('keeps a death notification for the direct message', () => {
+        const entries = RustPlusHistory.parsePairingEntries([
+            deathEntry('You were killed by JS8', '2026-11-09T02:06:11.5464213+00:00'),
+        ]);
+
+        Assert.strictEqual(entries.length, 1);
+        Assert.strictEqual(entries[0].kind, 'death');
+        Assert.strictEqual(entries[0].serverId, null);
+        Assert.strictEqual(entries[0].serverName, "Captain's Quarters");
+        Assert.strictEqual(entries[0].text, 'You were killed by JS8');
+        Assert.strictEqual(entries[0].playerId, STEAM_ID);
     });
 });
 
@@ -291,7 +325,7 @@ Test.describe('RustPlusHistory.refresh', () => {
         const client = fakeClient(instance);
 
         /* No pairing notifications, the server list of the account is enough to adopt the server. */
-        const added = await RustPlusHistory.refresh(client, async () => [],
+        const { devices } = await RustPlusHistory.refresh(client, async () => [],
             async () => ({ servers: [{ id: SERVER_ID, name: "Captain's Quarters", playerToken: 42, devices: [] }] }));
 
         const serverKeys = Object.keys(instance.serverList);
@@ -308,7 +342,7 @@ Test.describe('RustPlusHistory.refresh', () => {
 
         Assert.strictEqual(instance.activeServer, serverKeys[0]);
         Assert.strictEqual(client.saved, 1);
-        Assert.deepStrictEqual(added, []);
+        Assert.deepStrictEqual(devices, []);
 
         /* A server that is adopted while the bot runs is connected right away. */
         Assert.strictEqual(client.createdRustplusInstances.length, 1);
@@ -485,12 +519,39 @@ Test.describe('RustPlusHistory.refresh', () => {
         const client = fakeClient(instance);
 
         /* The account state cannot be read, so nothing is adopted and nothing may be activated. */
-        const added = await RustPlusHistory.refresh(client, async () => [], async () => null);
+        const { devices, deaths } = await RustPlusHistory.refresh(client, async () => [], async () => null);
 
-        Assert.deepStrictEqual(added, []);
+        Assert.deepStrictEqual(devices, []);
+        Assert.deepStrictEqual(deaths, []);
         Assert.strictEqual(instance.activeServer, null);
         Assert.strictEqual(client.saved, 0);
         Assert.deepStrictEqual(client.createdRustplusInstances, []);
+    });
+
+    /*
+        The removed FCM listener sent a direct message for every death of the account. The history keeps the same
+        notification, so the refresh has to report it - once, even though the history is replayed every run.
+    */
+    Test.it('reports a death of the account once', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const instance = { activeServer: null, serverList: {}, trackers: {} };
+        const client = fakeClient(instance);
+        const history = async () => [deathEntry('You were killed by JS8', '2026-11-09T02:06:11.5464213+00:00')];
+
+        const first = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.strictEqual(first.deaths.length, 1);
+        Assert.strictEqual(first.deaths[0].guildId, GUILD_ID);
+        Assert.strictEqual(first.deaths[0].steamId, STEAM_ID);
+        Assert.strictEqual(first.deaths[0].death.text, 'You were killed by JS8');
+        Assert.strictEqual(first.deaths[0].death.serverName, "Captain's Quarters");
+        Assert.strictEqual(instance.historyDeaths[STEAM_ID], Date.parse('2026-11-09T02:06:11.5464213+00:00'));
+
+        /* The same entry is in the history on the next run, it must not be reported again. */
+        const second = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.deepStrictEqual(second.deaths, []);
     });
 
     /*

@@ -115,10 +115,10 @@ module.exports = {
             so this works without FCM credentials.
         */
         const refreshPairingHistory = async () => {
-            const added = await RustPlusHistory.refresh(client);
+            const { devices, deaths } = await RustPlusHistory.refresh(client);
             const refreshedStorageMonitors = new Set();
 
-            for (const device of added) {
+            for (const device of devices) {
                 if (!device.serverKey) continue;
 
                 try {
@@ -152,6 +152,27 @@ module.exports = {
                 }
                 catch (e) {
                     client.log(client.intlGet(null, 'warningCap'), e, 'warning');
+                }
+            }
+
+            /*
+                A death of the account is reported as a direct message - the job the removed FCM listener did. The
+                history carries the notification, so a death is reported even when the bot was not connected.
+            */
+            for (const entry of deaths) {
+                try {
+                    const instance = client.getInstance(entry.guildId);
+                    if (!instance || !instance.generalSettings.deathNotifyDm) continue;
+
+                    const sent = await DiscordMessages.sendDeathDirectMessage(entry.guildId, entry.death);
+
+                    if (sent !== 0) {
+                        client.log(client.intlGet(null, 'infoCap'),
+                            `Death of ${entry.steamId} was reported as a direct message to ${sent} user(s).`);
+                    }
+                }
+                catch (e) {
+                    client.log(client.intlGet(null, 'warningCap'), e, 'warn');
                 }
             }
 

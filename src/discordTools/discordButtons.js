@@ -344,6 +344,11 @@ module.exports = {
                 customId: 'InGameTeammateDeath',
                 label: Client.client.intlGet(guildId, 'deathCap'),
                 style: instance.generalSettings.deathNotify ? SUCCESS : DANGER
+            }),
+            module.exports.getButton({
+                customId: 'InGameTeammateDeathDm',
+                label: Client.client.intlGet(guildId, 'deathDmCap'),
+                style: instance.generalSettings.deathNotifyDm ? SUCCESS : DANGER
             }));
     },
 

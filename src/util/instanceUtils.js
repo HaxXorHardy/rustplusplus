@@ -25,6 +25,29 @@ const AtomicWriteFile = require('./atomicWriteFile.js');
 const Client = require('../structures/clientRegistry.js');
 
 module.exports = {
+    /*
+        The Discord users that registered a steam account of this guild, the hoster first. A direct message (death
+        notification, see credentialLoginHandler.registerCredentials) can only go to them.
+    */
+    getRegisteredDiscordUserIds: function (guildId) {
+        const credentials = module.exports.readCredentialsFile(guildId);
+        const userIds = [];
+
+        const hoster = credentials.hoster;
+        if (hoster && credentials[hoster] && credentials[hoster].discord_user_id) {
+            userIds.push(`${credentials[hoster].discord_user_id}`);
+        }
+
+        for (const [steamId, content] of Object.entries(credentials)) {
+            if (steamId === 'hoster' || !content || !content.discord_user_id) continue;
+
+            const userId = `${content.discord_user_id}`;
+            if (!userIds.includes(userId)) userIds.push(userId);
+        }
+
+        return userIds;
+    },
+
     getSmartDevice: function (guildId, entityId) {
         /* Temporary function till discord modals gets more functional */
         const instance = Client.client.getInstance(guildId);

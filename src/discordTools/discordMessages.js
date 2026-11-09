@@ -27,6 +27,7 @@ const DiscordButtons = require('./discordButtons.js');
 const DiscordEmbeds = require('./discordEmbeds.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
+const InstanceUtils = require('../util/instanceUtils.js');
 const Scrape = require('../util/scrape.js');
 
 module.exports = {
@@ -354,6 +355,35 @@ module.exports = {
         }
 
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+    },
+
+    /*
+        The death notification of the account history as a direct message to the registered Discord users. The old FCM
+        listener sent exactly this message; the history carries it while the bot was offline as well, so it replaces
+        the push client (see util/rustplusHistory.js).
+    */
+    sendDeathDirectMessage: async function (guildId, death) {
+        const userIds = InstanceUtils.getRegisteredDiscordUserIds(guildId);
+
+        if (userIds.length === 0) {
+            Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                'No Discord user is registered for the Rust+ account, the death notification was not sent as a direct ' +
+                'message. Use "/credentials login" to register one.', 'warn');
+            return 0;
+        }
+
+        const content = { embeds: [DiscordEmbeds.getDeathDirectMessageEmbed(guildId, death)] };
+
+        let sent = 0;
+
+        for (const userId of userIds) {
+            const user = await DiscordTools.getUserById(guildId, userId);
+            if (!user) continue;
+
+            if (await Client.client.messageSend(user, content)) sent += 1;
+        }
+
+        return sent;
     },
 
     sendTeamChatMessage: async function (guildId, message) {

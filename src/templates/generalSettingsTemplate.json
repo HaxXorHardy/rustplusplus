@@ -15,6 +15,7 @@
     "connectionNotify": false,
     "afkNotify": false,
     "deathNotify": false,
+    "deathNotifyDm": true,
     "mapWipeNotifyEveryone": false,
     "itemAvailableInVendingMachineNotifyInGame": true,
     "displayInformationBattlemetricsAllOnlinePlayers": false,

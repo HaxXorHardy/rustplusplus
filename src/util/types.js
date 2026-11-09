@@ -40,6 +40,7 @@
  * @property {boolean} muteInGameBotMessages
  * @property {boolean} connectionNotify
  * @property {boolean} afkNotify
+ * @property {boolean} deathNotifyDm  Send the death notifications of the history as a direct message.
  * @property {boolean} teamChat
  */
 

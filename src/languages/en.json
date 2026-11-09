@@ -381,6 +381,7 @@
     "dash": "Dash",
     "dayOfWipe": "Day {day}",
     "deathCap": "DEATH",
+    "deathDmCap": "DEATH DM",
     "decay": "Decay",
     "decayingCap": "DECAYING",
     "DeepSeaMinWipeCooldownTime": "Deep Sea minimum wipe cooldown time is {time}.",

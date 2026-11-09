@@ -61,7 +61,12 @@ async function fetchHistory(token) {
     return Array.isArray(response.data) ? response.data : [];
 }
 
-/* The pairing notifications of the history, newest first, one entry per device. */
+/*
+    The pairing notifications of the history, newest first, one entry per device.
+
+    A death notification ("You were killed by ...") carries no pairing data, it is kept as `kind: 'death'` and used for
+    the direct message the FCM listener used to send (see discordMessages.sendDeathDirectMessage).
+*/
 function parsePairingEntries(entries) {
     const result = [];
 
@@ -76,7 +81,24 @@ function parsePairingEntries(entries) {
             continue;
         }
 
-        if (!data || !data.id) continue;
+        if (!data) continue;
+
+        if (`${data.type}` === 'death') {
+            result.push({
+                notificationId: entry.notificationId,
+                date: entry.date ? `${entry.date}` : null,
+                kind: 'death',
+                serverId: null,
+                serverName: data.name ? `${data.name}` : null,
+                playerId: data.playerId ? `${data.playerId}` : null,
+                /* The app shows `title` ("You were killed by ...") and names the server in `body`. */
+                text: entry.title ? `${entry.title}` : null,
+                body: entry.body ? `${entry.body}` : null,
+            });
+            continue;
+        }
+
+        if (!data.id) continue;
 
         const entityType = Number(data.entityType);
 
@@ -228,15 +250,31 @@ function applyPairingEntries(instance, steamId, entries, intlGet = (key) => key)
     return result;
 }
 
+/* The time of the newest death that was already reported for this account, 0 when none was. */
+function getReportedDeath(instance, steamId) {
+    const reported = (instance.historyDeaths || {})[`${steamId}`];
+    const value = Number(reported);
+
+    return Number.isFinite(value) ? value : 0;
+}
+
+function setReportedDeath(instance, steamId, at) {
+    if (!instance.historyDeaths) instance.historyDeaths = {};
+
+    instance.historyDeaths[`${steamId}`] = at;
+}
+
 /*
     Runs on a timer: adopts servers and devices that were paired in-game since the last run and returns the devices
-    that were added, so the caller can post their Discord messages.
+    that were added, so the caller can post their Discord messages. Deaths of the account are reported as well
+    (`deaths`), they replace the direct message the removed FCM listener sent.
 
     A renewed pairing of the active server (new player token) reconnects the instance, otherwise the bot would keep
     asking with credentials the server does not accept (`not_found` on every request).
 */
 async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = RustPlusLogin.fetchSyncData) {
     const added = [];
+    const deaths = [];
 
     for (const guildId of Object.keys(client.instances || {})) {
         try {
@@ -263,6 +301,26 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                 const entries = parsePairingEntries(await fetchHistoryFn(auth.token));
 
                 let changed = false;
+
+                /*
+                    A death notification is reported once as a direct message (the job of the removed FCM listener).
+                    The newest reported one is remembered per account, so the replay of the history does not repeat it.
+                */
+                const reportedDeath = getReportedDeath(instance, steamId);
+                const newDeaths = entries
+                    .filter((entry) => entry.kind === 'death')
+                    .map((entry) => ({ entry: entry, at: entry.date ? Date.parse(entry.date) : NaN }))
+                    .filter((death) => Number.isFinite(death.at) && death.at > reportedDeath);
+
+                if (newDeaths.length !== 0) {
+                    /* Oldest first, the user should read them in the order they happened. */
+                    for (const death of [...newDeaths].reverse()) {
+                        deaths.push({ guildId: guildId, steamId: steamId, death: death.entry });
+                    }
+
+                    setReportedDeath(instance, steamId, Math.max(...newDeaths.map((death) => death.at)));
+                    changed = true;
+                }
 
                 if (accountServers !== null) {
                     /* Keep the stored snapshot current, the token renewal and the login use it. */
@@ -346,7 +404,7 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
         }
     }
 
-    return added;
+    return { devices: added, deaths: deaths };
 }
 
 /*
