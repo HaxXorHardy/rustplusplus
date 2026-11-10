@@ -1,0 +1,51 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [FAQ](https://github.com/HaxXorHardy/rustplusplus/blob/master/FAQ.md) first - most login,
+        pairing and notification problems are answered there.
+
+        **Never paste tokens, passwords, steam ids or a full instance file.** The log excerpt is enough.
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens?
+      description: What did you do, and what did the bot do instead?
+      placeholder: The information channel stopped updating after a restart, the log says ...
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: The few lines around the problem, from `logs/<guildId>.log` or the console.
+      render: shell
+    validations:
+      required: false
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run the bot?
+      options:
+        - Docker / Portainer image
+        - node / npm in the repository
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Image tag (`master`), the `version` of `package.json`, or `git log -1 --oneline`.
+    validations:
+      required: false
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Screenshots, what you already tried, whether it worked before.
+    validations:
+      required: false

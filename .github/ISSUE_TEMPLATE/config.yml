@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: FAQ
+    url: https://github.com/HaxXorHardy/rustplusplus/blob/master/FAQ.md
+    about: Login, pairing, notifications and the information channel - most problems are answered here.
+  - name: Documentation
+    url: https://github.com/HaxXorHardy/rustplusplus/blob/master/docs/documentation.md
+    about: Setup, commands and the credentials of the bot.
