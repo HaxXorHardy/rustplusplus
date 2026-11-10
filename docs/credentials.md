@@ -1,44 +1,75 @@
 # Credentials Documentation
 
-> To be able to use an instance of the bot properly, you want to setup your Credentials. Adding these credentials makes it possible for you to pair with servers as well as connecting to them.
+> To use an instance of the bot you have to log in once with a Steam account that is signed in to the Rust+ app and has
+> paired your server. The login creates the Rust+ account token the bot needs for the authenticated websocket, the
+> server list, the pairing ids and the paired devices. No FCM credentials and no credential application are needed
+> anymore.
 
-## Retrieving Credentials
+## Logging in
 
-* Download and install the [rustplusplus credential application](https://github.com/alexemanuelol/rustplusplus-credential-application/releases/download/v1.4.0/rustplusplus-1.4.0-win-x64.exe)
-* Once downloaded and installed, open it and press the button `Connect with Rust+`.
+Run `/credentials login` in Discord. The bot offers three ways, all of them end in the same login:
 
-![rustplusplus Credential Application Image](images/bot_setup/fcm_credential_application_connect.png)
+| Way | Secret goes through Discord? | Renews itself |
+|---|---|---|
+| **QR code (Steam app)** - recommended | no | yes, the Steam refresh token is stored |
+| **Paste token** | only the Rust+ account token | no, the bot reminds you by DM |
+| **Password** | Steam account name, password and Steam Guard code (ephemeral) | yes, the Steam refresh token is stored |
 
-* Another window will pop up where you need to login with your Steam Account.
+### QR code
 
-![Steam Account login Image](images/bot_setup/steam_login.png)
+1. `/credentials login` → **QR code (Steam app)**.
+2. Scan the picture with the Steam app (or open the link on a phone that is signed in to Steam) and confirm the login
+   there.
+3. The bot polls Steam and reports the result. The challenge expires after a few minutes, press the button again then.
 
-* When you have logged in, you should be greeted with a window that display the Slash Command /credentials add .....
-* Click `Copy` to copy the Slash Command.
+The picture is rendered by the bot itself: the challenge is a one time login approval and is never sent to a QR service.
 
-![Credentials copy Image](images/bot_setup/credentials_copy.png)
+### Paste token
 
-* Paste the Slash command in your Discord Server Text Channel. Which Text Channel you run the Slash Command is not important, as long as the bot has access to it.
+1. Open https://app.playrust.com, log in and open a server of the account.
+2. Copy the value `authentication.token` out of the DevTools console or the IndexedDB (`rustplus-cache`, store
+   `cache`) - the snippet is in [FAQ.md](../FAQ.md#reading-the-values-manually-in-the-browser).
+3. `/credentials login` → **Paste token** and paste the value.
 
-![Credentials discord Image](images/bot_setup/credentials_discord.png)
+This way stores no Steam refresh token, so the bot cannot renew the login itself: `RPP_CREDENTIALS_EXPIRY_WARNING`
+(default 3 days) before the token expires the Discord user that logged in gets a direct message, and the same message
+once it has expired.
 
-* This process is the same for the owner of the bot as well as any teammate that want to register their credentials (mainly for the purpose to extend the usage of the leader command). Once a teammate have registered their credentials, they just need to go inside the game and pair with the server. Which teammates that have paired with the server can be seen in the information channel, they should have the P icon beside their name, see below:
+### Password
 
-![Teammates Paired with Server](images/bot_setup/teammates_paired.png)
+1. `/credentials login` → **Password**.
+2. Steam account name and password, then the Steam Guard confirmation in the app (**Confirmed**) or the code
+   (**Enter code**).
 
-## Why is Credentials necessary?
+The answer is ephemeral, only you see the response - but Discord transmits the text. Use the QR code or the token if you
+do not want that.
 
-Credentials are necessary in order to get the following:
+## What the login stores
 
-* Server Pairing Notifications
-* Smart Devices Pairing Notifications
-* Smart Alarm Notifications
-* Player Offline Death Notifications
-* Teammate Login Notifications
-* Facepunch News
+| File | Content |
+|---|---|
+| `credentials/rustplusAuth/<steamId>.json` | account token, expiry, server list (name → pairing id) and - for the QR and password login - the Steam refresh token |
+| `credentials/<guildId>.json` | which Discord user owns which steam account, `hoster` is the first one |
 
-Without these, the bot would not operate properly.
+Afterwards the bot writes the pairing ids into the servers of the guild whose name matches, posts the messages of new
+servers and devices and reconnects the active server. `/credentials show` lists the registered accounts with the expiry
+of their token, `/credentials remove` and `/credentials set_hoster` manage them.
 
-## Expiring Credentials
+## Token renewal and the DM reminder
 
-> The generated credentials include a Steam Auth Token that expires after roughly two weeks. rustplusplus monitors the stored `expire_date` of every registered user and sends a direct message to the Discord user a few days before the token expires, and again once it has expired. Each notification is sent only once per credential. You can run `/credentials show` at any time to see which credentials are registered, and re-generate them through the [rustplusplus-credentials page](https://rustplusplus-credentials.netlify.app/).
+* A login with a refresh token renews itself: `RPP_RUSTPLUS_TOKEN_RENEW_BEFORE` (default 3 days) before the expiry the
+  bot fetches a new token (fresh Steam cookies over the refresh token, no password, no Steam Guard). It also runs once an
+  hour in the background while the bot is connected, and `node scripts/rustplusLogin.js --renew` does it from cron.
+* A login without one (pasted token) is reported to its owner: the bot checks every
+  `RPP_CREDENTIALS_EXPIRY_CHECK_INTERVAL` (default 1 hour) and sends a direct message before and after the expiry, each
+  state once per token.
+* The refresh token dies when the Steam password is changed or all devices are deauthorized - after that the log says
+  `No Steam refresh token stored, a new login is required.` and `/credentials login` is needed once.
+
+## Why no FCM credentials anymore?
+
+Facepunch removed the direct Rust+ connections, the bot speaks the same authenticated websocket as the Rust+ app and
+needs the account token for it. The push notifications of the app are not needed either: the notification history of the
+account (`POST /api/history/read`) carries the pairings, so devices are adopted without FCM.
+
+See also: [FAQ.md](../FAQ.md#do-i-still-need-fcm-credentials), [Commands](commands.md#credentials).

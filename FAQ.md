@@ -306,7 +306,10 @@ credentials.**
 | `src/util/rustplusAuth.js` | reads/writes `credentials/rustplusAuth/<steamId>.json`, resolves server names -> ids |
 | `src/util/rustplusLogin.js` | Steam login (`steam-session`), Rust+ login, `/api/syncData` |
 | `src/util/rustplusLoginPages.js` | HTTP/HTML part of the browser flow (cookie jar, forms, page parsing) |
-| `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`, code modal, reconnect) |
+| `src/handlers/credentialsLoginHandler.js` | the Discord flow (`/credentials login`: QR code, pasted token, password form; code modal, reconnect) |
+| `src/discordTools/discordButtons.js` | the three login buttons (`CredentialsLoginQr/Token/Password`) |
+| `src/discordTools/discordModals.js` | the password and the token modal |
+| `qrcode` (dependency) | renders the Steam QR challenge locally, the URL never goes to a QR service |
 | `src/util/steamTimePlayed.js` | Steam playtime as Steam reports it (`RPP_STEAM_API_KEY`), not shown anywhere at the moment |
 
 `src/util/steamTimePlayed.js` reads the Rust playtime of a steam account (the number the Steam profile shows) and

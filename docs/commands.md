@@ -118,23 +118,16 @@ Subcommand | Options | Description | Required
 
 ## **/credentials**
 
-> **Add/Remove the Credentials for the user account.**
+> **Log in with a Steam account, and show or remove the registered credentials.**
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
-`add` | &nbsp; | Add Credentials. | &nbsp;
-&nbsp; | `gcm_android_id` | GCM Android ID. | `True`
-&nbsp; | `gcm_security_token` | GCM Security Token. | `True`
-&nbsp; | `steam_id` | Steam ID. | `True`
-&nbsp; | `issued_date` | Issued date of the credentials. | `True`
-&nbsp; | `expire_date` | Expire date of the credentials. | `True`
-&nbsp; | `hoster` | Should be hoster. | `False`
-`login` | &nbsp; | Login with Steam to fetch the Rust+ token and the server ids. | &nbsp;
-`remove` | &nbsp; | Remove Credentials. | &nbsp;
-&nbsp; | `steam_id` | Steam ID. | `False`
-`show` | &nbsp; | Show all registered Credentials. | &nbsp;
-`set_hoster` | &nbsp; | Set the hoster. | &nbsp;
-&nbsp; | `steam_id` | Steam ID. | `False`
+| `login` | &nbsp; | Log in and fetch the Rust+ token and the server ids: QR code of the Steam app, pasted account token or the password form, see [Credentials](credentials.md). | &nbsp;
+| `remove` | &nbsp; | Remove Credentials. | &nbsp;
+| &nbsp; | `steam_id` | Steam ID. | `False`
+| `show` | &nbsp; | Show all registered Credentials. | &nbsp;
+| `set_hoster` | &nbsp; | Set the hoster. | &nbsp;
+| &nbsp; | `steam_id` | Steam ID. | `False`
 
 ![Discord Slash Command credentials Image](images/slash_commands/credentials.png)
 
