@@ -19,10 +19,11 @@
 */
 
 const Builder = require('@discordjs/builders');
+const Discord = require('discord.js');
 
+const CredentialsLoginHandler = require('../handlers/credentialsLoginHandler.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
-const DiscordModals = require('../discordTools/discordModals.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 
 module.exports = {
@@ -60,9 +61,14 @@ module.exports = {
 
         if (!await client.validatePermissions(interaction)) return;
 
-        /* The login is answered with a modal, which is not possible after a deferred reply. */
+        /*
+            The login offers three ways: the QR code of the Steam app, a pasted account token and the password form. The
+            first two keep the Steam credentials out of Discord, so they are offered first.
+        */
         if (interaction.options.getSubcommand() === 'login') {
-            return await interaction.showModal(DiscordModals.getCredentialsLoginModal(interaction.guildId));
+            return await interaction.reply(Object.assign(
+                { flags: Discord.MessageFlags.Ephemeral },
+                CredentialsLoginHandler.getLoginChooser(client, interaction.guildId)));
         }
 
         await interaction.deferReply({ ephemeral: true });

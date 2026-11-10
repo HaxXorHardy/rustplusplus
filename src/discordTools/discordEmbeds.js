@@ -1187,6 +1187,15 @@ module.exports = {
         return module.exports.getEmbed(options);
     },
 
+    getCredentialsLoginChoiceEmbed: function (guildId) {
+        return module.exports.getEmbed({
+            color: Constants.COLOR_DEFAULT,
+            title: Client.client.intlGet(guildId, 'credentialsLoginChoiceTitle'),
+            description: Client.client.intlGet(guildId, 'credentialsLoginChoice'),
+            timestamp: true
+        });
+    },
+
     getCredentialsExpiryEmbed: function (guildId, steamId, expireDate, expired) {
         const date = DiscordTools.getDiscordFormattedDate(expireDate);
         return module.exports.getEmbed({

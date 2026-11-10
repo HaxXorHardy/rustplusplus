@@ -18,6 +18,9 @@
 
 */
 
+const Discord = require('discord.js');
+const QrCode = require('qrcode');
+
 const Constants = require('../util/constants.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
@@ -70,16 +73,28 @@ function getErrorMessage(e) {
     return message.replace(/`/g, '\'').slice(0, 200);
 }
 
-async function reply(client, interaction, color, description, components = []) {
+async function reply(client, interaction, color, description, components = [], files = []) {
     const content = {
         embeds: [DiscordEmbeds.getEmbed({
             color: color === 0 ? Constants.COLOR_ACTIVE : Constants.COLOR_INACTIVE,
             description: description
         })],
-        components: components
+        components: components,
+        files: files
     };
 
     return await client.interactionEditReply(interaction, content);
+}
+
+/*
+    The ways to log in, offered before a password is asked for. The QR code and the token keep the Steam credentials
+    out of Discord, the password modal stays as the fallback for accounts without the Steam app and without a browser.
+*/
+function getLoginChooser(client, guildId) {
+    return {
+        embeds: [DiscordEmbeds.getCredentialsLoginChoiceEmbed(guildId)],
+        components: [DiscordButtons.getCredentialsLoginChoiceButtons(guildId)]
+    };
 }
 
 /* The running server of the guild has to reconnect to pick up the new token. */
@@ -243,24 +258,19 @@ async function confirm(client, interaction) {
     return await complete(client, interaction, entry.flow);
 }
 
-/* Step 3: Rust+ token, server list and local storage. */
-async function complete(client, interaction, flow) {
+/*
+    Step 3 of every login: the account token is stored, the Discord user becomes its owner, the servers and paired
+    devices of the account are adopted, their messages are posted and the active server reconnects.
+*/
+async function finish(client, interaction, { steamId, token, servers, refreshToken = null }) {
     const guildId = interaction.guildId;
 
     try {
-        const cookies = await flow.wait();
-
-        client.log(client.intlGet(null, 'infoCap'), 'Rust+ login: Steam finished, reading the Rust+ account.');
-
-        const auth = await RustPlusLogin.loginToRustPlus(cookies,
-            (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
-        const data = await RustPlusLogin.fetchSyncData(auth.token);
-
         /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
-        RustPlusLogin.storeAuth(auth.steamId, auth.token, data.servers, flow.getRefreshToken());
+        const stored = RustPlusLogin.storeAuth(steamId, token, servers, refreshToken);
 
         /* The login registers the Discord user as the owner of the steam account, /credentials show lists it. */
-        registerCredentials(guildId, auth.steamId, interaction.member.user.id);
+        registerCredentials(guildId, steamId, interaction.member.user.id);
 
         /* Servers and paired devices of the account. */
         const instance = client.getInstance(guildId);
@@ -270,7 +280,7 @@ async function complete(client, interaction, flow) {
             user, only a new pairing in the Rust+ app (a newer pairing notification) brings it back.
         */
 
-        const applied = RustPlusSync.applySyncServers(instance, auth.steamId, data.servers,
+        const applied = RustPlusSync.applySyncServers(instance, steamId, servers,
             (key) => client.intlGet(guildId, key));
 
         if (applied.skipped.length !== 0) {
@@ -282,10 +292,10 @@ async function complete(client, interaction, flow) {
         /* Devices that were paired in-game but not added in the app are only in the notification history. */
         let paired = { devices: 0 };
         try {
-            const history = await RustPlusHistory.fetchHistory(auth.token);
+            const history = await RustPlusHistory.fetchHistory(token);
             const entries = RustPlusHistory.parsePairingEntries(history);
 
-            paired = RustPlusHistory.applyPairingEntries(instance, auth.steamId, entries,
+            paired = RustPlusHistory.applyPairingEntries(instance, steamId, entries,
                 (key) => client.intlGet(guildId, key));
         }
         catch (e) {
@@ -327,15 +337,18 @@ async function complete(client, interaction, flow) {
             restartActiveServer(client, guildId);
         }
 
-        const expires = RustPlusTransport.getAuthTokenExpiry(auth.token);
+        const expires = RustPlusTransport.getAuthTokenExpiry(token);
+
+        /* A login without a refresh token cannot renew itself, the expiry handler reminds the user by DM. */
+        const hint = stored.steamRefreshToken ? '' : `\n\n${client.intlGet(guildId, 'credentialsLoginTokenHint')}`;
 
         return await reply(client, interaction, 0, client.intlGet(guildId, 'credentialsLoginSuccess', {
-            steamId: `${auth.steamId}`,
+            steamId: `${steamId}`,
             servers: `${applied.servers}`,
             expires: expires === null ? '?' : `<t:${expires}:f>`
         }) + (activated === null ? '' : `\n\n${client.intlGet(guildId, 'credentialsLoginConnected', {
             server: `${instance.serverList[activated].title}`
-        })}`));
+        })}`) + hint);
     }
     catch (e) {
         return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginFailed', {
@@ -347,10 +360,124 @@ async function complete(client, interaction, flow) {
     }
 }
 
+/*
+    Step 1 of the QR login: Steam returns a challenge that the user confirms in the Steam app. The image is built here,
+    the URL never leaves the bot - it is a one time approval of a login.
+*/
+async function startQr(client, interaction) {
+    const guildId = interaction.guildId;
+
+    deleteFlow(client, interaction.user.id);
+
+    let flow = null;
+    let qr = null;
+
+    try {
+        client.log(client.intlGet(null, 'infoCap'), 'Rust+ login: asking Steam for a QR challenge.');
+
+        flow = new RustPlusLogin.SteamLogin({
+            timeoutMs: FLOW_TIMEOUT_MS,
+            log: (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug')
+        });
+
+        storeFlow(client, interaction.user.id, flow);
+
+        const url = await flow.startQr();
+        qr = await QrCode.toBuffer(url, { type: 'png', width: 320, margin: 1 });
+    }
+    catch (e) {
+        deleteFlow(client, interaction.user.id);
+        return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginQrFailed', {
+            error: getErrorMessage(e)
+        }));
+    }
+
+    await reply(client, interaction, 0, client.intlGet(guildId, 'credentialsLoginQrIntro'), [
+        DiscordButtons.getCredentialsLoginDoneButton(guildId),
+        DiscordButtons.getCredentialsLoginPasswordButton(guildId)
+    ], [new Discord.AttachmentBuilder(qr, { name: 'steam-qr.png' })]);
+
+    return await complete(client, interaction, flow, { qr: true });
+}
+
+/*
+    Step 1 of the token login: the account token is copied out of the own browser (app.playrust.com), so neither the
+    password nor a Steam Guard code goes through Discord. The token carries the steam id and its expiry.
+*/
+async function token(client, interaction, rawToken) {
+    const guildId = interaction.guildId;
+    const accountToken = `${rawToken === undefined || rawToken === null ? '' : rawToken}`
+        .trim().replace(/^`+/, '').replace(/`+$/, '');
+
+    const steamId = RustPlusAuth.getTokenSteamId(accountToken);
+    if (steamId === null) {
+        return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginTokenInvalid'));
+    }
+
+    const expires = RustPlusTransport.getAuthTokenExpiry(accountToken);
+    if (expires !== null && expires <= Math.floor(Date.now() / 1000)) {
+        return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginTokenExpired'));
+    }
+
+    let data = null;
+    try {
+        client.log(client.intlGet(null, 'infoCap'), `Rust+ login: reading the account of ${steamId}.`);
+        data = await RustPlusLogin.fetchSyncData(accountToken);
+    }
+    catch (e) {
+        return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginTokenRejected', {
+            error: getErrorMessage(e)
+        }));
+    }
+
+    return await finish(client, interaction, {
+        steamId: steamId,
+        token: accountToken,
+        servers: data.servers,
+        refreshToken: null
+    });
+}
+
+/* Step 2 of the password and the QR login: Steam finished, the Rust+ account of the login is read. */
+async function complete(client, interaction, flow, options = {}) {
+    const guildId = interaction.guildId;
+
+    try {
+        const cookies = await flow.wait();
+
+        client.log(client.intlGet(null, 'infoCap'), 'Rust+ login: Steam finished, reading the Rust+ account.');
+
+        const auth = await RustPlusLogin.loginToRustPlus(cookies,
+            (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
+        const data = await RustPlusLogin.fetchSyncData(auth.token);
+
+        return await finish(client, interaction, {
+            steamId: auth.steamId,
+            token: auth.token,
+            servers: data.servers,
+            refreshToken: flow.getRefreshToken()
+        });
+    }
+    catch (e) {
+        const expired = options.qr === true && /timed out/i.test(getErrorMessage(e));
+
+        return await reply(client, interaction, 1, expired ?
+            client.intlGet(guildId, 'credentialsLoginQrExpired') :
+            client.intlGet(guildId, 'credentialsLoginFailed', { error: getErrorMessage(e) }));
+    }
+    finally {
+        deleteFlow(client, interaction.user.id);
+    }
+}
+
 module.exports = {
     start: start,
+    startQr: startQr,
+    token: token,
     submitCode: submitCode,
     confirm: confirm,
     complete: complete,
+    finish: finish,
     getFlow: getFlow,
+    getLoginChooser: getLoginChooser,
 };

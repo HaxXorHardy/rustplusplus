@@ -54,6 +54,13 @@ module.exports = async (client, interaction) => {
         return;
     }
 
+    if (interaction.customId === 'CredentialsLoginToken') {
+        await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
+        await CredentialsLoginHandler.token(client, interaction,
+            interaction.fields.getTextInputValue('SteamAuthToken'));
+        return;
+    }
+
     if (interaction.customId === 'CredentialsLoginCode') {
         await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
         await CredentialsLoginHandler.submitCode(client, interaction,

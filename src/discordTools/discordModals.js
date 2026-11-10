@@ -83,6 +83,25 @@ module.exports = {
         return modal;
     },
 
+    getCredentialsLoginTokenModal(guildId) {
+        const modal = module.exports.getModal({
+            customId: 'CredentialsLoginToken',
+            title: Client.client.intlGet(guildId, 'credentialsLoginTokenModalTitle')
+        });
+
+        modal.addComponents(
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'SteamAuthToken',
+                label: Client.client.intlGet(guildId, 'credentialsLoginTokenLabel'),
+                style: Discord.TextInputStyle.Paragraph,
+                required: true,
+                minLength: 20
+            }))
+        );
+
+        return modal;
+    },
+
     getCredentialsLoginCodeModal(guildId) {
         const modal = module.exports.getModal({
             customId: 'CredentialsLoginCode',

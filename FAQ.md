@@ -164,19 +164,54 @@ know (an unauthenticated or unknown request never reaches the upgrade).
 
 ### Logging in with Steam
 
-The server id and the account token come from a Steam login of the Rust+ web app. There are two ways to do it, both
-run the same code.
+<a name="logging-in-with-steam"></a>
 
-#### In Discord: `/credentials login` (recommended)
+The server id and the account token come from a Steam login of the Rust+ web app. `/credentials login` offers three
+ways, all of them run the same login and store the same file.
 
-1. Run `/credentials login` (needs the usual admin permissions).
-2. A modal asks for the Steam account name and password. The answer is ephemeral, only you see the response - but
+| Way | Secret goes through Discord? | Renews itself |
+|---|---|---|
+| **QR code** - button *QR code (Steam app)* | no, the code is only an approval | yes, the Steam refresh token is stored |
+| **Paste token** - button *Paste token* | only the account token, no password | no, the token lives ~14 days, the bot reminds you by DM |
+| **Password** - button *Password* | yes, account name, password and Steam Guard code | yes, the Steam refresh token is stored |
+
+#### QR code (recommended: nothing is typed into Discord)
+
+1. Run `/credentials login` and press **QR code (Steam app)**.
+2. The bot renders the Steam challenge as a picture. Scan it with the Steam app (or open the link on a phone that is
+   signed in to Steam) and confirm the login there.
+3. Steam asks whether the device may be authorized - the same confirmation the password login gets. The bot is
+   already polling, the message turns into the success report.
+
+The QR code is a one time login approval: the bot renders it locally (it is never sent to a QR service) and the
+message is ephemeral. The challenge expires after a few minutes, press **QR code** again then.
+
+#### Paste token (no Steam app needed)
+
+1. Open https://app.playrust.com, log in and open a server of the account.
+2. Open the DevTools console and run the snippet of *Reading the values manually in the browser* below, or open the
+   page's IndexedDB (`rustplus-cache`, store `cache`) and copy `authentication.token`.
+3. Run `/credentials login` → **Paste token** and paste the value.
+
+The token carries the steam id and its expiry, so the bot needs nothing else. It stores no Steam refresh token, which
+means the login cannot renew itself: `RPP_CREDENTIALS_EXPIRY_WARNING` (default 3 days) before the token expires the
+bot sends the Discord user that logged in a direct message, and the same message when it has expired.
+
+#### Password (fallback)
+
+1. Run `/credentials login` → **Password** (needs the usual admin permissions).
+2. The modal asks for the Steam account name and password. The answer is ephemeral, only you see the response - but
    Discord itself transmits the text, so use it on a server you trust.
-3. Steam Guard: asks Steam whether the device may be authorized (push message in the Steam app), approve it there
-   and press **Confirmed** - the bot polls Steam immediately. If Steam asks for a code instead (e-mail or
-   authenticator), press **Enter code**. Both buttons are shown when Steam accepts both ways.
-4. The bot stores `credentials/rustplusAuth/<steamId>.json` (token + server list), writes the pairing id into every
-   server of the guild whose name matches, reconnects the active server and shows the expiry date.
+3. Steam Guard: approve the push message in the Steam app and press **Confirmed** - the bot polls Steam immediately.
+   If Steam asks for a code instead (e-mail or authenticator), press **Enter code**. Both buttons are shown when
+   Steam accepts both ways.
+
+#### What every way does afterwards
+
+The bot stores `credentials/rustplusAuth/<steamId>.json` (token, server list and - for the QR and password login -
+the Steam refresh token), registers the Discord user as the owner of the account, writes the pairing id into every
+server of the guild whose name matches, posts the messages of new servers and devices, reconnects the active server
+and shows the expiry date.
 
 #### Headless: `npm run rustplus:login`
 

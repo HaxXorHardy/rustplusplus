@@ -61,7 +61,7 @@ const RUSTPLUS_SYNC_URL = `${RUSTPLUS_BASE}/api/syncData`;
     the confirmation in the Steam app, so 2FA works without a browser.
 */
 class SteamLogin {
-    constructor({ accountName, password, timeoutMs = 5 * 60 * 1000, log = () => undefined }) {
+    constructor({ accountName = null, password = null, timeoutMs = 5 * 60 * 1000, log = () => undefined }) {
         this.accountName = accountName;
         this.password = password;
         this.log = log;
@@ -113,6 +113,21 @@ class SteamLogin {
         }
 
         return { types: types, type: types[0], detail: email ? (email.detail || null) : null };
+    }
+
+    /*
+        QR login: the user confirms the login in the Steam app instead of typing the password and a Steam Guard code
+        into Discord. Steam returns the URL that has to be shown as a QR code and the session then polls for the
+        approval like a device confirmation, so wait()/getRefreshToken() do not differ from the credential login.
+    */
+    async startQr() {
+        const result = await this.session.startWithQR();
+
+        if (!result || typeof (result.qrChallengeUrl) !== 'string' || result.qrChallengeUrl === '') {
+            throw new Error('Steam did not return a QR challenge.');
+        }
+
+        return result.qrChallengeUrl;
     }
 
     /* Email or TOTP code, not used for the mobile confirmation. */

@@ -473,6 +473,34 @@ module.exports = {
             }));
     },
 
+    getCredentialsLoginChoiceButtons: function (guildId) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                customId: 'CredentialsLoginQr',
+                label: Client.client.intlGet(guildId, 'credentialsLoginQrButton'),
+                style: SUCCESS
+            }),
+            module.exports.getButton({
+                customId: 'CredentialsLoginToken',
+                label: Client.client.intlGet(guildId, 'credentialsLoginTokenButton'),
+                style: PRIMARY
+            }),
+            module.exports.getButton({
+                customId: 'CredentialsLoginPassword',
+                label: Client.client.intlGet(guildId, 'credentialsLoginPasswordButton'),
+                style: SECONDARY
+            }));
+    },
+
+    getCredentialsLoginPasswordButton: function (guildId) {
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getButton({
+                customId: 'CredentialsLoginPassword',
+                label: Client.client.intlGet(guildId, 'credentialsLoginPasswordButton'),
+                style: SECONDARY
+            }));
+    },
+
     getCredentialsLoginCodeButton: function (guildId) {
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({

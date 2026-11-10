@@ -77,6 +77,16 @@ module.exports = async (client, interaction) => {
                 guildId, ids.setting, setting.discord, setting.inGame, setting.voice)]
         });
     }
+    else if (interaction.customId === 'CredentialsLoginQr') {
+        await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
+        await CredentialsLoginHandler.startQr(client, interaction);
+    }
+    else if (interaction.customId === 'CredentialsLoginToken') {
+        await interaction.showModal(DiscordModals.getCredentialsLoginTokenModal(guildId));
+    }
+    else if (interaction.customId === 'CredentialsLoginPassword') {
+        await interaction.showModal(DiscordModals.getCredentialsLoginModal(guildId));
+    }
     else if (interaction.customId === 'CredentialsLoginCode') {
         await interaction.showModal(DiscordModals.getCredentialsLoginCodeModal(guildId));
     }

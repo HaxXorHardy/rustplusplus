@@ -118,6 +118,22 @@ function resolveServerGuid(auth, server) {
     return fuzzy ? fuzzy.id || null : null;
 }
 
+/*
+    The steam id the account token belongs to, taken from the token payload. The Rust+ token carries it as a claim, so
+    a token that was copied out of the browser does not have to be accompanied by the steam id.
+*/
+function getTokenSteamId(token) {
+    try {
+        const payload = `${token}`.trim().split('.')[0];
+        const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+
+        return (data && data.steamId) ? `${data.steamId}` : null;
+    }
+    catch (e) {
+        return null;
+    }
+}
+
 /* Expiry of the stored token (unix seconds), taken from the file or from the token payload. */
 function getTokenExpiry(auth) {
     if (auth && Number.isFinite(auth.tokenExpiresAt)) return auth.tokenExpiresAt;
@@ -150,6 +166,7 @@ module.exports = {
     writeAuth: writeAuth,
     listSteamIds: listSteamIds,
     resolveServerGuid: resolveServerGuid,
+    getTokenSteamId: getTokenSteamId,
     getTokenExpiry: getTokenExpiry,
     isTokenExpired: isTokenExpired,
     isTokenExpiringSoon: isTokenExpiringSoon,
