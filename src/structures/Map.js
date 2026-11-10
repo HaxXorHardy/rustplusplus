@@ -86,15 +86,15 @@ class Map {
                 map: Client.client.intlGet(rustplus.guildId, 'abandonedMilitaryBase').toUpperCase(),
                 radius: 46
             },
-            apartmentcomplex: {
-                clean: Client.client.intlGet(rustplus.guildId, 'apartmentComplex'),
-                map: Client.client.intlGet(rustplus.guildId, 'apartmentComplex').toUpperCase(),
-                radius: 40
-            },
             airfield_display_name: {
                 clean: Client.client.intlGet(rustplus.guildId, 'airfield'),
                 map: Client.client.intlGet(rustplus.guildId, 'airfield').toUpperCase(),
                 radius: 120
+            },
+            apartmentcomplex: {
+                clean: Client.client.intlGet(rustplus.guildId, 'apartmentComplex'),
+                map: Client.client.intlGet(rustplus.guildId, 'apartmentComplex').toUpperCase(),
+                radius: 40
             },
             arctic_base_a: {
                 clean: Client.client.intlGet(rustplus.guildId, 'arcticResearchBase'),
