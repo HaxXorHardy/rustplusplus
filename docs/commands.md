@@ -129,8 +129,6 @@ Subcommand | Options | Description | Required
 | `set_hoster` | &nbsp; | Set the hoster. | &nbsp;
 | &nbsp; | `steam_id` | Steam ID. | `False`
 
-![Discord Slash Command credentials Image](images/slash_commands/credentials.png)
-
 
 ## **/decay**
 
