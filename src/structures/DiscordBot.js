@@ -322,6 +322,17 @@ class DiscordBot extends Discord.Client {
     }
 
     createRustplusInstance(guildId, serverIp, appPort, steamId, playerToken) {
+        /*
+            An entry without an address cannot be reached: the library would build `ws://undefined:undefined` and throw
+            inside the WebSocket constructor. connect() refuses that connection, the reason is logged here already so
+            the missing address is not mistaken for a network problem.
+        */
+        if (!serverIp || !appPort) {
+            this.log(this.intlGet(null, 'warningCap'),
+                `The server of ${guildId} has no address (${serverIp}:${appPort}), it cannot be connected. ` +
+                'Use "/credentials login" in Discord so the Rust+ account provides its servers.', 'warn');
+        }
+
         const directFailures = this.rustplusConnectFailures[guildId] || 0;
         const useFacepunchProxy = RustPlusTransport.shouldUseFacepunchProxy(
             Config.general.rustplusTransport, directFailures);

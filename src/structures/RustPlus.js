@@ -2821,6 +2821,10 @@ class RustPlus extends RustPlusLib {
         const commandPlayers = `${prefix}${Client.client.intlGet(this.guildId, 'commandSyntaxPlayers')}`;
         const commandPlayersEn = `${prefix}${Client.client.intlGet('en', 'commandSyntaxPlayers')}`;
 
+        if (!Config.battlemetrics.enabled) {
+            return Client.client.intlGet(this.guildId, 'battlemetricsDisabled');
+        }
+
         const bmInstance = Client.client.battlemetricsInstances[battlemetricsId];
 
         if (!bmInstance || !bmInstance.lastUpdateSuccessful) {

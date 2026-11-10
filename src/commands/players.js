@@ -21,6 +21,7 @@
 const Builder = require('@discordjs/builders');
 
 const Constants = require('../util/constants.js');
+const Config = require('../../config');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const Timer = require('../util/timer.js');
@@ -92,6 +93,13 @@ module.exports = {
             }
 
             battlemetricsId = server.battlemetricsId;
+        }
+
+        if (!Config.battlemetrics.enabled) {
+            const str = client.intlGet(interaction.guildId, 'battlemetricsDisabled');
+            await client.interactionEditReply(interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
+            client.log(client.intlGet(null, 'warningCap'), str);
+            return;
         }
 
         const bmInstance = client.battlemetricsInstances[battlemetricsId];

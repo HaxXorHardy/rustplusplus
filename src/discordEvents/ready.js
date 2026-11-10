@@ -105,6 +105,14 @@ module.exports = {
             BattlemetricsHandler.handler(client, true);
             client.battlemetricsIntervalId = setInterval(BattlemetricsHandler.handler, 60000, client, false);
         }
+        else {
+            /*
+                Without a token every Battlemetrics request would be answered with 401, the bot asks for nothing at all.
+                Say so once, otherwise the missing player information looks like a bug.
+            */
+            client.log(client.intlGet(null, 'infoCap'),
+                'Battlemetrics is disabled (RPP_BATTLEMETRICS_TOKEN is not set), no requests are sent.', 'info');
+        }
 
         /* Notify users when their stored Rust+ credentials are about to expire or have expired. */
         await CredentialsExpiryHandler.handler(client, true);

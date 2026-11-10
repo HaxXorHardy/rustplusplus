@@ -219,3 +219,48 @@ Test.describe("RustPlus.checkAuthTokenRenewal", () => {
         Assert.ok(rustplus.logged.some((entry) => entry.level === "warn" && entry.text.includes("steam says no")));
     });
 });
+
+/*
+    An entry that carries neither an address nor a usable login (an instance file of an older version, or a pairing
+    that only brought the pairing id) must never reach the library transport: it would build
+    `new WebSocket('ws://undefined:undefined')`, which throws and ends the process as an unhandled rejection.
+*/
+Test.describe('RustPlus.connect (missing address)', () => {
+    Test.it('never builds a websocket without an address', (t) => {
+        const library = stubLibraryConnect(t, 'library');
+
+        const rustplus = fakeInstance({
+            server: undefined,
+            port: undefined,
+            serverId: 'undefined-undefined',
+            serverGuid: null,
+            authToken: null,
+        });
+
+        const result = RustPlus.prototype.connect.call(rustplus);
+
+        Assert.strictEqual(result, undefined);
+        Assert.strictEqual(library.count, 0);
+        Assert.ok(rustplus.logged.some((entry) => entry.level === 'error'));
+        Assert.deepStrictEqual(rustplus.retries, ['The address of the server is unknown.']);
+    });
+});
+
+Test.describe('RustPlusLite.connect (missing address)', () => {
+    Test.it('never builds a websocket without an address', (t) => {
+        const library = stubLibraryConnect(t, 'library');
+
+        const rustplusLite = fakeInstance({
+            server: undefined,
+            port: undefined,
+            serverGuid: null,
+            resolveAuthenticatedTransport: () => false,
+        });
+
+        const result = RustPlusLite.prototype.connect.call(rustplusLite);
+
+        Assert.strictEqual(result, undefined);
+        Assert.strictEqual(library.count, 0);
+        Assert.ok(rustplusLite.logged.some((entry) => entry.level === 'warn'));
+    });
+});

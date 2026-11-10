@@ -44,6 +44,7 @@
     "baseIsUnderAttack": "Üssün saldırı altında!",
     "battlemetricsApiRequestFailed": "Battlemetrics API isteği başarısız oldu: {api_call}.",
     "battlemetricsCap": "BATTLEMETRICS",
+    "battlemetricsDisabled": "Battlemetrics is disabled (no API token configured), so it is not asked for player data.",
     "battlemetricsFailedToUpdate": "Battlemetrics sunucusu {server} güncellenemedi.",
     "battlemetricsGlobalLoginCap": "KÜRESEL OTURUMU AÇ",
     "battlemetricsGlobalLogoutCap": "KÜRESEL OTURUMU KAPAT",

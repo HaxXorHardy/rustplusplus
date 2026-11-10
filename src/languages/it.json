@@ -44,6 +44,7 @@
     "baseIsUnderAttack": "La tua base è sotto attacco!",
     "battlemetricsApiRequestFailed": "Chiamata API Battlemetrics Fallita: {api_call}.",
     "battlemetricsCap": "BATTLEMETRICS",
+    "battlemetricsDisabled": "Battlemetrics is disabled (no API token configured), so it is not asked for player data.",
     "battlemetricsFailedToUpdate": "Impossibile aggiornare il server Battlemetrics {server}.",
     "battlemetricsGlobalLoginCap": "LOGIN GLOBALE",
     "battlemetricsGlobalLogoutCap": "LOGOUT GLOBALE",
