@@ -122,12 +122,12 @@ Subcommand | Options | Description | Required
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
-| `login` | &nbsp; | Log in and fetch the Rust+ token and the server ids: QR code of the Steam app, pasted account token or the password form, see [Credentials](credentials.md). | &nbsp;
-| `remove` | &nbsp; | Remove Credentials. | &nbsp;
-| &nbsp; | `steam_id` | Steam ID. | `False`
-| `show` | &nbsp; | Show all registered Credentials. | &nbsp;
-| `set_hoster` | &nbsp; | Set the hoster. | &nbsp;
-| &nbsp; | `steam_id` | Steam ID. | `False`
+`login` | &nbsp; | Log in and fetch the Rust+ token and the server ids: QR code of the Steam app, pasted account token or the password form, see [Credentials](credentials.md). | &nbsp;
+`remove` | &nbsp; | Remove Credentials. | &nbsp;
+&nbsp; | `steam_id` | Steam ID. | `False`
+`show` | &nbsp; | Show all registered Credentials. | &nbsp;
+`set_hoster` | &nbsp; | Set the hoster. | &nbsp;
+&nbsp; | `steam_id` | Steam ID. | `False`
 
 
 ## **/decay**
