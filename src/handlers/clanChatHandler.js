@@ -21,7 +21,7 @@
 const Clan = require('../structures/Clan.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const { CHANNELS, getConfiguredChannel } = require('../util/inGameChat.js');
-const { isResponseFailure, describeResponse } = require('../util/responseUtils.js');
+const { classifyResponse, describeResponse } = require('../util/responseUtils.js');
 
 module.exports = {
     /*
@@ -51,11 +51,18 @@ module.exports = {
             return rustplus.clanInfo;
         }
 
-        if (isResponseFailure(response)) {
+        /* An unsupported request or an account in no clan is answered with an empty response, not with an error. */
+        const classification = classifyResponse(response);
+        if (classification === 'error' || classification === 'timeout') {
             rustplus.log(client.intlGet(rustplus.guildId, 'errorCap'),
                 'The in-game chat channel is set to the clan chat, but the clan info could not be read: ' +
                 `${describeResponse(response)}. No in-game messages are written until the clan is known.`,
                 'warn');
+        }
+        else if (classification === 'empty') {
+            rustplus.log(client.intlGet(rustplus.guildId, 'infoCap'),
+                'The game server answered the clan info request with an empty response: the paired steam account is ' +
+                'in no clan, or the server does not support the clan chat.', 'debug');
         }
         else if (rustplus.clanInfo === null) {
             rustplus.log(client.intlGet(rustplus.guildId, 'errorCap'),
