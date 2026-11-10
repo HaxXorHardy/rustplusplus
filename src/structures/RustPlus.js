@@ -3748,6 +3748,10 @@ class RustPlus extends RustPlusLib {
         for (const monument of this.map.monuments) {
             if (monument.token === 'DungeonBase') continue;
 
+            /* Custom monument prefabs (assets/bundled/...) are not a monument with a name, same filter as the map. */
+            if (typeof monument.token !== 'string' || monument.token === '') continue;
+            if (monument.token.replace(/\\/g, '/').toLowerCase().includes('assets/bundled')) continue;
+
             /* A monument that is not in the table (a newer Rust version) gets its formatted token as name. */
             const name = Object.prototype.hasOwnProperty.call(this.map.monumentInfo, monument.token) ?
                 this.map.monumentInfo[monument.token].clean : Monuments.formatToken(monument.token);

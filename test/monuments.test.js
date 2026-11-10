@@ -106,4 +106,15 @@ Test.describe('RustPlus.getMonumentInformation', () => {
 
         Assert.ok(!result.some((entry) => entry.name.includes('Dungeon')));
     });
+
+    Test.it('skips custom monument prefabs and empty tokens', () => {
+        const instance = fakeInstance();
+        instance.map.monuments.push({ token: 'assets/bundled/prefabs/autospawn/monument/x.prefab', x: 1, y: 1 });
+        instance.map.monuments.push({ token: '', x: 2, y: 2 });
+
+        const result = RustPlus.prototype.getMonumentInformation.call(instance);
+
+        Assert.ok(!result.some((entry) => entry.name.toLowerCase().includes('assets')));
+        Assert.ok(!result.some((entry) => entry.name === ''));
+    });
 });
