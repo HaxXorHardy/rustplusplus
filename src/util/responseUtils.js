@@ -29,6 +29,41 @@ function isResponseFailure(response) {
     return (typeof response === 'object') && response.hasOwnProperty('error');
 }
 
+/* The AppResponse fields that carry an answer (see AppResponse in rustplus.proto). */
+const RESPONSE_KEYS = [
+    'success', 'error', 'info', 'time', 'map', 'teamInfo', 'teamChat', 'entityInfo', 'flag', 'mapMarkers',
+    'clanInfo', 'clanChat', 'nexusAuth', 'cameraSubscribeInfo',
+];
+
+/*
+    An unsupported or invalid request is answered with an empty AppResponse - not with an AppError. A live server was
+    asked for getEntityInfo without an id, for checkSubscription without an id, for an unknown field and for a camera
+    subscription with an invalid id: every one of them came back as `{}`. isResponseFailure() still treats only a real
+    error as a failure, the classifier below tells the cases apart.
+*/
+function isResponseEmpty(response) {
+    if (response === undefined || response === null || response instanceof Error) return false;
+    if (typeof response !== 'object') return false;
+
+    return !RESPONSE_KEYS.some((key) => Object.prototype.hasOwnProperty.call(response, key));
+}
+
+/*
+    'success' | 'error' | 'empty' | 'timeout' | 'invalid'
+    - success: the response carries one of the AppResponse fields
+    - error: an AppError came back (or the request threw)
+    - empty: the server answered, but the request is not supported (or invalid)
+    - timeout: no response at all
+*/
+function classifyResponse(response) {
+    if (response === undefined || response === null) return 'timeout';
+    if (response instanceof Error) return 'error';
+    if (typeof response !== 'object') return 'invalid';
+    if (Object.prototype.hasOwnProperty.call(response, 'error')) return 'error';
+
+    return isResponseEmpty(response) ? 'empty' : 'success';
+}
+
 function describeResponse(response) {
     if (response instanceof Error) return response.message;
     if (response === undefined) return 'undefined';
@@ -42,6 +77,9 @@ function describeResponse(response) {
 }
 
 module.exports = {
+    RESPONSE_KEYS: RESPONSE_KEYS,
     isResponseFailure: isResponseFailure,
+    isResponseEmpty: isResponseEmpty,
+    classifyResponse: classifyResponse,
     describeResponse: describeResponse,
 };

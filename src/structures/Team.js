@@ -27,6 +27,10 @@ class Team {
         this._players = [];
         this._teamSize = this.players.length;
 
+        /* Map notes (pings) of the team, AppTeamInfo.mapNotes: [{ type, x, y }], the leader's own notes separately. */
+        this._mapNotes = [];
+        this._leaderMapNotes = [];
+
         this._rustplus = rustplus;
 
         this._allOnline = false;
@@ -48,6 +52,10 @@ class Team {
     set allOnline(allOnline) { this._allOnline = allOnline; }
     get allOffline() { return this._allOffline; }
     set allOffline(allOffline) { this._allOffline = allOffline; }
+    get mapNotes() { return this._mapNotes; }
+    set mapNotes(mapNotes) { this._mapNotes = mapNotes; }
+    get leaderMapNotes() { return this._leaderMapNotes; }
+    set leaderMapNotes(leaderMapNotes) { this._leaderMapNotes = leaderMapNotes; }
 
     /* Change checkers */
     isLeaderSteamIdChanged(team) { return (this.leaderSteamId !== team.leaderSteamId.toString()); }
@@ -108,6 +116,10 @@ class Team {
         }
 
         this.teamSize = this.players.length;
+
+        /* The notes are the marks the team placed on the map (AppTeamInfo.mapNotes/leaderMapNotes). */
+        this.mapNotes = Array.isArray(team.mapNotes) ? team.mapNotes : [];
+        this.leaderMapNotes = Array.isArray(team.leaderMapNotes) ? team.leaderMapNotes : [];
 
         let player = this.getPlayer(this.leaderSteamId);
         if (player !== null) {

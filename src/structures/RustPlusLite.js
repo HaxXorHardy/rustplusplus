@@ -22,6 +22,7 @@ const RustPlusLib = require('@liamcottle/rustplus.js');
 
 const Client = require('./clientRegistry.js');
 const Config = require('../../config');
+const RustPlusApi = require('../util/rustplusApi.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
@@ -97,19 +98,36 @@ class RustPlusLite extends RustPlusLib {
         }
     }
 
-    async promoteToLeaderAsync(steamId, timeout = 10000) {
+    /*
+        Any request of the Rust+ protocol, built from util/rustplusApi.js (RustPlusApi.listRequests()). The named methods
+        below are the short cuts the bot uses, this is the escape hatch for everything else.
+    */
+    async apiRequestAsync(name, params = {}, timeout = 10000) {
         try {
-            return await this.sendRequestAsync({
-                promoteToLeader: {
-                    steamId: steamId
-                }
-            }, timeout).catch((e) => {
+            return await this.sendRequestAsync(RustPlusApi.buildRequest(name, params), timeout).catch((e) => {
                 return e;
             });
         }
         catch (e) {
             return e;
         }
+    }
+
+    async getTimeAsync(timeout = 10000) { return await this.apiRequestAsync('getTime', {}, timeout); }
+    async getMapAsync(timeout = 30000) { return await this.apiRequestAsync('getMap', {}, timeout); }
+    async getMapMarkersAsync(timeout = 10000) { return await this.apiRequestAsync('getMapMarkers', {}, timeout); }
+    async getTeamInfoAsync(timeout = 10000) { return await this.apiRequestAsync('getTeamInfo', {}, timeout); }
+    async getTeamChatAsync(timeout = 10000) { return await this.apiRequestAsync('getTeamChat', {}, timeout); }
+    async getClanInfoAsync(timeout = 10000) { return await this.apiRequestAsync('getClanInfo', {}, timeout); }
+    async getClanChatAsync(timeout = 10000) { return await this.apiRequestAsync('getClanChat', {}, timeout); }
+    async getEntityInfoAsync(id, timeout = 10000) { return await this.apiRequestAsync('getEntityInfo', { entityId: id }, timeout); }
+    async checkSubscriptionAsync(id, timeout = 10000) { return await this.apiRequestAsync('checkSubscription', { entityId: id }, timeout); }
+    async setEntityValueAsync(id, value, timeout = 10000) { return await this.apiRequestAsync('setEntityValue', { entityId: id, value: value }, timeout); }
+    async sendTeamMessageAsync(message, timeout = 10000) { return await this.apiRequestAsync('sendTeamMessage', { message: `${message}` }, timeout); }
+    async sendClanMessageAsync(message, timeout = 10000) { return await this.apiRequestAsync('sendClanMessage', { message: `${message}` }, timeout); }
+
+    async promoteToLeaderAsync(steamId, timeout = 10000) {
+        return await this.apiRequestAsync('promoteToLeader', { steamId: steamId }, timeout);
     }
 
     isResponseValid(response) {

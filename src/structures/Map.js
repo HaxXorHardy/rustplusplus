@@ -24,6 +24,7 @@ const Jimp = require('jimp');
 const Path = require('path');
 
 const Constants = require('../util/constants.js');
+const Monuments = require('../util/monuments.js');
 const Client = require('./clientRegistry.js');
 
 class Map {
@@ -85,6 +86,11 @@ class Map {
                 map: Client.client.intlGet(rustplus.guildId, 'abandonedMilitaryBase').toUpperCase(),
                 radius: 46
             },
+            apartmentcomplex: {
+                clean: Client.client.intlGet(rustplus.guildId, 'apartmentComplex'),
+                map: Client.client.intlGet(rustplus.guildId, 'apartmentComplex').toUpperCase(),
+                radius: 40
+            },
             airfield_display_name: {
                 clean: Client.client.intlGet(rustplus.guildId, 'airfield'),
                 map: Client.client.intlGet(rustplus.guildId, 'airfield').toUpperCase(),
@@ -134,6 +140,11 @@ class Map {
                 clean: Client.client.intlGet(rustplus.guildId, 'harbor'),
                 map: Client.client.intlGet(rustplus.guildId, 'harbor').toUpperCase(),
                 radius: 96
+            },
+            jungle_ziggurat: {
+                clean: Client.client.intlGet(rustplus.guildId, 'jungleZiggurat'),
+                map: Client.client.intlGet(rustplus.guildId, 'jungleZiggurat').toUpperCase(),
+                radius: 90
             },
             junkyard_display_name: {
                 clean: Client.client.intlGet(rustplus.guildId, 'junkyard'),
@@ -204,6 +215,11 @@ class Map {
                 clean: Client.client.intlGet(rustplus.guildId, 'powerPlant'),
                 map: Client.client.intlGet(rustplus.guildId, 'powerPlant').toUpperCase(),
                 radius: 112
+            },
+            radtown: {
+                clean: Client.client.intlGet(rustplus.guildId, 'radtown'),
+                map: Client.client.intlGet(rustplus.guildId, 'radtown').toUpperCase(),
+                radius: 45
             },
             satellite_dish_display_name: {
                 clean: Client.client.intlGet(rustplus.guildId, 'satelliteDish'),
@@ -366,7 +382,8 @@ class Map {
                         monument.token.replace(/\\/g, '/').toLowerCase().includes('assets/bundled')) continue;
 
                     let name = (this.monumentInfo.hasOwnProperty(monument.token)) ?
-                        this.monumentInfo[monument.token].map : monument.token;
+                        this.monumentInfo[monument.token].map : Monuments.formatToken(monument.token).toUpperCase();
+                    if (name === '') continue;
                     let comp = name.length * 5;
                     this.mapMarkerImageMeta.map.jimp.print(
                         this.font, x - comp, y - 10, name);

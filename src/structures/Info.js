@@ -33,6 +33,10 @@ class Info {
         this._maxPlayers = info.maxPlayers;
         this._queuedPlayers = info.queuedPlayers;
         this._seed = info.seed;
+        this._logoImage = info.logoImage;
+        this._nexus = info.nexus;
+        this._nexusId = info.nexusId;
+        this._nexusZone = info.nexusZone;
 
         this._correctedMapSize = info.mapSize;
     }
@@ -58,6 +62,14 @@ class Info {
     set queuedPlayers(queuedPlayers) { this._queuedPlayers = queuedPlayers; }
     get seed() { return this._seed; }
     set seed(seed) { this._seed = seed; }
+    get logoImage() { return this._logoImage; }
+    set logoImage(logoImage) { this._logoImage = logoImage; }
+    get nexus() { return this._nexus; }
+    set nexus(nexus) { this._nexus = nexus; }
+    get nexusId() { return this._nexusId; }
+    set nexusId(nexusId) { this._nexusId = nexusId; }
+    get nexusZone() { return this._nexusZone; }
+    set nexusZone(nexusZone) { this._nexusZone = nexusZone; }
     get correctedMapSize() { return this._correctedMapSize; }
     set correctedMapSize(correctedMapSize) { this._correctedMapSize = correctedMapSize; }
 
@@ -72,6 +84,10 @@ class Info {
     isMaxPlayersChanged(info) { return ((this.maxPlayers) !== (info.maxPlayers)); }
     isQueuedPlayersChanged(info) { return ((this.queuedPlayers) !== (info.queuedPlayers)); }
     isSeedChanged(info) { return ((this.seed) !== (info.seed)); }
+    isLogoImageChanged(info) { return ((this.logoImage) !== (info.logoImage)); }
+    isNexusChanged(info) { return ((this.nexus) !== (info.nexus)); }
+    isNexusIdChanged(info) { return ((this.nexusId) !== (info.nexusId)); }
+    isNexusZoneChanged(info) { return ((this.nexusZone) !== (info.nexusZone)); }
 
     /* Other checkers */
     isMaxPlayersIncreased(info) { return ((this.maxPlayers) < (info.maxPlayers)); }
@@ -89,6 +105,10 @@ class Info {
         this.maxPlayers = info.maxPlayers;
         this.queuedPlayers = info.queuedPlayers;
         this.seed = info.seed;
+        this.logoImage = info.logoImage;
+        this.nexus = info.nexus;
+        this.nexusId = info.nexusId;
+        this.nexusZone = info.nexusZone;
 
         this.correctedMapSize = info.mapSize;
     }

@@ -353,6 +353,7 @@ class MapMarkers {
             vendingMachine.id = marker.id;
             vendingMachine.location = pos;
             vendingMachine.sellOrders = marker.sellOrders;
+            vendingMachine.outOfStock = marker.outOfStock === true;
         }
 
         let mapSize = this.rustplus.info.correctedMapSize;

@@ -36,8 +36,10 @@ const InstanceUtils = require('../util/instanceUtils.js');
 const Languages = require('../util/languages.js');
 const Logger = require('./Logger.js');
 const Map = require('../util/map.js');
+const Monuments = require('../util/monuments.js');
 const getRuntimeDataStorage = require('../util/storage/getRuntimeDataStorage.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
+const RustPlusApi = require('../util/rustplusApi.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusLite = require('../structures/RustPlusLite');
 const RustPlusLogin = require('../util/rustplusLogin.js');
@@ -982,6 +984,25 @@ class RustPlus extends RustPlusLib {
         return true;
     }
 
+    /*
+        Any request of the Rust+ protocol, built from util/rustplusApi.js (RustPlusApi.listRequests()). The named methods
+        below are the short cuts the bot uses, this is the escape hatch for everything else.
+    */
+    async apiRequestAsync(name, params = {}, timeout = 10000) {
+        try {
+            if (!(await this.waitForAvailableTokens(1))) {
+                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+            }
+
+            return await this.sendRequestAsync(RustPlusApi.buildRequest(name, params), timeout).catch((e) => {
+                return e;
+            });
+        }
+        catch (e) {
+            return e;
+        }
+    }
+
     async turnSmartSwitchAsync(id, value, timeout = 10000) {
         if (value) {
             return await this.turnSmartSwitchOnAsync(id, timeout);
@@ -1275,6 +1296,67 @@ class RustPlus extends RustPlusLib {
             return await this.sendRequestAsync({
                 getClanInfo: {}
             }, timeout).catch((e) => {
+                return e;
+            })
+        }
+        catch (e) {
+            return e;
+        }
+    }
+
+    /*
+        The clan chat history of the account (AppResponse.clanChat). An account that is in no clan, or a server that does
+        not support the clan chat, answers with an empty response - classify it with util/responseUtils.js.
+    */
+    async getClanChatAsync(timeout = 10000) {
+        try {
+            if (!(await this.waitForAvailableTokens(1))) {
+                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+            }
+
+            return await this.sendRequestAsync(RustPlusApi.buildRequest('getClanChat'), timeout).catch((e) => {
+                return e;
+            })
+        }
+        catch (e) {
+            return e;
+        }
+    }
+
+    /*
+        Sets the message of the day of the clan. The server checks the permission of the account's role (canSetMotd),
+        a rejected change comes back as an AppError.
+    */
+    async setClanMotdAsync(message, timeout = 10000) {
+        try {
+            if (!(await this.waitForAvailableTokens(1))) {
+                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+            }
+
+            return await this.sendRequestAsync(RustPlusApi.buildRequest('setClanMotd', {
+                message: `${message}`
+            }), timeout).catch((e) => {
+                return e;
+            })
+        }
+        catch (e) {
+            return e;
+        }
+    }
+
+    /*
+        The Nexus auth token of the server (AppResponse.nexusAuth). Servers that are not tracked by the Rust+ Nexus
+        answer with an empty response.
+    */
+    async getNexusAuthAsync(appKey, timeout = 10000) {
+        try {
+            if (!(await this.waitForAvailableTokens(1))) {
+                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+            }
+
+            return await this.sendRequestAsync(RustPlusApi.buildRequest('getNexusAuth', {
+                appKey: `${appKey}`
+            }), timeout).catch((e) => {
                 return e;
             })
         }
@@ -3665,9 +3747,10 @@ class RustPlus extends RustPlusLib {
 
         for (const monument of this.map.monuments) {
             if (monument.token === 'DungeonBase') continue;
-            if (!Object.prototype.hasOwnProperty.call(this.map.monumentInfo, monument.token)) continue;
 
-            const name = this.map.monumentInfo[monument.token].clean;
+            /* A monument that is not in the table (a newer Rust version) gets its formatted token as name. */
+            const name = Object.prototype.hasOwnProperty.call(this.map.monumentInfo, monument.token) ?
+                this.map.monumentInfo[monument.token].clean : Monuments.formatToken(monument.token);
             if (name === '') continue;
 
             if (!monuments.hasOwnProperty(name)) {

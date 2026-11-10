@@ -10,3 +10,4 @@
 * [**Discord Text Channels**](discord_text_channels.md)
 * [**Smart Devices**](smart_devices.md)
 * [**Static Game Data**](static_data.md)
+* [**Rust+ API Coverage**](rustplus_api.md)

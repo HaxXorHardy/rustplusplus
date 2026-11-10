@@ -18,6 +18,7 @@
 
 */
 
+const Clan = require('../structures/Clan.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const { CHANNELS, getConfiguredChannel } = require('../util/inGameChat.js');
 const { isResponseFailure, describeResponse } = require('../util/responseUtils.js');
@@ -44,7 +45,7 @@ module.exports = {
     */
     updateClanInfo: async function (rustplus, client) {
         const response = await rustplus.getClanInfoAsync();
-        rustplus.clanInfo = parseClanInfo(response);
+        rustplus.clanInfo = Clan.fromResponse(response);
 
         if (getConfiguredChannel(rustplus.generalSettings) !== CHANNELS.CLAN) {
             return rustplus.clanInfo;
@@ -74,17 +75,3 @@ module.exports = {
     },
 };
 
-/* Parses the clan of a getClanInfo response. AppResponse.clanInfo is an AppClanInfo wrapper, the data is nested. */
-function parseClanInfo(response) {
-    if (isResponseFailure(response) || !response.clanInfo) return null;
-
-    const clanInfo = response.clanInfo.clanInfo;
-    if (!clanInfo) return null;
-
-    return {
-        clanId: clanInfo.clanId,
-        name: clanInfo.name,
-        memberCount: Array.isArray(clanInfo.members) ? clanInfo.members.length : 0,
-        maxMemberCount: clanInfo.maxMemberCount
-    };
-}

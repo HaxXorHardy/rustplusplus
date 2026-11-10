@@ -42,6 +42,49 @@ Test.describe('ResponseUtils.isResponseFailure', () => {
     });
 });
 
+Test.describe('ResponseUtils.classifyResponse', () => {
+    Test.it('reports a normal answer as success', () => {
+        Assert.strictEqual(ResponseUtils.classifyResponse({ info: { name: 'Server' } }), 'success');
+        Assert.strictEqual(ResponseUtils.classifyResponse({ seq: 8, success: {} }), 'success');
+        Assert.strictEqual(ResponseUtils.classifyResponse({ flag: { value: true } }), 'success');
+        Assert.strictEqual(ResponseUtils.classifyResponse({ mapMarkers: { markers: [] } }), 'success');
+    });
+
+    Test.it('reports an AppError and a thrown error as error', () => {
+        Assert.strictEqual(ResponseUtils.classifyResponse({ error: 'wrong_type' }), 'error');
+        Assert.strictEqual(ResponseUtils.classifyResponse(new Error('Timeout')), 'error');
+    });
+
+    /* A live server answers an unsupported request with an empty AppResponse, not with an AppError. */
+    Test.it('reports an empty answer as unsupported', () => {
+        Assert.strictEqual(ResponseUtils.classifyResponse({}), 'empty');
+        Assert.strictEqual(ResponseUtils.classifyResponse({ seq: 4 }), 'empty');
+    });
+
+    Test.it('reports a missing answer as timeout', () => {
+        Assert.strictEqual(ResponseUtils.classifyResponse(undefined), 'timeout');
+        Assert.strictEqual(ResponseUtils.classifyResponse(null), 'timeout');
+    });
+
+    Test.it('reports something that is not a response as invalid', () => {
+        Assert.strictEqual(ResponseUtils.classifyResponse('nope'), 'invalid');
+    });
+});
+
+Test.describe('ResponseUtils.isResponseEmpty', () => {
+    Test.it('detects an answer without any response field', () => {
+        Assert.strictEqual(ResponseUtils.isResponseEmpty({}), true);
+        Assert.strictEqual(ResponseUtils.isResponseEmpty({ seq: 1 }), true);
+    });
+
+    Test.it('does not call a real answer or an error empty', () => {
+        Assert.strictEqual(ResponseUtils.isResponseEmpty({ clanChat: { messages: [] } }), false);
+        Assert.strictEqual(ResponseUtils.isResponseEmpty({ error: 'x' }), false);
+        Assert.strictEqual(ResponseUtils.isResponseEmpty(undefined), false);
+        Assert.strictEqual(ResponseUtils.isResponseEmpty(new Error('x')), false);
+    });
+});
+
 Test.describe('ResponseUtils.describeResponse', () => {
     Test.it('uses the error message for thrown errors', () => {
         Assert.strictEqual(ResponseUtils.describeResponse(new Error('boom')), 'boom');
