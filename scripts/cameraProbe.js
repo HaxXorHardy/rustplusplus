@@ -75,6 +75,7 @@ function parseArgs(argv) {
         png: false,
         guildId: null,
         serverId: null,
+        playerToken: null,
         timeoutMs: 10000,
         help: false,
     };
@@ -86,6 +87,7 @@ function parseArgs(argv) {
         else if (arg.startsWith('--seconds=')) options.seconds = Number(arg.slice('--seconds='.length));
         else if (arg.startsWith('--guild=')) options.guildId = arg.slice('--guild='.length);
         else if (arg.startsWith('--server=')) options.serverId = arg.slice('--server='.length);
+        else if (arg.startsWith('--player-token=')) options.playerToken = arg.slice('--player-token='.length);
         else if (arg.startsWith('--timeout=')) options.timeoutMs = Number(arg.slice('--timeout='.length));
         else throw new Error(`Unknown argument "${arg}"`);
     }
@@ -119,6 +121,24 @@ function describeControlFlags(flags) {
 
 function entityTypeName(type) {
     return ENTITY_TYPES[type] === undefined ? `${type}` : ENTITY_TYPES[type];
+}
+
+/*
+    The two answers a camera subscription can get, and what they mean - both cost an afternoon if you have to guess:
+    - not_found: the server does not know the camera, or the playerToken of the server is stale (it rotates on re-pairing)
+    - player_online: the paired account is connected to the server, Rust+ only streams cameras while it is offline
+*/
+function describeCameraError(error) {
+    const code = (error && error.error) ? `${error.error}` : null;
+
+    if (code === 'not_found') {
+        return 'not_found (unknown camera code, or the playerToken of this server is stale - it rotates on re-pairing)';
+    }
+    if (code === 'player_online') {
+        return 'player_online (the paired account is on the server - Rust+ only streams cameras while it is offline)';
+    }
+
+    return code === null ? JSON.stringify(error) : code;
 }
 
 function position(entity) {
@@ -216,10 +236,18 @@ async function main() {
         process.exit(1);
     }
 
-    console.log(`[camera] guild=${guildId} server=${serverId} title="${server.title}" ` +
-        `endpoint=${server.serverIp}:${server.appPort} steamId=${server.steamId} camera=${options.camera}`);
+    /*
+        The player token is per server and rotates every time the server is paired again. A stale token connects fine but
+        every request is answered with AppError not_found (see the troubleshooting notes of the community clients), so
+        it can be passed in explicitly when the instance file is older than the pairing.
+    */
+    if (options.playerToken === null) options.playerToken = server.playerToken;
 
-    const rustplus = new RustPlusLib(server.serverIp, server.appPort, server.steamId, server.playerToken);
+    console.log(`[camera] guild=${guildId} server=${serverId} title="${server.title}" ` +
+        `endpoint=${server.serverIp}:${server.appPort} steamId=${server.steamId} camera=${options.camera} ` +
+        `playerToken=${options.playerToken}${options.playerToken === undefined ? ' (missing)' : ''}`);
+
+    const rustplus = new RustPlusLib(server.serverIp, server.appPort, server.steamId, options.playerToken);
 
     rustplus.on('error', (e) => console.log(`[camera] socket error: ${e && e.message ? e.message : e}`));
 
@@ -256,7 +284,7 @@ async function main() {
                 response = await rustplus.sendRequestAsync({ cameraSubscribe: { cameraId: code } }, options.timeoutMs);
             }
             catch (e) {
-                console.log(`[camera] ${code}: ${e && e.message ? e.message : JSON.stringify(e)}`);
+                console.log(`[camera] ${code}: ${describeCameraError(e)}`);
                 continue;
             }
 
@@ -292,7 +320,7 @@ async function main() {
     }
     catch (e) {
         /* sendRequestAsync rejects with the AppError object of the server, not with an Error instance. */
-        console.error(`[camera] subscribe failed: ${e && e.message ? e.message : JSON.stringify(e)}`);
+        console.error(`[camera] subscribe failed: ${describeCameraError(e)}`);
         process.exit(1);
     }
 
