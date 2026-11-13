@@ -923,7 +923,7 @@
     "cameraWatchDisabled": "Kamera izleme kapalıdır.",
     "cameraListTitle": "İzlenen kameralar",
     "cameraListEmpty": "Henüz izlenen kamera yok. \"/cameras add\" komutuyla bir kamera ekleyin.",
-    "cameraEnabled": "on",
+    "cameraEnabled": "açık",
     "cameraDisabled": "kapalı",
     "cameraAlertTitle": "Kamerada görünen yabancı {camera}",
     "cameraAlertNoPlayers": "Görünürde kimse yok.",

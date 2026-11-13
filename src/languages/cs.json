@@ -923,7 +923,7 @@
     "cameraWatchDisabled": "Sledování kamery je vypnuté.",
     "cameraListTitle": "Sledované kamery",
     "cameraListEmpty": "Zatím není sledována žádná kamera. Přidejte ji příkazem „/cameras add“.",
-    "cameraEnabled": "na",
+    "cameraEnabled": "zapnuto",
     "cameraDisabled": "vypnuto",
     "cameraAlertTitle": "Cizí osoba na kameře {camera}",
     "cameraAlertNoPlayers": "Nikdo v záběru.",
