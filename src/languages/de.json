@@ -926,5 +926,11 @@
     "cameraEnabled": "an",
     "cameraDisabled": "aus",
     "cameraAlertTitle": "Fremder auf Kamera {camera}",
-    "cameraAlertNoPlayers": "Niemand im Bild."
+    "cameraAlertNoPlayers": "Niemand im Bild.",
+    "cameraWatchSetting": "Fremden-Überwachung der Kameras",
+    "cameraWatchNote": "Prüft die Kameras aus \"/cameras\" und meldet Fremde im Kamera-Channel. Funktioniert nur, solange der gepairte Account nicht auf dem Server ist.",
+    "cameraWatchIntervalSetting": "Intervall der Kamera-Überwachung",
+    "cameraWatchIntervalNote": "Wie oft die Kameras geprüft werden, eine nach der anderen.",
+    "cameraWatchIntervalCurrent": "Alle {minutes} Min.",
+    "cameraWatchIntervalOptionDesc": "Die Kameras alle {minutes} Minuten prüfen."
 }

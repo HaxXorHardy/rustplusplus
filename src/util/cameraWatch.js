@@ -42,6 +42,28 @@ function teamNameSet(team) {
     return names;
 }
 
+/* The intervals the settings menu offers, in seconds (1, 2, 5, 10 and 15 minutes). */
+const INTERVAL_OPTIONS = [60, 120, 300, 600, 900];
+
+const INTERVAL_DEFAULT_SECONDS = 120;
+const INTERVAL_MIN_SECONDS = 30;
+const INTERVAL_MAX_SECONDS = 3600;
+
+/*
+    The interval of the watch in seconds: a value from the select menu, the instance file or an older version, clamped to
+    a range that neither spams the server nor leaves the base unwatched for hours.
+*/
+function normalizeIntervalSeconds(value) {
+    /* Number(null) is 0, so the empty values are handled before the conversion. */
+    if (value === undefined || value === null || value === '') return INTERVAL_DEFAULT_SECONDS;
+
+    const seconds = Number(value);
+
+    if (!Number.isFinite(seconds)) return INTERVAL_DEFAULT_SECONDS;
+
+    return Math.min(INTERVAL_MAX_SECONDS, Math.max(INTERVAL_MIN_SECONDS, Math.round(seconds)));
+}
+
 /*
     The players the camera saw that are not in the team. A player without a name is reported as well (it cannot be
     compared, and a stranger without a name is more interesting than a missed one).
@@ -106,6 +128,9 @@ function pruneAlertState(state, nowMs, cooldownMs) {
 module.exports = {
     normalizeName: normalizeName,
     teamNameSet: teamNameSet,
+    normalizeIntervalSeconds: normalizeIntervalSeconds,
+    INTERVAL_OPTIONS: INTERVAL_OPTIONS,
+    INTERVAL_DEFAULT_SECONDS: INTERVAL_DEFAULT_SECONDS,
     findStrangers: findStrangers,
     distanceOf: distanceOf,
     alertKey: alertKey,

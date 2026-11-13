@@ -23,6 +23,7 @@ const Fs = require('fs');
 const Path = require('path');
 
 const Client = require('../structures/clientRegistry.js');
+const CameraWatch = require('../util/cameraWatch.js');
 const Constants = require('../util/constants.js');
 const Languages = require('../util/languages.js');
 const LogLevels = require('../util/logLevels.js');
@@ -206,6 +207,33 @@ module.exports = {
                         description: Client.client.intlGet(guildId, 'serverLogLevelFullDesc'),
                         value: 'full'
                     }]
+            }));
+    },
+
+    /*
+        The interval of the camera watch. The values are the ones of util/cameraWatch.js, so the handler and the menu can
+        never disagree about what an interval is.
+    */
+    getCameraWatchIntervalSelectMenu: function (guildId, intervalSeconds) {
+        const current = CameraWatch.normalizeIntervalSeconds(intervalSeconds);
+
+        return new Discord.ActionRowBuilder().addComponents(
+            module.exports.getSelectMenu({
+                customId: 'CameraWatchInterval',
+                placeholder: Client.client.intlGet(guildId, 'cameraWatchIntervalCurrent', {
+                    minutes: `${Math.round(current / 60)}`
+                }),
+                options: CameraWatch.INTERVAL_OPTIONS.map((seconds) => {
+                    const minutes = `${Math.round(seconds / 60)}`;
+
+                    return {
+                        label: `${minutes} min`,
+                        description: Client.client.intlGet(guildId, 'cameraWatchIntervalOptionDesc', {
+                            minutes: minutes
+                        }),
+                        value: `${seconds}`
+                    };
+                })
             }));
     },
 

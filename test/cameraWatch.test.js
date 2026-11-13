@@ -127,3 +127,38 @@ Test.describe('CameraWatch cooldown', () => {
         Assert.deepStrictEqual(Object.keys(state), ['fresh']);
     });
 });
+
+Test.describe('CameraWatch.normalizeIntervalSeconds', () => {
+    Test.it('keeps a value the menu offers', () => {
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(60), 60);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds('300'), 300);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(900), 900);
+    });
+
+    Test.it('falls back to the default for a value that is no number', () => {
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(undefined), CameraWatch.INTERVAL_DEFAULT_SECONDS);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(null), CameraWatch.INTERVAL_DEFAULT_SECONDS);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds('abc'), CameraWatch.INTERVAL_DEFAULT_SECONDS);
+    });
+
+    Test.it('clamps a value into the allowed range', () => {
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(1), 30);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(-600), 30);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(99999), 3600);
+    });
+
+    Test.it('rounds a fraction', () => {
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(120.6), 121);
+    });
+
+    Test.it('offers the intervals of the menu in ascending order', () => {
+        const options = CameraWatch.INTERVAL_OPTIONS;
+
+        Assert.ok(options.length >= 2);
+        Assert.deepStrictEqual([...options].sort((a, b) => a - b), options);
+
+        for (const seconds of options) {
+            Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(seconds), seconds);
+        }
+    });
+});

@@ -24,6 +24,7 @@ const ClanChatHandler = require('./clanChatHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordSelectMenus = require('../discordTools/discordSelectMenus.js');
 const DiscordTools = require('../discordTools/discordTools.js');
+const CameraWatch = require('../util/cameraWatch.js');
 const LogLevels = require('../util/logLevels.js');
 const { CHANNELS, normalizeChannel } = require('../util/inGameChat.js');
 
@@ -159,6 +160,24 @@ module.exports = async (client, interaction) => {
         await client.interactionUpdate(interaction, {
             components: [DiscordSelectMenus.getServerLogLevelSelectMenu(guildId,
                 instance.generalSettings.serverLogLevel)]
+        });
+    }
+    else if (interaction.customId === 'CameraWatchInterval') {
+        instance.generalSettings.cameraWatchIntervalSeconds =
+            CameraWatch.normalizeIntervalSeconds(interaction.values[0]);
+        client.setInstance(guildId, instance);
+
+        if (rustplus) rustplus.generalSettings.cameraWatchIntervalSeconds =
+            instance.generalSettings.cameraWatchIntervalSeconds;
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'selectMenuValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.cameraWatchIntervalSeconds}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordSelectMenus.getCameraWatchIntervalSelectMenu(guildId,
+                instance.generalSettings.cameraWatchIntervalSeconds)]
         });
     }
     else if (interaction.customId === 'VoiceGender') {

@@ -36,7 +36,6 @@ const SNAPSHOT_MS = 4000;
 
 const ALERT_COOLDOWN_MS = 10 * 60 * 1000;               /* One alert per camera and player in this window. */
 const PAUSE_AFTER_PLAYER_ONLINE_MS = 5 * 60 * 1000;     /* Retry a paused watch after this. */
-const MIN_INTERVAL_SECONDS = 30;
 
 module.exports = {
     /*
@@ -58,8 +57,8 @@ module.exports = {
         const nowMs = Date.now();
         if (rustplus.cameraWatchPausedUntilMs && nowMs < rustplus.cameraWatchPausedUntilMs) return;
 
-        const intervalSeconds = Math.max(MIN_INTERVAL_SECONDS,
-            Number(instance.generalSettings.cameraWatchIntervalSeconds) || 120);
+        const intervalSeconds = CameraWatch.normalizeIntervalSeconds(
+            instance.generalSettings.cameraWatchIntervalSeconds);
         if ((nowMs - (rustplus.lastCameraWatchMs || 0)) < (intervalSeconds * 1000)) return;
 
         rustplus.lastCameraWatchMs = nowMs;

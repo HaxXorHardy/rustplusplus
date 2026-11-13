@@ -366,6 +366,29 @@ module.exports = async (client, interaction) => {
             await DiscordMessages.deleteInformationMessage(guildId, 'monument');
         }
     }
+    else if (interaction.customId === 'CameraWatch') {
+        instance.generalSettings.cameraWatchEnabled = !instance.generalSettings.cameraWatchEnabled;
+        client.setInstance(guildId, instance);
+
+        if (rustplus) {
+            rustplus.generalSettings.cameraWatchEnabled = instance.generalSettings.cameraWatchEnabled;
+
+            /* A watch that is switched on checks right away instead of waiting for the next interval. */
+            if (instance.generalSettings.cameraWatchEnabled) {
+                rustplus.lastCameraWatchMs = 0;
+                rustplus.cameraWatchPausedUntilMs = 0;
+            }
+        }
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.cameraWatchEnabled}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getCameraWatchButton(guildId, instance.generalSettings.cameraWatchEnabled)]
+        });
+    }
     else if (interaction.customId === 'BattlemetricsServerNameChanges') {
         instance.generalSettings.battlemetricsServerNameChanges =
             !instance.generalSettings.battlemetricsServerNameChanges;

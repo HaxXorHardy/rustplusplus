@@ -51,6 +51,7 @@ module.exports = async (client, guild, forced = false) => {
         await ensureInGameChatChannelSetting(client, guild, channel);
         await ensureInformationDisplaySettings(client, guild, channel);
         await ensureServerLogLevelSetting(client, guild, channel);
+        await ensureCameraWatchSettings(client, guild, channel);
     }
 
     await removeDisabledInformationMessages(client, guild);
@@ -307,6 +308,41 @@ async function setupGeneralSettings(client, guildId, channel) {
     await client.messageSend(channel, {
         embeds: [DiscordEmbeds.getEmbed({
             color: Constants.COLOR_SETTINGS,
+            title: client.intlGet(guildId, 'cameraWatchSetting'),
+            thumbnail: `attachment://settings_logo.png`,
+            fields: [
+                {
+                    name: client.intlGet(guildId, 'noteCap'),
+                    value: client.intlGet(guildId, 'cameraWatchNote'),
+                    inline: true
+                }]
+        })],
+        components: [DiscordButtons.getCameraWatchButton(guildId, instance.generalSettings.cameraWatchEnabled)],
+        files: [new Discord.AttachmentBuilder(
+            Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+    });
+
+    await client.messageSend(channel, {
+        embeds: [DiscordEmbeds.getEmbed({
+            color: Constants.COLOR_SETTINGS,
+            title: client.intlGet(guildId, 'cameraWatchIntervalSetting'),
+            thumbnail: `attachment://settings_logo.png`,
+            fields: [
+                {
+                    name: client.intlGet(guildId, 'noteCap'),
+                    value: client.intlGet(guildId, 'cameraWatchIntervalNote'),
+                    inline: true
+                }]
+        })],
+        components: [DiscordSelectMenus.getCameraWatchIntervalSelectMenu(guildId,
+            instance.generalSettings.cameraWatchIntervalSeconds)],
+        files: [new Discord.AttachmentBuilder(
+            Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+    });
+
+    await client.messageSend(channel, {
+        embeds: [DiscordEmbeds.getEmbed({
+            color: Constants.COLOR_SETTINGS,
             title: client.intlGet(guildId, 'subscribeToChangesBattlemetrics'),
             thumbnail: `attachment://settings_logo.png`
         })],
@@ -499,6 +535,70 @@ async function ensureInformationDisplaySettings(client, guild, channel) {
     catch (e) {
         client.log(client.intlGet(null, 'errorCap'),
             `Could not add the information channel settings: ${e}. Use /reset settings instead.`, 'warn');
+    }
+}
+
+/*
+    Same as ensureInGameChatChannelSetting but for the camera watch that was added after the settings channel was
+    originally created: two messages, the on/off button and the interval.
+*/
+async function ensureCameraWatchSettings(client, guild, channel) {
+    const instance = client.getInstance(guild.id);
+
+    const settings = [
+        {
+            customId: 'CameraWatch',
+            titleId: 'cameraWatchSetting',
+            noteId: 'cameraWatchNote',
+            getComponent: () => DiscordButtons.getCameraWatchButton(guild.id,
+                instance.generalSettings.cameraWatchEnabled)
+        },
+        {
+            customId: 'CameraWatchInterval',
+            titleId: 'cameraWatchIntervalSetting',
+            noteId: 'cameraWatchIntervalNote',
+            getComponent: () => DiscordSelectMenus.getCameraWatchIntervalSelectMenu(guild.id,
+                instance.generalSettings.cameraWatchIntervalSeconds)
+        }
+    ];
+
+    try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+
+        for (const setting of settings) {
+            const message = messages.find((message) => message.components.some((row) =>
+                row.components.some((component) => component.customId === setting.customId)));
+
+            if (message) {
+                if (message.embeds.length !== 0 &&
+                    message.embeds[0].title === client.intlGet(guild.id, setting.titleId)) {
+                    continue;
+                }
+
+                await message.delete().catch(() => undefined);
+            }
+
+            await client.messageSend(channel, {
+                embeds: [DiscordEmbeds.getEmbed({
+                    color: Constants.COLOR_SETTINGS,
+                    title: client.intlGet(guild.id, setting.titleId),
+                    thumbnail: `attachment://settings_logo.png`,
+                    fields: [
+                        {
+                            name: client.intlGet(guild.id, 'noteCap'),
+                            value: client.intlGet(guild.id, setting.noteId),
+                            inline: true
+                        }]
+                })],
+                components: [setting.getComponent()],
+                files: [new Discord.AttachmentBuilder(
+                    Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+            });
+        }
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'errorCap'),
+            `Could not add the camera watch settings: ${e}. Use /reset settings instead.`, 'warn');
     }
 }
 
