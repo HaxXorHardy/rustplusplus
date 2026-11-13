@@ -14,7 +14,9 @@ WORKDIR /app
 
 COPY package.json /app/package.json
 COPY package-lock.json /app/package-lock.json
-RUN npm install
+
+# Runtime dependencies only: the bot runs with plain node (index.js); the TypeScript toolchain is a dev dependency.
+RUN npm install --omit=dev
 COPY . /app
 
 VOLUME [ "/app/credentials" ]

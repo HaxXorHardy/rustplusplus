@@ -20,7 +20,7 @@
 
 /*
     The bot instance is created once by the entrypoint and published here. Modules read it through
-    `Client.client` instead of requiring index.ts, so nothing under src/ depends on the bootstrap
+    `Client.client` instead of requiring index.js, so nothing under src/ depends on the bootstrap
     entrypoint and the require graph stays acyclic.
 */
 module.exports = {
