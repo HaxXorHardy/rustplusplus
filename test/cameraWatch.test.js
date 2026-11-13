@@ -142,8 +142,8 @@ Test.describe('CameraWatch.normalizeIntervalSeconds', () => {
     });
 
     Test.it('clamps a value into the allowed range', () => {
-        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(1), 30);
-        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(-600), 30);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(1), 5);
+        Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(-600), 5);
         Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(99999), 3600);
     });
 
@@ -156,9 +156,63 @@ Test.describe('CameraWatch.normalizeIntervalSeconds', () => {
 
         Assert.ok(options.length >= 2);
         Assert.deepStrictEqual([...options].sort((a, b) => a - b), options);
+        Assert.strictEqual(options[0], 5, 'the smallest interval is 5 seconds');
 
         for (const seconds of options) {
             Assert.strictEqual(CameraWatch.normalizeIntervalSeconds(seconds), seconds);
         }
+    });
+});
+
+Test.describe('CameraWatch.formatInterval', () => {
+    Test.it('shows seconds below a minute and minutes above', () => {
+        Assert.strictEqual(CameraWatch.formatInterval(5), '5 s');
+        Assert.strictEqual(CameraWatch.formatInterval(45), '45 s');
+        Assert.strictEqual(CameraWatch.formatInterval(60), '1 min');
+        Assert.strictEqual(CameraWatch.formatInterval(120), '2 min');
+        Assert.strictEqual(CameraWatch.formatInterval(300), '5 min');
+    });
+
+    Test.it('normalizes the value before it is shown', () => {
+        Assert.strictEqual(CameraWatch.formatInterval(1), '5 s');
+        Assert.strictEqual(CameraWatch.formatInterval(undefined), '1 min');
+    });
+});
+
+Test.describe('CameraWatch.effectiveIntervalSeconds', () => {
+    Test.it('keeps a chosen interval that fits the round', () => {
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(30, 1), 30);
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(5, 5), 5);
+    });
+
+    /* 10 cameras need ~6 s per round, a 5 s interval would run the watch back to back. */
+    Test.it('raises an interval below the round time', () => {
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(5, 10), 6);
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(5, 20), 12);
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(300, 20), 300);
+    });
+
+    Test.it('treats a missing camera count as one camera', () => {
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(5, undefined), 5);
+        Assert.strictEqual(CameraWatch.effectiveIntervalSeconds(5, 0), 5);
+    });
+});
+
+Test.describe('CameraWatch.teamIgnoreSet', () => {
+    const team = { players: [{ name: 'Hardy' }, { name: '$krrtCobain' }] };
+
+    Test.it('ignores the team by default', () => {
+        const names = CameraWatch.teamIgnoreSet(team, false);
+
+        Assert.strictEqual(names.has('hardy'), true);
+        Assert.strictEqual(names.has('$krrtcobain'), true);
+    });
+
+    Test.it('ignores nobody when team members should be reported', () => {
+        Assert.strictEqual(CameraWatch.teamIgnoreSet(team, true).size, 0);
+    });
+
+    Test.it('is empty without a team', () => {
+        Assert.strictEqual(CameraWatch.teamIgnoreSet(null, false).size, 0);
     });
 });

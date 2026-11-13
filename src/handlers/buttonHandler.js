@@ -389,6 +389,23 @@ module.exports = async (client, interaction) => {
             components: [DiscordButtons.getCameraWatchButton(guildId, instance.generalSettings.cameraWatchEnabled)]
         });
     }
+    else if (interaction.customId === 'CameraWatchReportTeam') {
+        instance.generalSettings.cameraWatchReportTeam = !instance.generalSettings.cameraWatchReportTeam;
+        client.setInstance(guildId, instance);
+
+        if (rustplus) rustplus.generalSettings.cameraWatchReportTeam =
+            instance.generalSettings.cameraWatchReportTeam;
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.cameraWatchReportTeam}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getCameraWatchReportTeamButton(guildId,
+                instance.generalSettings.cameraWatchReportTeam)]
+        });
+    }
     else if (interaction.customId === 'BattlemetricsServerNameChanges') {
         instance.generalSettings.battlemetricsServerNameChanges =
             !instance.generalSettings.battlemetricsServerNameChanges;

@@ -114,6 +114,11 @@ image builds up over the frames. `src/util/cameraRenderer.js` does both and accu
 `src/structures/Camera.js` wraps subscribe/collect/render/unsubscribe, and `src/handlers/cameraWatchHandler.js` uses it to
 report players that are not in the team into the cameras channel.
 
+A check of the watch does **not** render: the entities of a frame are the whole view of the camera, so `waitForFrames()`
+waits for 3 frames (or 400 ms) and only the alert collects the ~4 s of frames a complete picture needs. One check
+therefore costs ~19 KB instead of ~195 KB; a team member is only reported when the settings say so
+(`cameraWatchReportTeam`).
+
 ## Team map notes
 
 `AppTeamInfo.mapNotes` and `AppTeamInfo.leaderMapNotes` (the marks the team placed on the map) are parsed into

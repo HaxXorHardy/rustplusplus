@@ -28,5 +28,6 @@
     "battlemetricsGlobalLogout": false,
     "serverLogLevel": "error",
     "cameraWatchEnabled": false,
-    "cameraWatchIntervalSeconds": 120
+    "cameraWatchIntervalSeconds": 60,
+    "cameraWatchReportTeam": false
 }

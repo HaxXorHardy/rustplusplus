@@ -30,8 +30,13 @@ const Camera = require('../structures/Camera.js');
 const CameraWatch = require('../util/cameraWatch.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 
-/* The entities of a camera arrive with the first frames, a complete image needs ~3-4 s. */
-const COLLECT_MS = 2500;
+/*
+    A check only needs the entities of a camera: they arrive with the first frames, so 3 frames (or 400 ms) are enough -
+    the first frame after a subscribe can still be a sweep start. Only an alert needs a picture, that collects
+    SNAPSHOT_MS of frames and renders them.
+*/
+const CHECK_MIN_FRAMES = 3;
+const CHECK_TIMEOUT_MS = 400;
 const SNAPSHOT_MS = 4000;
 
 const ALERT_COOLDOWN_MS = 10 * 60 * 1000;               /* One alert per camera and player in this window. */
@@ -57,12 +62,24 @@ module.exports = {
         const nowMs = Date.now();
         if (rustplus.cameraWatchPausedUntilMs && nowMs < rustplus.cameraWatchPausedUntilMs) return;
 
-        const intervalSeconds = CameraWatch.normalizeIntervalSeconds(
-            instance.generalSettings.cameraWatchIntervalSeconds);
+        const intervalSeconds = CameraWatch.effectiveIntervalSeconds(
+            instance.generalSettings.cameraWatchIntervalSeconds, watched.length);
+        const chosenSeconds = CameraWatch.normalizeIntervalSeconds(instance.generalSettings.cameraWatchIntervalSeconds);
+
+        if (intervalSeconds !== chosenSeconds && rustplus.cameraWatchIntervalWarnedFor !== intervalSeconds) {
+            rustplus.cameraWatchIntervalWarnedFor = intervalSeconds;
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `The camera watch interval is raised from ${chosenSeconds} s to ${intervalSeconds} s: ` +
+                `${watched.length} camera(s) need that long for one round.`, 'debug');
+        }
+
         if ((nowMs - (rustplus.lastCameraWatchMs || 0)) < (intervalSeconds * 1000)) return;
 
         rustplus.lastCameraWatchMs = nowMs;
         rustplus.cameraWatchIsRunning = true;
+
+        const roundStartedMs = Date.now();
+        const round = { cameras: 0, frames: 0, sightings: 0 };
 
         try {
             rustplus.cameraAlertState = CameraWatch.pruneAlertState(rustplus.cameraAlertState || {}, nowMs,
@@ -70,8 +87,17 @@ module.exports = {
 
             for (const [code, camera] of watched) {
                 if (rustplus.isDeleted) break;
-                await module.exports.checkCamera(rustplus, client, code, camera);
+
+                const result = await module.exports.checkCamera(rustplus, client, code, camera);
+                round.cameras += 1;
+                round.frames += result.frames;
+                round.sightings += result.strangers;
             }
+
+            /* One line per round (debug): the measurement that shows what a check costs. */
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `camera watch: ${round.cameras} camera(s), ${round.frames} frame(s), ` +
+                `${round.sightings} sighting(s) in ${Date.now() - roundStartedMs} ms.`, 'debug');
         }
         catch (e) {
             rustplus.log(client.intlGet(null, 'warningCap'),
@@ -82,30 +108,45 @@ module.exports = {
         }
     },
 
-    /* Looks at one camera and reports strangers the cooldown does not suppress. */
+    /*
+        Looks at one camera and reports strangers the cooldown does not suppress.
+        Returns { frames, strangers } for the round summary of the caller.
+    */
     checkCamera: async function (rustplus, client, code, cameraSettings = {}) {
         const camera = new Camera(rustplus, code);
+        const result = { frames: 0, strangers: 0 };
 
         if (!(await camera.subscribe())) {
             await module.exports.handleSubscribeFailure(rustplus, client, code, camera.lastError);
-            return;
+            return result;
         }
 
         try {
-            await camera.collect(COLLECT_MS);
+            const startedMs = Date.now();
+            result.frames = await camera.waitForFrames({ minFrames: CHECK_MIN_FRAMES, timeoutMs: CHECK_TIMEOUT_MS });
 
-            const names = CameraWatch.teamNameSet(rustplus.team);
+            if (result.frames === 0) {
+                rustplus.log(client.intlGet(null, 'infoCap'),
+                    `Camera "${code}": no frame in ${CHECK_TIMEOUT_MS} ms, no verdict.`, 'debug');
+                return result;
+            }
+
+            const instance = client.getInstance(rustplus.guildId);
+            const names = CameraWatch.teamIgnoreSet(rustplus.team,
+                instance.generalSettings.cameraWatchReportTeam === true);
             const strangers = CameraWatch.findStrangers(camera.players, names);
-            if (strangers.length === 0) return;
+            result.strangers = strangers.length;
+            if (strangers.length === 0) return result;
 
             const nowMs = Date.now();
             const state = rustplus.cameraAlertState || {};
             const fresh = strangers.filter((stranger) =>
                 CameraWatch.isCooldownOver(state, CameraWatch.alertKey(code, stranger), nowMs, ALERT_COOLDOWN_MS));
-            if (fresh.length === 0) return;
+            if (fresh.length === 0) return result;
 
-            /* The camera is subscribed anyway, so take the complete picture for the alert. */
-            if (camera.frameCount > 0) await camera.collect(SNAPSHOT_MS - COLLECT_MS);
+            /* The camera is subscribed anyway, so collect the frames of a complete picture for the alert. */
+            const elapsedMs = Date.now() - startedMs;
+            if (elapsedMs < SNAPSHOT_MS) await camera.collect(SNAPSHOT_MS - elapsedMs);
             const rendered = camera.frameCount === 0 ? null : await camera.render();
 
             for (const stranger of fresh) {
@@ -120,6 +161,8 @@ module.exports = {
                 png: rendered === null ? null : rendered.buffer,
                 coverage: rendered === null ? 0 : rendered.coverage,
             });
+
+            return result;
         }
         finally {
             await camera.unsubscribe();

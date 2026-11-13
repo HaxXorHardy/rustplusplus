@@ -221,15 +221,15 @@ module.exports = {
             module.exports.getSelectMenu({
                 customId: 'CameraWatchInterval',
                 placeholder: Client.client.intlGet(guildId, 'cameraWatchIntervalCurrent', {
-                    minutes: `${Math.round(current / 60)}`
+                    interval: CameraWatch.formatInterval(current)
                 }),
                 options: CameraWatch.INTERVAL_OPTIONS.map((seconds) => {
-                    const minutes = `${Math.round(seconds / 60)}`;
+                    const interval = CameraWatch.formatInterval(seconds);
 
                     return {
-                        label: `${minutes} min`,
+                        label: interval,
                         description: Client.client.intlGet(guildId, 'cameraWatchIntervalOptionDesc', {
-                            minutes: minutes
+                            interval: interval
                         }),
                         value: `${seconds}`
                     };

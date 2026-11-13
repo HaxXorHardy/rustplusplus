@@ -931,6 +931,8 @@
     "cameraWatchNote": "Checks the cameras of \"/cameras\" and posts strangers into the cameras channel. Only works while the paired account is not on the server.",
     "cameraWatchIntervalSetting": "Camera watch interval",
     "cameraWatchIntervalNote": "How often the cameras are checked, one camera after another.",
-    "cameraWatchIntervalCurrent": "Every {minutes} min",
-    "cameraWatchIntervalOptionDesc": "Check the cameras every {minutes} minutes."
+    "cameraWatchIntervalCurrent": "Every {interval}",
+    "cameraWatchIntervalOptionDesc": "Check the cameras every {interval}.",
+    "cameraWatchReportTeamSetting": "Report team members too",
+    "cameraWatchReportTeamNote": "A player of the team usually does not trigger an alert. Turned on, the camera reports team members as well."
 }

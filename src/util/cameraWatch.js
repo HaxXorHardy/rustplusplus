@@ -42,12 +42,15 @@ function teamNameSet(team) {
     return names;
 }
 
-/* The intervals the settings menu offers, in seconds (1, 2, 5, 10 and 15 minutes). */
-const INTERVAL_OPTIONS = [60, 120, 300, 600, 900];
+/* The intervals the settings menu offers, in seconds (5 s up to 5 minutes). */
+const INTERVAL_OPTIONS = [5, 10, 15, 30, 60, 120, 300];
 
-const INTERVAL_DEFAULT_SECONDS = 120;
-const INTERVAL_MIN_SECONDS = 30;
+const INTERVAL_DEFAULT_SECONDS = 60;
+const INTERVAL_MIN_SECONDS = 5;
 const INTERVAL_MAX_SECONDS = 3600;
+
+/* How long a check of one camera takes (3 frames + subscribe/unsubscribe), used for the smallest sane interval. */
+const ROUND_SECONDS_PER_CAMERA = 0.6;
 
 /*
     The interval of the watch in seconds: a value from the select menu, the instance file or an older version, clamped to
@@ -62,6 +65,35 @@ function normalizeIntervalSeconds(value) {
     if (!Number.isFinite(seconds)) return INTERVAL_DEFAULT_SECONDS;
 
     return Math.min(INTERVAL_MAX_SECONDS, Math.max(INTERVAL_MIN_SECONDS, Math.round(seconds)));
+}
+
+/*
+    The interval that is really used: a round takes ROUND_SECONDS_PER_CAMERA per camera, so an interval below that would
+    make the watch run back to back (a permanent camera stream). With 10 cameras a 5 s choice becomes 6 s.
+*/
+function effectiveIntervalSeconds(chosenSeconds, cameraCount) {
+    const chosen = normalizeIntervalSeconds(chosenSeconds);
+    const count = Math.max(1, Number.isFinite(Number(cameraCount)) ? Math.floor(Number(cameraCount)) : 1);
+    const roundSeconds = Math.max(1, Math.ceil(count * ROUND_SECONDS_PER_CAMERA));
+
+    return Math.max(chosen, roundSeconds);
+}
+
+/* A readable interval for the select menu: 5 s, 45 s, 2 min, 5 min. */
+function formatInterval(seconds) {
+    const value = normalizeIntervalSeconds(seconds);
+
+    return (value < 60) ? `${value} s` : `${Math.round(value / 60)} min`;
+}
+
+/*
+    The names that do not trigger an alert. A team member is only ignored while the setting says so, so a group can be
+    told to report its own members as well.
+*/
+function teamIgnoreSet(team, reportTeam) {
+    if (reportTeam === true) return new Set();
+
+    return teamNameSet(team);
 }
 
 /*
@@ -128,7 +160,10 @@ function pruneAlertState(state, nowMs, cooldownMs) {
 module.exports = {
     normalizeName: normalizeName,
     teamNameSet: teamNameSet,
+    teamIgnoreSet: teamIgnoreSet,
     normalizeIntervalSeconds: normalizeIntervalSeconds,
+    effectiveIntervalSeconds: effectiveIntervalSeconds,
+    formatInterval: formatInterval,
     INTERVAL_OPTIONS: INTERVAL_OPTIONS,
     INTERVAL_DEFAULT_SECONDS: INTERVAL_DEFAULT_SECONDS,
     findStrangers: findStrangers,

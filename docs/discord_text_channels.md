@@ -76,7 +76,9 @@ There are a few buttons for each server. The `CONNECT` button lets you start a c
 
 The `Which lines should the bot post to the server-log channel?` dropdown decides what the bot writes into the [Serverlog Channel](discord_text_channels.md#serverlog-channel): `OFF` (nothing, the channel stays empty), `ERROR` (only errors), `INFO` (information, warnings and errors) or `FULL` (everything, including the debug lines that require `RPP_DEBUG=true`). The default is `ERROR`. The change is live, a restart is not needed.
 
-The two camera settings switch the watch of the [Cameras Channel](discord_text_channels.md#cameras-channel): `Camera stranger watch` turns it on or off (the button shows `ENABLED`/`DISABLED`) and `Camera watch interval` decides how often the cameras are checked (`1`, `2`, `5`, `10` or `15` minutes, one camera after another). Both are live, and switching the watch on starts a check right away. The cameras themselves are added with `/cameras add` - the settings only control the watch.
+The camera settings switch the watch of the [Cameras Channel](discord_text_channels.md#cameras-channel): `Camera stranger watch` turns it on or off (the button shows `ENABLED`/`DISABLED`), `Camera watch interval` decides how often the cameras are checked (`5 s`, `10 s`, `15 s`, `30 s`, `1 min`, `2 min`, `5 min`, one camera after another) and `Report team members too` decides whether a player of the own team also triggers an alert (default: off, so only players outside the team are reported). All of them are live, and switching the watch on starts a check right away. The cameras themselves are added with `/cameras add` - the settings only control the watch.
+
+If the chosen interval is shorter than one round through all cameras, the bot raises it: a round takes about `0.6 s` per camera, so with 10 cameras a `5 s` interval becomes `6 s` (one debug line says so). Without that the watch would run back to back, which is a permanent camera stream.
 
 ![Discord Text Channel Settings](images/channels/settings_channel.png)
 

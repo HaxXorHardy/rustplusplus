@@ -109,6 +109,23 @@ class Camera {
         return this._frames.length;
     }
 
+    /*
+        Waits until `minFrames` frames arrived or `timeoutMs` passed and returns the number of frames.
+
+        The entities of a frame are the whole view of the camera, so for "who is there" a few frames are enough (a check
+        does not need a picture at all). Three frames are the safe minimum: the first frame after a subscribe can still be
+        a sweep start without entities.
+    */
+    async waitForFrames({ minFrames = 3, timeoutMs = 400, pollMs = 50 } = {}) {
+        const deadline = Date.now() + timeoutMs;
+
+        while (this._frames.length < minFrames && Date.now() < deadline) {
+            await Timer.sleep(pollMs);
+        }
+
+        return this._frames.length;
+    }
+
     async render() {
         return await CameraRenderer.renderPng(this._frames, this.width, this.height);
     }
