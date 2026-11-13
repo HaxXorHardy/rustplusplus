@@ -24,6 +24,11 @@ on:
         required: false
         default: false
         type: boolean
+      retranslate_fallbacks:
+        description: "Also translate keys that still carry the English text (best combined with a language list)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -67,12 +72,15 @@ jobs:
         run: cp scripts/translate_language_json.py "$RUNNER_TEMP/translate_language_json.py"
 
       - name: Run translation script
+        # A manual run on the default branch cannot commit - so it only reports on dry runs instead of burning quota.
+        if: github.event_name == 'pull_request' || github.ref_name != github.event.repository.default_branch || github.event.inputs.dry_run == 'true'
         env:
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
           DEEPL_API_URL: ${{ vars.DEEPL_API_URL }}
           INPUT_LANGUAGES: ${{ github.event.inputs.languages }}
           INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
           INPUT_FORCE: ${{ github.event.inputs.force }}
+          INPUT_FALLBACKS: ${{ github.event.inputs.retranslate_fallbacks }}
         run: |
           args=(--source src/languages/en.json --output-dir src/languages --provider deepl)
           if [ -n "$INPUT_LANGUAGES" ]; then
@@ -84,6 +92,9 @@ jobs:
           fi
           if [ "$INPUT_FORCE" = "true" ]; then
             args+=(--force)
+          fi
+          if [ "$INPUT_FALLBACKS" = "true" ]; then
+            args+=(--fallbacks)
           fi
           python "$RUNNER_TEMP/translate_language_json.py" "${args[@]}"
 

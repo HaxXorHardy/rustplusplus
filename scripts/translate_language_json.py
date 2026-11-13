@@ -229,6 +229,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--libre-key", default=os.getenv("LIBRETRANSLATE_API_KEY"))
     parser.add_argument("--libre-source-lang", default="en")
     parser.add_argument("--force", action="store_true", help="Translate all keys again instead of only missing keys")
+    parser.add_argument(
+        "--fallbacks",
+        action="store_true",
+        help="Also translate keys that still carry the English source text (untranslated fallbacks)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Only show what would be translated")
     return parser.parse_args()
 
@@ -269,7 +274,14 @@ def main() -> int:
         target_path = output_dir / f"{lang}.json"
         existing = load_json(target_path)
 
-        missing_keys = [k for k in source.keys() if args.force or k not in existing or not str(existing.get(k, "")).strip()]
+        missing_keys = [
+            key
+            for key in source.keys()
+            if args.force
+            or key not in existing
+            or not str(existing.get(key, "")).strip()
+            or (args.fallbacks and str(existing.get(key, "")) == str(source[key]))
+        ]
         print(f"[{lang}] existing={len(existing)} missing={len(missing_keys)} -> {target_path}")
 
         total_new += len(missing_keys)
