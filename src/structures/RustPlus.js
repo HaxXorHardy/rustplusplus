@@ -52,6 +52,10 @@ const Timer = require('../util/timer.js');
 const TOKENS_LIMIT = 24;        /* Per player */
 const TOKENS_REPLENISH = 3;     /* Per second */
 
+/* One replenish step per second, and the longest a request waits for a free token. */
+const TOKENS_REPLENISH_MS = 1000;
+const TOKENS_WAIT_TIMEOUT_MS = 30 * 1000;
+
 /* Do not ask Steam for a new token more often than this when the stored refresh token was rejected. */
 const TOKEN_RENEWAL_RETRY_MS = 60 * 60 * 1000;
 
@@ -89,7 +93,14 @@ class RustPlus extends RustPlusLib {
         this.tokensReplenishTaskId = 0;     /* The id of the replenish task for rustplus tokens. */
 
         /* Other variable initializations */
-        this.tokens = 24;                           /* The amount of tokens that is available at start. */
+        this.tokens = TOKENS_LIMIT;                 /* The amount of tokens that is available at start. */
+        /*
+            Timestamp of the last refill. The bucket is refilled from the elapsed time (see replenishTokens), so a lost
+            replenish interval - a replaced socket, a reconnected instance - cannot starve the polling loop.
+        */
+        this.tokensUpdatedMs = Date.now();
+        this.consecutiveFailedPolls = 0;            /* Polls in a row that got no valid answer from the server. */
+        this.isPolling = false;                     /* Is a poll cycle running right now? */
         this.timers = new Object();                 /* Stores all custom timers that are created. */
         this.markers = new Object();                /* Stores all custom markers that are created. */
         this.storageMonitors = new Object();        /* Contain content information of paired storage monitors. */
@@ -967,21 +978,50 @@ class RustPlus extends RustPlusLib {
         this.log(Client.client.intlGet(null, 'eventCap'), text);
     }
 
+    /*
+        Refills the token bucket from the elapsed time: TOKENS_REPLENISH per second, at most TOKENS_LIMIT. Called by the
+        replenish interval and by waitForAvailableTokens(), so the bucket recovers even when the interval is gone (a
+        replaced socket, a reconnected instance).
+    */
     replenishTokens() {
-        this.tokens += TOKENS_REPLENISH;
-        if (this.tokens > TOKENS_LIMIT) this.tokens = TOKENS_LIMIT;
+        const steps = Math.floor((Date.now() - this.tokensUpdatedMs) / TOKENS_REPLENISH_MS);
+        if (steps <= 0) return;
+
+        this.tokensUpdatedMs += steps * TOKENS_REPLENISH_MS;
+        this.tokens = Math.min(TOKENS_LIMIT, this.tokens + (steps * TOKENS_REPLENISH));
+    }
+
+    /*
+        A request that never left because no token was free. This is a local condition, not an answer of the game server,
+        so a caller can tell it apart from an AppError (see isResponseValid).
+    */
+    tokenErrorResponse() {
+        return {
+            error: Client.client.intlGet(null, 'tokensDidNotReplenish'),
+            localError: 'tokensDidNotReplenish'
+        };
     }
 
     async waitForAvailableTokens(cost) {
-        let timeoutCounter = 0;
-        while (this.tokens < cost) {
-            if (timeoutCounter === 90) return false;
+        const deadline = Date.now() + TOKENS_WAIT_TIMEOUT_MS;
 
-            await Timer.sleep(1000 / 3);
-            timeoutCounter += 1;
+        while (true) {
+            this.replenishTokens();
+
+            if (this.tokens >= cost) {
+                this.tokens -= cost;
+                return true;
+            }
+
+            if (Date.now() >= deadline) {
+                this.log(Client.client.intlGet(null, 'warningCap'),
+                    `No Rust+ token free for ${cost} token(s) within ` +
+                    `${Math.round(TOKENS_WAIT_TIMEOUT_MS / 1000)} s (${this.tokens} of ${TOKENS_LIMIT} left).`, 'warn');
+                return false;
+            }
+
+            await Timer.sleep(TOKENS_REPLENISH_MS / 3);
         }
-        this.tokens -= cost;
-        return true;
     }
 
     /*
@@ -991,7 +1031,7 @@ class RustPlus extends RustPlusLib {
     async apiRequestAsync(name, params = {}, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync(RustPlusApi.buildRequest(name, params), timeout).catch((e) => {
@@ -1033,7 +1073,7 @@ class RustPlus extends RustPlusLib {
     async setEntityValueAsync(id, value, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1053,7 +1093,7 @@ class RustPlus extends RustPlusLib {
     async sendTeamMessageAsync(message, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(2))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1073,7 +1113,7 @@ class RustPlus extends RustPlusLib {
         try {
             /* The clan chat request is not listed in the rate limit table of rustplus.js, 2 tokens like team chat. */
             if (!(await this.waitForAvailableTokens(2))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1092,7 +1132,7 @@ class RustPlus extends RustPlusLib {
     async getEntityInfoAsync(id, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1110,7 +1150,7 @@ class RustPlus extends RustPlusLib {
     async getMapAsync(timeout = 30000) {
         try {
             if (!(await this.waitForAvailableTokens(5))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1127,7 +1167,7 @@ class RustPlus extends RustPlusLib {
     async getTimeAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1144,7 +1184,7 @@ class RustPlus extends RustPlusLib {
     async getMapMarkersAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1161,7 +1201,7 @@ class RustPlus extends RustPlusLib {
     async getInfoAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1178,7 +1218,7 @@ class RustPlus extends RustPlusLib {
     async getTeamInfoAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1195,7 +1235,7 @@ class RustPlus extends RustPlusLib {
     async subscribeToCameraAsync(identifier, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1214,7 +1254,7 @@ class RustPlus extends RustPlusLib {
     async unsubscribeFromCameraAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1231,7 +1271,7 @@ class RustPlus extends RustPlusLib {
     async sendCameraInputAsync(buttons, x, y, timeout = 1000) {
         try {
             if (!(await this.waitForAvailableTokens(0.01))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1254,7 +1294,7 @@ class RustPlus extends RustPlusLib {
     async promoteToLeaderAsync(steamId, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1273,7 +1313,7 @@ class RustPlus extends RustPlusLib {
     async getTeamChatAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1290,7 +1330,7 @@ class RustPlus extends RustPlusLib {
     async getClanInfoAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1311,7 +1351,7 @@ class RustPlus extends RustPlusLib {
     async getClanChatAsync(timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync(RustPlusApi.buildRequest('getClanChat'), timeout).catch((e) => {
@@ -1330,7 +1370,7 @@ class RustPlus extends RustPlusLib {
     async setClanMotdAsync(message, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync(RustPlusApi.buildRequest('setClanMotd', {
@@ -1351,7 +1391,7 @@ class RustPlus extends RustPlusLib {
     async getNexusAuthAsync(appKey, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync(RustPlusApi.buildRequest('getNexusAuth', {
@@ -1368,7 +1408,7 @@ class RustPlus extends RustPlusLib {
     async checkSubscriptionAsync(id, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1386,7 +1426,7 @@ class RustPlus extends RustPlusLib {
     async setSubscriptionAsync(id, value, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(1))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1406,7 +1446,7 @@ class RustPlus extends RustPlusLib {
     async getCameraFrameAsync(identifier, frame, timeout = 10000) {
         try {
             if (!(await this.waitForAvailableTokens(2))) {
-                return { error: Client.client.intlGet(null, 'tokensDidNotReplenish') };
+                return this.tokenErrorResponse();
             }
 
             return await this.sendRequestAsync({
@@ -1440,15 +1480,26 @@ class RustPlus extends RustPlusLib {
             return false;
         }
         else if (response.hasOwnProperty('error')) {
-            this.log(Client.client.intlGet(null, 'errorCap'), Client.client.intlGet(null, 'responseContainError', {
-                error: response.error
-            }), 'error');
+            /*
+                An empty token bucket is a local condition (the request never left), so it is a warning: the next poll
+                simply retries. A real AppError of the server stays an error.
+            */
+            const isLocal = response.hasOwnProperty('localError');
+
+            this.log(Client.client.intlGet(null, isLocal ? 'warningCap' : 'errorCap'),
+                Client.client.intlGet(null, 'responseContainError', {
+                    error: response.error
+                }), isLocal ? 'warn' : 'error');
             return false;
         }
         else if (Object.keys(response).length === 0) {
+            /*
+                An empty answer is not a normal answer of the game server (it sends that for a request it does not
+                support). Polling on would hide the problem, and stopping the loop silently is worse - count it as a
+                failed cycle so the watchdog rebuilds the connection (see handlers/pollingHandler.js).
+            */
             this.log(Client.client.intlGet(null, 'errorCap'),
                 Client.client.intlGet(null, 'responseIsEmpty'), 'error');
-            clearInterval(this.pollingTaskId);
             return false;
         }
         return true;

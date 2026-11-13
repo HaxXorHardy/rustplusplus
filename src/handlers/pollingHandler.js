@@ -44,17 +44,113 @@ async function runHandler(rustplus, client, label, handler) {
     }
 }
 
+/* A poll cycle can wait up to 30 s for a free token or a request timeout - the interval must not stack cycles. */
+const MAX_FAILED_POLLS = 6;
+
+/* Stops the polling loop of an instance that must not poll anymore. */
+function stopPolling(rustplus) {
+    clearInterval(rustplus.pollingTaskId);
+    rustplus.pollingTaskId = 0;
+}
+
+/*
+    Is this instance still the one that speaks for its guild? A reconnect can replace an instance while its polling loop
+    keeps running; the old one would then poll forever without anyone reading its results.
+*/
+function isCurrentInstance(rustplus, client) {
+    if (rustplus.isDeleted) return false;
+
+    const instances = client.rustplusInstances;
+    if (!instances || !Object.prototype.hasOwnProperty.call(instances, rustplus.guildId)) return true;
+
+    return instances[rustplus.guildId] === rustplus;
+}
+
+/*
+    A connection that keeps failing is torn down and rebuilt instead of polling a dead socket forever (that state used to
+    survive for days, with one ERROR per minute for every request). disconnect() starts the regular reconnect with the
+    growing delay (see rustplusEvents/disconnected.js).
+*/
+function updatePollHealth(rustplus, client, success) {
+    if (success) {
+        rustplus.consecutiveFailedPolls = 0;
+        return;
+    }
+
+    rustplus.consecutiveFailedPolls = (rustplus.consecutiveFailedPolls || 0) + 1;
+    if (rustplus.consecutiveFailedPolls < MAX_FAILED_POLLS) return;
+
+    rustplus.consecutiveFailedPolls = 0;
+
+    rustplus.log(client.intlGet(null, 'warningCap'),
+        `${MAX_FAILED_POLLS} polls in a row got no valid answer from the server, reconnecting.`, 'warn');
+
+    forceReconnect(rustplus, client);
+}
+
+/*
+    Tear the connection down and let the client build a fresh instance. A socket that is already closed does not emit
+    'disconnected' (there is nothing to close), so the instance is replaced here as well - otherwise the same dead
+    connection would be polled forever.
+*/
+function forceReconnect(rustplus, client) {
+    rustplus.disconnect();
+
+    const timer = setTimeout(() => {
+        if (rustplus.isDeleted) return;
+        if (!client.rustplusInstances || client.rustplusInstances[rustplus.guildId] !== rustplus) return;
+
+        stopPolling(rustplus);
+        rustplus.isDeleted = true;
+        delete client.rustplusInstances[rustplus.guildId];
+
+        client.createRustplusInstance(rustplus.guildId, rustplus.server, rustplus.port, rustplus.playerId,
+            rustplus.playerToken);
+    }, 5000);
+
+    if (typeof timer.unref === 'function') timer.unref();
+}
+
 module.exports = {
     pollingHandler: async function (rustplus, client) {
+        /* One cycle at a time: the previous one may still wait for a token or for a response. */
+        if (rustplus.isPolling) return;
+
+        if (!isCurrentInstance(rustplus, client)) {
+            stopPolling(rustplus);
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                'The instance was replaced, its polling loop stopped.', 'debug');
+            return;
+        }
+
+        rustplus.isPolling = true;
+
+        let success = false;
+        try {
+            success = await module.exports.poll(rustplus, client);
+        }
+        catch (e) {
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `The poll failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
+        finally {
+            rustplus.isPolling = false;
+        }
+
+        updatePollHealth(rustplus, client, success);
+    },
+
+    /* One poll cycle, true when every request of the cycle was answered. */
+    poll: async function (rustplus, client) {
         /* Poll information such as info, mapMarkers, teamInfo and time */
         let info = await rustplus.getInfoAsync();
-        if (!(await rustplus.isResponseValid(info))) return;
+        if (!(await rustplus.isResponseValid(info))) return false;
         let mapMarkers = await rustplus.getMapMarkersAsync();
-        if (!(await rustplus.isResponseValid(mapMarkers))) return;
+        if (!(await rustplus.isResponseValid(mapMarkers))) return false;
         let teamInfo = await rustplus.getTeamInfoAsync();
-        if (!(await rustplus.isResponseValid(teamInfo))) return;
+        if (!(await rustplus.isResponseValid(teamInfo))) return false;
         let time = await rustplus.getTimeAsync();
-        if (!(await rustplus.isResponseValid(time))) return;
+        if (!(await rustplus.isResponseValid(time))) return false;
 
         if (rustplus.isFirstPoll) {
             rustplus.info = new Info(info.info);
@@ -70,6 +166,8 @@ module.exports = {
         await rustplus.checkAuthTokenRenewal();
 
         rustplus.isFirstPoll = false;
+
+        return true;
     },
 
     handlers: async function (rustplus, client, info, mapMarkers, teamInfo, time) {

@@ -62,9 +62,6 @@ module.exports = {
 
         rustplus.uptimeServer = new Date();
 
-        /* Start the token replenish task */
-        rustplus.tokensReplenishTaskId = setInterval(rustplus.replenishTokens.bind(rustplus), 1000);
-
         /*
             Request the map. Act as a check to see if connection is truly operational.
 
@@ -163,6 +160,17 @@ module.exports = {
         await PollingHandler.pollingHandler(rustplus, client);
         rustplus.restorePersistentRuntimeState();
         rustplus.persistMapMarkersRuntimeState();
+
+        /*
+            Start both timers here and together: the setup above awaits Discord and the game server, and the 'disconnected'
+            event of a previous socket can arrive late (it is closed asynchronously). It clears the timers, and a timer
+            that was already set then stayed gone - an instance that polled without ever refilling its token bucket.
+        */
+        clearInterval(rustplus.pollingTaskId);
+        clearInterval(rustplus.tokensReplenishTaskId);
+
+        rustplus.tokensUpdatedMs = Date.now();
+        rustplus.tokensReplenishTaskId = setInterval(rustplus.replenishTokens.bind(rustplus), 1000);
         rustplus.pollingTaskId = setInterval(PollingHandler.pollingHandler, client.pollingIntervalMs, rustplus, client);
         rustplus.isOperational = true;
 
