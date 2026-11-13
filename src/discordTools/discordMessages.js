@@ -339,6 +339,26 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.events);
     },
 
+    /* Posted into the cameras channel when a camera saw a player that is not in the team. */
+    sendCameraAlertMessage: async function (rustplus, alert) {
+        const instance = Client.client.getInstance(rustplus.guildId);
+        if (!instance.channelId.cameras) {
+            rustplus.log(Client.client.intlGet(null, 'warningCap'),
+                'A stranger was seen by a camera, but there is no camera channel configured.', 'warn');
+            return;
+        }
+
+        const imageName = alert.png === null ? null : `camera-${alert.code}.png`;
+        const content = {
+            embeds: [DiscordEmbeds.getCameraAlertEmbed(rustplus.guildId, alert.code, alert.name, alert.strangers,
+                imageName)]
+        };
+
+        if (imageName !== null) content.files = [new Discord.AttachmentBuilder(alert.png, { name: imageName })];
+
+        await module.exports.sendMessage(rustplus.guildId, content, null, instance.channelId.cameras);
+    },
+
     sendActivityNotificationMessage: async function (guildId, serverId, color, text, steamId, title = null, everyone = false) {
         const instance = Client.client.getInstance(guildId);
 

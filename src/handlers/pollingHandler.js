@@ -19,6 +19,7 @@
 */
 
 const Info = require('../structures/Info');
+const CameraWatchHandler = require('../handlers/cameraWatchHandler.js');
 const InformationHandler = require('../handlers/informationHandler.js');
 const MapMarkers = require('../structures/MapMarkers.js');
 const SmartAlarmHandler = require('../handlers/smartAlarmHandler.js');
@@ -188,5 +189,14 @@ module.exports = {
         await runHandler(rustplus, client, 'the storage monitors',
             () => StorageMonitorHandler.handler(rustplus, client));
         await runHandler(rustplus, client, 'the smart alarms', () => SmartAlarmHandler.handler(rustplus, client));
+
+        /*
+            The camera watch runs detached: a check needs a photo's worth of frames (seconds), the poll must not wait for
+            it. It guards itself (one round at a time, an interval, a pause while the paired account is on the server).
+        */
+        CameraWatchHandler.handler(rustplus, client).catch((e) => {
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `The camera watch failed: ${e && e.message ? e.message : e}`, 'warn');
+        });
     },
 };

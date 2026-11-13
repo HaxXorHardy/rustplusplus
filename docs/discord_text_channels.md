@@ -16,6 +16,7 @@
 * [**Activity**](discord_text_channels.md#activity-channel)
 * [**Trackers**](discord_text_channels.md#trackers-channel)
 * [**Serverlog**](discord_text_channels.md#serverlog-channel)
+* [**Cameras**](discord_text_channels.md#cameras-channel)
 
 
 ## Information Channel
@@ -157,6 +158,16 @@ By clicking the `ADD PLAYER` button, you can add a player to the tracker by prov
 ![CREATE TRACKER](images/channels/tracker_create.png)
 ![Discord Text Channel Trackers](images/channels/trackers_channel.png)
 
+
+## Cameras Channel
+
+> The Cameras Channel receives an alert when the camera watch sees a player that is not in the team. The watch is turned on with `/cameras watch enabled:true` and checks the cameras that were added with `/cameras add` (by default every 2 minutes, one camera after another).
+
+The alert shows the camera, the name of every player in view with the distance to the camera and a picture of the moment. A player is reported once per camera and 10 minutes, so a raid does not fill the channel. Names are used for the comparison with the team, because a camera only sends the name of a player, no steam id.
+
+**When does the watch work?** Only while the paired steam account is **not** on the server: Rust+ answers a camera subscription with `player_online` while the account is in the game. That is exactly when a base is unattended, and the watch pauses and retries later instead of logging an error every round.
+
+<br>
 
 ## Serverlog Channel
 

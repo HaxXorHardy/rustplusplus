@@ -147,6 +147,7 @@ function createServerEntry(data, existing, steamId, options = {}) {
         timeTillDay: null,
         timeTillNight: null,
         customCameraGroups: {},
+        watchedCameras: {},
     }, existing || {});
 
     /*

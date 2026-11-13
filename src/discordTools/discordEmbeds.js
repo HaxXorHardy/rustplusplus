@@ -1270,6 +1270,44 @@ module.exports = {
         });
     },
 
+    getCameraAlertEmbed: function (guildId, cameraCode, cameraName, strangers, imageName) {
+        const lines = strangers.map((stranger) => {
+            const name = stranger.name === null ? `\`#${stranger.entityId}\`` : `**${stranger.name}**`;
+
+            return (stranger.distance === null) ? `- ${name}` : `- ${name} (${stranger.distance} m)`;
+        });
+
+        const options = {
+            color: Constants.COLOR_DEFAULT,
+            timestamp: true,
+            title: Client.client.intlGet(guildId, 'cameraAlertTitle', {
+                camera: cameraName === null ? cameraCode : `${cameraName} (${cameraCode})`
+            }),
+            description: lines.length === 0 ? Client.client.intlGet(guildId, 'cameraAlertNoPlayers') : lines.join('\n')
+        };
+
+        if (imageName) options.image = `attachment://${imageName}`;
+
+        return module.exports.getEmbed(options);
+    },
+
+    getCameraListEmbed: function (guildId, cameras, enabled) {
+        const lines = cameras.map((camera) => {
+            const state = camera.enabled === false ?
+                Client.client.intlGet(guildId, 'cameraDisabled') : Client.client.intlGet(guildId, 'cameraEnabled');
+
+            return `- \`${camera.code}\`${camera.name ? ` **${camera.name}**` : ''} (${state})`;
+        });
+
+        return module.exports.getEmbed({
+            color: Constants.COLOR_DEFAULT,
+            timestamp: true,
+            title: Client.client.intlGet(guildId, 'cameraListTitle'),
+            description: (lines.length === 0 ? Client.client.intlGet(guildId, 'cameraListEmpty') :
+                (enabled ? lines : [`${Client.client.intlGet(guildId, 'cameraWatchDisabled')}`, ...lines]).join('\n'))
+        });
+    },
+
     getUptimeEmbed: function (guildId, uptime) {
         return module.exports.getEmbed({
             color: Constants.COLOR_DEFAULT,

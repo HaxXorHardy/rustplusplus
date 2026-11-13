@@ -41,6 +41,7 @@ module.exports = async (client, guild, category) => {
         'storageMonitors', client, guild, category);
     await addTextChannel(client.intlGet(guild.id, 'channelNameActivity'), 'activity', client, guild, category);
     await addTextChannel(client.intlGet(guild.id, 'channelNameTrackers'), 'trackers', client, guild, category);
+    await addTextChannel(client.intlGet(guild.id, 'channelNameCameras'), 'cameras', client, guild, category);
 
     /*
         The server-log channel is not created with the permissions of the other channels: it is only readable

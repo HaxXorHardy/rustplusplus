@@ -82,6 +82,38 @@ The map sends a token per monument (`AppMap.monuments[].token`). The readable, l
 formatted by [`src/util/monuments.js`](../src/util/monuments.js) (`jungle_ziggurat` -> `Jungle Ziggurat`), both for
 `/map monuments` and for the drawn map.
 
+## Cameras
+
+`cameraSubscribe { cameraId }` answers with `cameraSubscribeInfo` (`width`, `height`, `nearPlane`, `farPlane`,
+`controlFlags`). While a camera is subscribed the server pushes `cameraRays` broadcasts (~12 per second) with the
+raycast samples and the entities in view.
+
+| Item | Value on a live server (PTZ camera, 2026-11) |
+| --- | --- |
+| Resolution | `320x180` |
+| Control flags | `10` = `MOUSE` + `FIRE` = pan/tilt + zoom of a **PTZ camera** (an Auto Turret adds `CROSSHAIR`/`RELOAD`, a static CCTV camera has none) |
+| Frames | ~12 per second, ~6.3 KB of ray data per frame (~78 KB/s) |
+| Complete image | ~30-40 frames, i.e. 3-4 seconds, one frame covers only a few percent of the pixels |
+| Entities | `Player` and `Tree` with `entityId`, `name`, position (relative to the camera, in metres), rotation, size - **no steam id** |
+
+Two answers a subscription can get, both are AppErrors:
+
+- `not_found` - the code is unknown **or** the `playerToken` of the server is stale (it rotates on every re-pairing, and
+  a stale token makes *every* request answer `not_found`, not only cameras).
+- `player_online` - the paired account is on the server. Rust+ only streams cameras while it is offline.
+
+Only one camera can be subscribed per connection at a time, so cameras have to be checked one after another. A camera
+subscription costs 1 token, camera movement 0.01.
+
+### Rendering
+
+The sample index -> pixel mapping is a shuffle (seeded xorshift, seed 1337) that every client has to apply, and the
+image builds up over the frames. `src/util/cameraRenderer.js` does both and accumulates **all** frames; the library
+(`@liamcottle/rustplus.js`) renders only the last 10, which leaves a dotted pattern (60 % of the pixels never covered).
+
+`src/structures/Camera.js` wraps subscribe/collect/render/unsubscribe, and `src/handlers/cameraWatchHandler.js` uses it to
+report players that are not in the team into the cameras channel.
+
 ## Team map notes
 
 `AppTeamInfo.mapNotes` and `AppTeamInfo.leaderMapNotes` (the marks the team placed on the map) are parsed into

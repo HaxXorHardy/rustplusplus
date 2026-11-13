@@ -186,6 +186,7 @@ Test.describe('RustPlusSync.applySyncServers (existing entries)', () => {
             'switches', 'alarms', 'storageMonitors', 'markers', 'switchGroups', 'messageId', 'battlemetricsId',
             'connect', 'cargoShipEgressTimeMs', 'oilRigLockedCrateUnlockTimeMs', 'deepSeaMinWipeCooldownMs',
             'deepSeaMaxWipeCooldownMs', 'deepSeaWipeDurationMs', 'timeTillDay', 'timeTillNight', 'customCameraGroups',
+            'watchedCameras',
         ]);
 
         Assert.deepStrictEqual(Object.keys(instance.serverListLite[key]), [STEAM_ID]);

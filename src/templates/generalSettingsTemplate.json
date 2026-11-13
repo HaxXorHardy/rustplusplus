@@ -26,5 +26,7 @@
     "battlemetricsGlobalNameChanges": false,
     "battlemetricsGlobalLogin": false,
     "battlemetricsGlobalLogout": false,
-    "serverLogLevel": "error"
+    "serverLogLevel": "error",
+    "cameraWatchEnabled": false,
+    "cameraWatchIntervalSeconds": 120
 }

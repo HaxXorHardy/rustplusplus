@@ -57,6 +57,7 @@ module.exports = (client, guild) => {
                 storageMonitors: null,
                 activity: null,
                 trackers: null,
+                cameras: null,
                 log: null
             },
             informationMessageId: {
@@ -158,6 +159,7 @@ module.exports = (client, guild) => {
                 storageMonitors: null,
                 activity: null,
                 trackers: null,
+                cameras: null,
                 log: null
             }
         }
@@ -176,6 +178,7 @@ module.exports = (client, guild) => {
             if (!instance.channelId.hasOwnProperty('storageMonitors')) instance.channelId.storageMonitors = null;
             if (!instance.channelId.hasOwnProperty('activity')) instance.channelId.activity = null;
             if (!instance.channelId.hasOwnProperty('trackers')) instance.channelId.trackers = null;
+            if (!instance.channelId.hasOwnProperty('cameras')) instance.channelId.cameras = null;
             if (!instance.channelId.hasOwnProperty('log')) instance.channelId.log = null;
         }
 
@@ -246,6 +249,7 @@ module.exports = (client, guild) => {
         /* The pairing id (uuid) of the server, resolved from the Rust+ login file when it is missing. */
         if (!content.hasOwnProperty('guid')) content.guid = null;
         if (!content.hasOwnProperty('customCameraGroups')) content.customCameraGroups = {};
+        if (!content.hasOwnProperty('watchedCameras')) content.watchedCameras = {};
         if (!content.hasOwnProperty('cargoShipEgressTimeMs')) {
             content.cargoShipEgressTimeMs = Constants.DEFAULT_CARGO_SHIP_EGRESS_TIME_MS;
         }

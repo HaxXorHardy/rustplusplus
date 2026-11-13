@@ -13,6 +13,7 @@ Slash Command | Description
 [**/alias**](commands.md#alias) | Create an alias for a command/sequence of characters.
 [**/blacklist**](commands.md#blacklist) | Blacklist a user from using the bot.
 [**/cctv**](commands.md#cctv) | Posts CCTV codes for a monument.
+[**/cameras**](commands.md#cameras) | Cameras of the server: list, add, snapshot and the stranger watch.
 [**/craft**](commands.md#craft) | Display the cost to craft an item.
 [**/credentials**](commands.md#credentials) | Set/Clear the Credentials for the user account.
 [**/decay**](commands.md#decay) | Display the decay time of an item.
@@ -101,6 +102,22 @@ Subcommand | Options | Description | Required
 &nbsp; | `monument` | Rust monument. | `True`
 
 ![Discord Slash Command monument Image](images/slash_commands/cctv.png)
+
+
+## **/cameras**
+
+> **Cameras of the server: list, add, snapshot and the stranger watch.**
+
+A camera is addressed by the code the game gives it: it is set at the camera itself (look at it and press `E`) and typed into the computer station there. Rust+ only streams a camera while the paired account is **not** on the server, so a snapshot only works while the account is offline.
+
+Subcommand | Options | Description | Required
+---------- | ------- | ----------- | --------
+`list` | &nbsp; | Show the watched cameras and whether the watch is on. | &nbsp;
+`add` | `code` | Camera code to watch. | `True`
+&nbsp; | `name` | Name for the list. | `False`
+`remove` | `code` | Camera code to remove. | `True`
+`watch` | `enabled` | Turn the stranger watch on or off (every 2 minutes the cameras are checked, a player that is not in the team is posted into the cameras channel with a picture). | `True`
+`snapshot` | `code` | Take one picture of a camera and post it with the players in view. | `True`
 
 
 ## **/craft**
