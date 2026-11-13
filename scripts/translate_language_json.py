@@ -38,16 +38,45 @@ def load_json(path: Path) -> Dict[str, str]:
     return data
 
 
-def sort_dict(data: Dict[str, str]) -> Dict[str, str]:
-    return dict(sorted(data.items(), key=lambda item: item[0].lower()))
+def ordered_keys(existing: Dict[str, str], source: Dict[str, str]) -> List[str]:
+    """The order of the target file: keep it, insert a new key next to its neighbours from the source.
+
+    Re-sorting the keys (or writing them in the order of the source) rewrote every language file on every run, so a
+    translation that only added a handful of keys came out as hundreds of moved lines - and the workflow committed
+    that. The file order is the reference, the source only decides where a new key belongs.
+    """
+    result = [key for key in existing if key in source]
+    source_keys = list(source)
+
+    for position, key in enumerate(source_keys):
+        if key in existing:
+            continue
+
+        anchor = None
+        for previous in reversed(source_keys[:position]):
+            if previous in result:
+                anchor = previous
+                break
+
+        if anchor is None:
+            result.insert(0, key)
+        else:
+            result.insert(result.index(anchor) + 1, key)
+
+    return result
 
 
-def save_json(path: Path, data: Dict[str, str]) -> None:
+def save_json(path: Path, data: Dict[str, str]) -> bool:
+    """Write `data` in its given order. Returns False when the file already had exactly this content."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    sorted_data = sort_dict(data)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(sorted_data, f, ensure_ascii=False, indent=4)
-        f.write("\n")
+
+    text = json.dumps(data, ensure_ascii=False, indent=4) + "\n"
+    if path.exists() and path.read_text(encoding="utf-8") == text:
+        return False
+
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    return True
 
 
 def mask_placeholders(text: str) -> Tuple[str, Dict[str, str]]:
@@ -214,7 +243,9 @@ def main() -> int:
         print(f"Source file is empty or missing: {source_path}", file=sys.stderr)
         return 1
 
-    if args.provider == "deepl":
+    if args.dry_run:
+        translator = None
+    elif args.provider == "deepl":
         if not args.deepl_key:
             print("Missing DeepL API key. Set --deepl-key or DEEPL_API_KEY.", file=sys.stderr)
             return 1
@@ -250,8 +281,9 @@ def main() -> int:
             pairs = [(k, str(source[k])) for k in missing_keys]
             translated = translator.translate_many(pairs, lang)
 
-        merged = dict(existing)
-        for key in source.keys():
+        stale_keys = [key for key in existing if key not in source]
+        merged: Dict[str, str] = {}
+        for key in ordered_keys(existing, source):
             if key in translated:
                 merged[key] = translated[key]
             elif key in existing:
@@ -259,8 +291,10 @@ def main() -> int:
             else:
                 merged[key] = source[key]
 
-        save_json(target_path, merged)
-        print(f"[{lang}] wrote {len(translated)} translated keys and sorted all keys")
+        changed = save_json(target_path, merged)
+        if stale_keys:
+            print(f"[{lang}] dropped {len(stale_keys)} key(s) that are not in the source: {', '.join(stale_keys[:5])}")
+        print(f"[{lang}] {len(translated)} translated, file {'updated' if changed else 'unchanged'}")
 
     if args.dry_run:
         print(f"Dry run complete. Keys to translate: {total_new}")

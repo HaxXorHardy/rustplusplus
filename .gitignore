@@ -26,3 +26,7 @@ scripts/review.cmd
 
 # local-only agent notes (infrastructure details, never commit)
 .agents/
+
+# python bytecode of scripts/*.py
+__pycache__/
+*.pyc

@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - src/languages/en.json
+      - scripts/translate_language_json.py
   workflow_dispatch:
     inputs:
       languages:
@@ -87,7 +88,9 @@ jobs:
           python "$RUNNER_TEMP/translate_language_json.py" "${args[@]}"
 
       - name: Commit translation changes
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        # Direct pushes to the default branch are off the table: a manual run on master once committed nothing but a
+        # re-sorted key order. Translations go to a pull request branch, everything else stays local to the run.
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name != github.event.repository.default_branch)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -99,5 +102,11 @@ jobs:
             exit 0
           fi
 
+          git diff --cached --stat
           git commit -m "chore(i18n): update translations"
           git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
+
+      - name: Report a run that must not commit
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name == github.event.repository.default_branch
+        run: |
+          echo "::warning::Translations are not committed to ${{ github.ref_name }} directly. Open a pull request with the new keys in src/languages/en.json, or start this workflow on a branch."
