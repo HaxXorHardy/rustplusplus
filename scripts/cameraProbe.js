@@ -173,7 +173,7 @@ function printFrame(index, rays) {
             `name=${entity.name === undefined ? '-' : `"${entity.name}"`} pos=${position(entity)}`);
     }
 }
-function summarise(frames, seconds) {
+function summarise(frames, seconds, frameCount = frames.length) {
     if (frames.length === 0) {
         console.log('[camera] no cameraRays frame arrived - the server does not stream this camera.');
         return;
@@ -187,10 +187,11 @@ function summarise(frames, seconds) {
         if (!unique.has(key)) unique.set(key, entity);
     }
 
-    console.log(`[camera] ${frames.length} frame(s) in ${seconds} s = ${(frames.length / seconds).toFixed(2)} frames/s`);
+    console.log(`[camera] ${frameCount} frame(s) in ${seconds} s = ${(frameCount / seconds).toFixed(2)} frames/s ` +
+        `(the buffer of the library keeps the last ${frames.length})`);
     console.log(`[camera] rayData: min=${Math.min(...raySizes)} B max=${Math.max(...raySizes)} B ` +
         `(sum ${raySizes.reduce((a, b) => a + b, 0)} B)`);
-    console.log(`[camera] entities: ${entities.length} entr(y/ies) in all frames, ${unique.size} unique`);
+    console.log(`[camera] entities: ${entities.length} entr(y/ies) in the kept frames, ${unique.size} unique`);
 
     for (const entity of unique.values()) {
         console.log(`[camera]   unique: ${entityTypeName(entity.type)} id=${entity.entityId} ` +
@@ -299,18 +300,27 @@ async function main() {
     }
     const camera = rustplus.getCamera(options.camera);
     let renders = 0;
+    let frames = 0;
     let pngPath = null;
+
+    /* Every cameraRays broadcast carries only a part of the image (sampleOffset), the render builds up over frames. */
+    const originalOnCameraRays = camera._onCameraRays.bind(camera);
+    camera._onCameraRays = async (rays) => {
+        frames += 1;
+        return await originalOnCameraRays(rays);
+    };
 
     camera.on('render', (buffer) => {
         renders += 1;
 
-        if (options.png && pngPath === null) {
+        if (options.png) {
             const tempDir = Path.join(__dirname, '..', 'temp');
             Fs.mkdirSync(tempDir, { recursive: true });
 
-            pngPath = Path.join(tempDir, `camera-${options.camera}-${Date.now()}.png`);
+            if (pngPath === null) pngPath = Path.join(tempDir, `camera-${options.camera}-${Date.now()}.png`);
+
+            /* Overwritten on every render, so the file always holds the most complete frame. */
             Fs.writeFileSync(pngPath, buffer);
-            console.log(`[camera] rendered frame saved to ${pngPath} (${buffer.length} B)`);
         }
     });
 
@@ -334,11 +344,10 @@ async function main() {
     for (let step = 0; step < seconds; step++) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        const frames = camera.cameraRays;
-        if (frames.length === step + 1) printFrame(step + 1, frames[frames.length - 1]);
+        if (step % 5 === 4) console.log(`[camera] ${step + 1} s: ${frames} frame(s), ${renders} render(s)`);
     }
 
-    summarise(camera.cameraRays, seconds);
+    summarise(camera.cameraRays, seconds, frames);
     console.log(`[camera] rendered frames: ${renders}${pngPath === null ? '' : ` (png: ${pngPath})`}`);
 
     await camera.unsubscribe();
