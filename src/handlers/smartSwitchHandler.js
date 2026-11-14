@@ -22,6 +22,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const Map = require('../util/map.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const Timer = require('../util/timer');
+const UnreachableDevices = require('../util/unreachableDevices.js');
 
 module.exports = {
     handler: async function (rustplus, client, time) {
@@ -42,8 +43,13 @@ module.exports = {
         const changedSwitches = [];
         if (rustplus.smartSwitchIntervalCounter === 0) {
             for (const entityId in instance.serverList[serverId].switches) {
+                /* A device the server does not know anymore is asked once an hour instead of on every round. */
+                if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
+
                 const info = await rustplus.getEntityInfoAsync(entityId);
-                if (!(await rustplus.isResponseValid(info))) {
+                if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+                    UnreachableDevices.markUnreachable(rustplus, entityId);
+
                     if (instance.serverList[serverId].switches[entityId].reachable) {
                         await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
                         instance.serverList[serverId].switches[entityId].reachable = false;
@@ -54,6 +60,8 @@ module.exports = {
                     }
                 }
                 else {
+                    UnreachableDevices.markReachable(rustplus, entityId);
+
                     if (!instance.serverList[serverId].switches[entityId].reachable) {
                         instance.serverList[serverId].switches[entityId].reachable = true;
                         client.setInstance(guildId, instance);

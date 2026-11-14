@@ -108,6 +108,33 @@ Test.describe('RustPlus.rebuildConnection', () => {
     });
 });
 
+Test.describe('RustPlus.isResponseValid', () => {
+    Test.it('logs a gone device as debug when the caller expects it', async () => {
+        const rustplus = fakeRustPlus();
+
+        Assert.strictEqual(await rustplus.isResponseValid({ error: 'not_found' }, { expectNotFound: true }), false);
+
+        Assert.strictEqual(rustplus.logs.length, 1);
+        Assert.strictEqual(rustplus.logs[0].level, 'debug');
+    });
+
+    Test.it('keeps an unexpected not_found an error', async () => {
+        const rustplus = fakeRustPlus();
+
+        Assert.strictEqual(await rustplus.isResponseValid({ error: 'not_found' }), false);
+        Assert.strictEqual(rustplus.logs[0].level, 'error');
+    });
+
+    /* A device that answers wrong_type is a different problem, a device round must not hide it. */
+    Test.it('keeps another error an error in a device round', async () => {
+        const rustplus = fakeRustPlus();
+
+        await rustplus.isResponseValid({ error: 'wrong_type' }, { expectNotFound: true });
+
+        Assert.strictEqual(rustplus.logs[0].level, 'error');
+    });
+});
+
 Test.describe('RustPlus.checkAuthTokenRenewal', () => {
     Test.it('rebuilds the connection after the token was renewed', async (t) => {
         const RustPlusAuth = require('../src/util/rustplusAuth.js');

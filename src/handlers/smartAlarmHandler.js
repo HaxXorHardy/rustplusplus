@@ -20,6 +20,7 @@
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Timer = require('../util/timer.js');
+const UnreachableDevices = require('../util/unreachableDevices.js');
 
 module.exports = {
     handler: async function (rustplus, client) {
@@ -40,8 +41,13 @@ module.exports = {
             for (const entityId in instance.serverList[serverId].alarms) {
                 instance = client.getInstance(guildId);
 
+                /* A device the server does not know anymore is asked once an hour instead of on every round. */
+                if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
+
                 const info = await rustplus.getEntityInfoAsync(entityId);
-                if (!(await rustplus.isResponseValid(info))) {
+                if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+                    UnreachableDevices.markUnreachable(rustplus, entityId);
+
                     if (instance.serverList[serverId].alarms[entityId].reachable) {
                         await DiscordMessages.sendSmartAlarmNotFoundMessage(guildId, serverId, entityId);
 
@@ -52,6 +58,8 @@ module.exports = {
                     }
                 }
                 else {
+                    UnreachableDevices.markReachable(rustplus, entityId);
+
                     if (!instance.serverList[serverId].alarms[entityId].reachable) {
                         instance.serverList[serverId].alarms[entityId].reachable = true;
                         client.setInstance(guildId, instance);

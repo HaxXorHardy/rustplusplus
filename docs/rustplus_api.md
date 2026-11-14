@@ -117,6 +117,11 @@ For that reason `RustPlus.rebuildConnection()` closes the socket after a renewal
 for after **two** rejected reads in a row, because every renewal itself invalidates the running socket - and a `403`
 is a proxy refusal, not a dead token.
 
+A device that the server does not know anymore (`not_found` for its `entityId`, e.g. destroyed in game or lost with a
+wipe) answers that way forever. The device round of the poll runs every 30 polls (5 minutes), so `util/unreachableDevices.js`
+remembers such a device and asks it once an hour instead - one line at debug level per round would otherwise fill the log
+(~290 ERROR lines a day per gone device).
+
 ### Rendering
 
 The sample index -> pixel mapping is a shuffle (seeded xorshift, seed 1337) that every client has to apply, and the

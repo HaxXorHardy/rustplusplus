@@ -1512,7 +1512,12 @@ class RustPlus extends RustPlusLib {
         }
     }
 
-    async isResponseValid(response) {
+    /*
+        `options.expectNotFound` marks the requests of a device round: a device that the server does not know anymore
+        answers not_found, which is a normal answer for it (the caller remembers it and asks it again in an hour). Such
+        a line is written to the debug log instead of the console, a timeout or another error stays an error.
+    */
+    async isResponseValid(response, options) {
         if (response === undefined) {
             this.log(Client.client.intlGet(null, 'errorCap'),
                 Client.client.intlGet(null, 'responseIsUndefined'), 'error');
@@ -1534,11 +1539,13 @@ class RustPlus extends RustPlusLib {
                 simply retries. A real AppError of the server stays an error.
             */
             const isLocal = response.hasOwnProperty('localError');
+            const isExpectedNotFound = Boolean(options && options.expectNotFound) &&
+                `${response.error}` === 'not_found';
 
             this.log(Client.client.intlGet(null, isLocal ? 'warningCap' : 'errorCap'),
                 Client.client.intlGet(null, 'responseContainError', {
                     error: response.error
-                }), isLocal ? 'warn' : 'error');
+                }), isExpectedNotFound ? 'debug' : (isLocal ? 'warn' : 'error'));
             return false;
         }
         else if (Object.keys(response).length === 0) {
