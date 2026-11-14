@@ -122,6 +122,10 @@ wipe) answers that way forever. The device round of the poll runs every 30 polls
 remembers such a device and asks it once an hour instead - one line at debug level per round would otherwise fill the log
 (~290 ERROR lines a day per gone device).
 
+Every failing `isResponseValid()` line names the caller as `(file:line)` (`util/callSite.js`): `not_found` is answered to
+the poll, to a device round, to the pairing history and to a button, and the console line used to look the same for all
+of them.
+
 ### Rendering
 
 The sample index -> pixel mapping is a shuffle (seeded xorshift, seed 1337) that every client has to apply, and the

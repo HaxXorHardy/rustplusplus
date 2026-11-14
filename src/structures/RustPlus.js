@@ -24,6 +24,7 @@ const RustPlusLib = require('@liamcottle/rustplus.js');
 const Translate = require('translate');
 
 const Client = require('./clientRegistry.js');
+const CallSite = require('../util/callSite.js');
 const Config = require('../../config');
 const Constants = require('../util/constants.js');
 const Decay = require('../util/decay.js');
@@ -1518,9 +1519,16 @@ class RustPlus extends RustPlusLib {
         a line is written to the debug log instead of the console, a timeout or another error stays an error.
     */
     async isResponseValid(response, options) {
+        /*
+            Every failing branch names the caller (file:line): the same not_found line comes from a dozen rounds and the
+            console could not tell them apart (see util/callSite.js).
+        */
+        const callSite = CallSite.describe(['RustPlus.js']);
+        const where = callSite === null ? '' : ` (${callSite})`;
+
         if (response === undefined) {
             this.log(Client.client.intlGet(null, 'errorCap'),
-                Client.client.intlGet(null, 'responseIsUndefined'), 'error');
+                Client.client.intlGet(null, 'responseIsUndefined') + where, 'error');
             return false;
         }
         else if (response instanceof Error) {
@@ -1528,9 +1536,9 @@ class RustPlus extends RustPlusLib {
             const message = `${response.message}`;
 
             this.log(Client.client.intlGet(null, 'errorCap'),
-                (message.includes('Timeout reached while waiting for response')) ?
+                ((message.includes('Timeout reached while waiting for response')) ?
                     Client.client.intlGet(null, 'responseTimeout') :
-                    message, 'error');
+                    message) + where, 'error');
             return false;
         }
         else if (response.hasOwnProperty('error')) {
@@ -1545,7 +1553,7 @@ class RustPlus extends RustPlusLib {
             this.log(Client.client.intlGet(null, isLocal ? 'warningCap' : 'errorCap'),
                 Client.client.intlGet(null, 'responseContainError', {
                     error: response.error
-                }), isExpectedNotFound ? 'debug' : (isLocal ? 'warn' : 'error'));
+                }) + where, isExpectedNotFound ? 'debug' : (isLocal ? 'warn' : 'error'));
             return false;
         }
         else if (Object.keys(response).length === 0) {
@@ -1555,7 +1563,7 @@ class RustPlus extends RustPlusLib {
                 failed cycle so the watchdog rebuilds the connection (see handlers/pollingHandler.js).
             */
             this.log(Client.client.intlGet(null, 'errorCap'),
-                Client.client.intlGet(null, 'responseIsEmpty'), 'error');
+                Client.client.intlGet(null, 'responseIsEmpty') + where, 'error');
             return false;
         }
         return true;

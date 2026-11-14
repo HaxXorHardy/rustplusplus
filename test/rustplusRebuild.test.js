@@ -123,6 +123,9 @@ Test.describe('RustPlus.isResponseValid', () => {
 
         Assert.strictEqual(await rustplus.isResponseValid({ error: 'not_found' }), false);
         Assert.strictEqual(rustplus.logs[0].level, 'error');
+
+        /* The line names the caller, that is how a not_found of a specific round is found in the log. */
+        Assert.match(rustplus.logs[0].text, /\(rustplusRebuild\.test\.js:\d+\)$/);
     });
 
     /* A device that answers wrong_type is a different problem, a device round must not hide it. */
