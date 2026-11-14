@@ -24,7 +24,15 @@ the pairing history, a button), and the console line looked identical for all of
 message is written names the caller, so the log line carries `file:line`.
 */
 
-const Path = require('path');
+/*
+    The file name of a frame, with and without a path: a stack written on Windows uses backslashes, one written on
+    Linux slashes - and path.basename only knows the separators of the platform it runs on.
+*/
+function baseName(file) {
+    const parts = `${file}`.split(/[\\/]/);
+
+    return parts[parts.length - 1];
+}
 
 /*
     The first frame outside `skip` (module file names), as `file:line`. Node writes frames as
@@ -41,7 +49,7 @@ function format(stack, skip = []) {
         const file = match[1];
         if (skip.some((name) => file.includes(name))) continue;
 
-        return `${Path.basename(file)}:${match[2]}`;
+        return `${baseName(file)}:${match[2]}`;
     }
 
     return null;
