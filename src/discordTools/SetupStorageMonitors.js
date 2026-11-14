@@ -21,6 +21,7 @@
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('./discordMessages.js');
 const DiscordTools = require('./discordTools.js');
+const UnreachableDevices = require('../util/unreachableDevices.js');
 
 module.exports = async (client, rustplus) => {
     const instance = client.getInstance(rustplus.guildId);
@@ -35,13 +36,17 @@ module.exports = async (client, rustplus) => {
         const entity = instance.serverList[serverId].storageMonitors[entityId];
         const info = await rustplus.getEntityInfoAsync(entityId);
 
-        if (!(await rustplus.isResponseValid(info))) {
+        if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+            UnreachableDevices.markUnreachable(rustplus, entityId);
+
             if (entity.reachable === true) {
                 await DiscordMessages.sendStorageMonitorNotFoundMessage(guildId, serverId, entityId);
             }
             entity.reachable = false;
         }
         else {
+            UnreachableDevices.markReachable(rustplus, entityId);
+
             entity.reachable = true;
         }
         client.setInstance(guildId, instance);
