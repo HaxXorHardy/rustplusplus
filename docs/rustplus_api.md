@@ -105,6 +105,18 @@ Two answers a subscription can get, both are AppErrors:
 Only one camera can be subscribed per connection at a time, so cameras have to be checked one after another. A camera
 subscription costs 1 token, camera movement 0.01.
 
+### The account token and the socket
+
+The relay socket is authenticated **once**, at the handshake, with the account token (`util/rustplusSocket.js` sends it
+as the websocket subprotocol). Facepunch keeps the newest token of an account, so every new Rust+ login mints a new one
+and then answers the requests of the *old* socket with `not_found` - the same answer a stale `playerToken` gets, which
+makes it look like a lost pairing (the pairing itself is fine, the notification history keeps delivering).
+
+For that reason `RustPlus.rebuildConnection()` closes the socket after a renewal (`util/rustplusHistory.js` and
+`checkAuthTokenRenewal()`): the reconnect reads the stored token and the connection works again. A renewal is only asked
+for after **two** rejected reads in a row, because every renewal itself invalidates the running socket - and a `403`
+is a proxy refusal, not a dead token.
+
 ### Rendering
 
 The sample index -> pixel mapping is a shuffle (seeded xorshift, seed 1337) that every client has to apply, and the

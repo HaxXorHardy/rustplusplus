@@ -319,12 +319,30 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                 catch (e) {
                     if (!isAuthFailure(e)) throw e;
 
+                    const strikes = (authFailureStrikes.get(`${steamId}`) || 0) + 1;
+                    authFailureStrikes.set(`${steamId}`, strikes);
+
+                    /*
+                        A single rejected request can be a race with a login somewhere else. The renewal is only asked
+                        for when the next read fails as well: a renewal mints a new token and with it kills the token
+                        of the running socket.
+                    */
+                    if (strikes < AUTH_FAILURE_STRIKES) {
+                        client.log(client.intlGet(null, 'warningCap'),
+                            `The Rust+ API rejected one read of ${steamId} (${strikes}/${AUTH_FAILURE_STRIKES}), ` +
+                            'the token is renewed if it happens again.', 'debug');
+
+                        throw e;
+                    }
+
                     auth = await renewRejectedAuth(client, steamId);
 
                     if (auth === null) {
                         authFailureUntil.set(`${steamId}`, Date.now() + AUTH_FAILURE_BACKOFF_MS);
                         throw e;
                     }
+
+                    rebuildInstanceConnection(client, guildId, steamId, 'the account token was renewed');
 
                     try {
                         accountServers = await readAccountServers(client, steamId, auth, fetchSyncFn);
@@ -337,6 +355,9 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                         throw retryError;
                     }
                 }
+
+                /* A read that went through means the token is accepted, the next rejection starts at one again. */
+                authFailureStrikes.delete(`${steamId}`);
 
                 let changed = false;
 
@@ -465,20 +486,44 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
 const accountStateCache = new Map();   /* steamId -> { servers, at } */
 
 /*
-    A token that the API rejects (401/403, e.g. because the account logged in somewhere else and minted a new one) is
+    A token that the API rejects (401, e.g. because the account logged in somewhere else and minted a new one) is
     renewed with the stored Steam refresh token. When that fails, the account is left alone for a while: asking every
     few seconds would only fill the log and hammer the API.
 */
 const AUTH_FAILURE_BACKOFF_MS = 10 * 60 * 1000;
 const authFailureUntil = new Map();   /* steamId -> ms */
 
+/*
+    A single rejected request is no proof of a dead token: a request can race a login, and a proxy in front of the API
+    answers 403 (not 401) on its own. Every renewal mints a new token and with it kills the token of the running Rust+
+    socket, so the bot only asks Steam after the second failure in a row.
+*/
+const AUTH_FAILURE_STRIKES = 2;
+const authFailureStrikes = new Map();   /* steamId -> failed reads in a row */
+
 function resetAccountStateCache() {
     accountStateCache.clear();
     authFailureUntil.clear();
+    authFailureStrikes.clear();
 }
 
+/* Only 401 says "this token is not accepted anymore". A 403 is a refusal by a proxy, not a dead token. */
 function isAuthFailure(error) {
-    return Boolean(error) && (error.status === 401 || error.status === 403);
+    return Boolean(error) && (error.status === 401);
+}
+
+/*
+    The relay authenticates a socket once, with the token of the handshake (`util/rustplusSocket.js`), so a renewed
+    token never reaches a running socket: from that moment every request is answered with not_found. The instance has
+    to build its socket again to use the stored token.
+*/
+function rebuildInstanceConnection(client, guildId, steamId, reason) {
+    const rustplus = (client.rustplusInstances) ? client.rustplusInstances[guildId] : null;
+
+    if (!rustplus || typeof rustplus.rebuildConnection !== 'function') return;
+    if (rustplus.playerId !== undefined && `${rustplus.playerId}` !== `${steamId}`) return;
+
+    rustplus.rebuildConnection(reason);
 }
 
 async function renewRejectedAuth(client, steamId) {

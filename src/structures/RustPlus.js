@@ -62,6 +62,11 @@ const TOKEN_RENEWAL_RETRY_MS = 60 * 60 * 1000;
 /* How often a running connection checks whether the stored account token has to be renewed. */
 const TOKEN_RENEWAL_CHECK_MS = 60 * 60 * 1000;
 
+/*
+    A rebuilt connection must not be triggered twice by the burst of not_found answers of the same dead socket.
+*/
+const CONNECTION_REBUILD_MIN_MS = 60 * 1000;
+
 class RustPlus extends RustPlusLib {
     constructor(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false) {
         super(serverIp, appPort, steamId, playerToken, useFacepunchProxy);
@@ -81,6 +86,7 @@ class RustPlus extends RustPlusLib {
         this.authRetryTimer = null;                 /* Retry of a connection whose login/token is not usable. */
         this.authRetryAttempt = 0;                  /* Failed attempts in a row, the retry delay grows with it. */
         this.lastTokenRenewalCheckMs = 0;           /* Throttles the background renewal of the account token. */
+        this.lastConnectionRebuildMs = 0;           /* Throttles the rebuild of a socket with a stale token. */
 
         /* Status flags */
         this.isOperational = false;         /* Connected to the server, and request is verified. */
@@ -677,9 +683,9 @@ class RustPlus extends RustPlusLib {
     }
 
     /*
-        The account token lives ~14 days while a connection can stay up longer. It is renewed in the background so the
-        next connection (relay restart, reconnect after a timeout) never starts with an almost expired token; the token
-        of the running socket is validated once at the handshake and is not touched.
+        The account token lives ~14 days while a connection can stay up longer, so it is renewed in the background.
+        A renewal mints a new token and the relay only accepts the token of the handshake, so the connection is rebuilt
+        right after it - otherwise every request of the running socket is answered with not_found.
     */
     async checkAuthTokenRenewal() {
         if ((Date.now() - this.lastTokenRenewalCheckMs) < TOKEN_RENEWAL_CHECK_MS) return;
@@ -698,7 +704,9 @@ class RustPlus extends RustPlusLib {
             this.applyRenewedAccountState(auth);
 
             this.log(Client.client.intlGet(null, 'infoCap'),
-                'Rust+ account token renewed in the background, the running connection keeps its token.');
+                'Rust+ account token renewed in the background.');
+
+            this.rebuildConnection('the account token was renewed in the background');
         }
         catch (e) {
             this.log(Client.client.intlGet(null, 'warningCap'),
@@ -746,6 +754,47 @@ class RustPlus extends RustPlusLib {
         }, 2000);
 
         if (typeof timer.unref === 'function') timer.unref();
+    }
+
+    /*
+        The relay authenticates a socket once, with the token of the handshake (see util/rustplusSocket.js). A renewed
+        account token therefore never reaches a running socket, and the server answers every request of it with
+        `not_found` - repeatedly, until the socket is built again. Closing it runs the normal reconnect, which reads
+        the stored token.
+
+        Returns false when the rebuild was throttled or the instance is gone, so a caller can tell whether the burst of
+        answers already led to a reconnect.
+    */
+    rebuildConnection(reason) {
+        if (this.isDeleted) return false;
+        if ((Date.now() - this.lastConnectionRebuildMs) < CONNECTION_REBUILD_MIN_MS) return false;
+
+        this.lastConnectionRebuildMs = Date.now();
+
+        this.log(Client.client.intlGet(null, 'warningCap'),
+            `The Rust+ connection is rebuilt, the stored account token is used again (${reason}).`);
+
+        /* The next instance starts with a short delay instead of the expired backoff of this one. */
+        if (Client.client.rustplusReconnectAttempts) Client.client.rustplusReconnectAttempts[this.guildId] = 0;
+
+        const socket = this.websocket;
+
+        if (!socket || typeof socket.close !== 'function') {
+            this.connect();
+            return true;
+        }
+
+        try {
+            socket.close();
+        }
+        catch (e) {
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                `The Rust+ socket could not be closed: ${e && e.message ? e.message : e}`, 'debug');
+
+            this.connect();
+        }
+
+        return true;
     }
 
     build() {

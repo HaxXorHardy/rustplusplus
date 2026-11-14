@@ -72,9 +72,17 @@ module.exports = {
         if (!(await rustplus.isResponseValid(map))) {
             const reason = (map && map.error) ? `${map.error}` : 'unknown';
 
-            rustplus.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'serverNotAnswering', {
-                reason: reason
-            }), 'error');
+            /*
+                not_found on a fresh connection is the relay refusing the token of the handshake (a login elsewhere
+                minted a new one, and the relay only accepts the newest). The history refresh below renews it and the
+                instance that reconnects uses the stored token - so that case is a warning, not a server failure.
+            */
+            const isStaleToken = reason === 'not_found';
+
+            rustplus.log(client.intlGet(null, isStaleToken ? 'warningCap' : 'errorCap'),
+                client.intlGet(null, 'serverNotAnswering', {
+                    reason: reason
+                }), isStaleToken ? 'warn' : 'error');
 
             /*
                 A player token that the server does not accept anymore (the server was paired again) answers with

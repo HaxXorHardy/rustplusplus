@@ -563,11 +563,39 @@ Test.describe('RustPlusHistory.refresh', () => {
     });
 
     /*
-        A token that the API rejects (403, e.g. because the account logged in somewhere else) is renewed with the stored
-        Steam refresh token and the read is repeated. Without a renewal the account is left alone for a while instead
-        of asking every few seconds.
+        A token that the API rejects (401, e.g. because the account logged in somewhere else and minted a new one) is
+        renewed with the stored Steam refresh token and the read is repeated. A renewal mints a new token and with it
+        kills the token of the running Rust+ socket, so a single rejected read is not enough to ask Steam for one.
     */
-    Test.it('renews a rejected token and retries the read', async (t) => {
+    Test.it('does not renew the token for a single rejected read', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+        let renewals = 0;
+
+        RustPlusLogin.renewAuth = async () => {
+            renewals += 1;
+            return { steamId: STEAM_ID, token: 'new-token', servers: [] };
+        };
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        const history = async () => {
+            const error = new Error('History request failed with status 401.');
+            error.status = 401;
+            throw error;
+        };
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.strictEqual(renewals, 0, 'one rejected read is no proof of a dead token');
+    });
+
+    Test.it('renews the token when two reads in a row are rejected', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
@@ -587,8 +615,8 @@ Test.describe('RustPlusHistory.refresh', () => {
         const history = async (token) => {
             tokens.push(token);
             if (token === 'old-token') {
-                const error = new Error('History request failed with status 403.');
-                error.status = 403;
+                const error = new Error('History request failed with status 401.');
+                error.status = 401;
                 throw error;
             }
 
@@ -596,11 +624,118 @@ Test.describe('RustPlusHistory.refresh', () => {
         };
 
         const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        Assert.strictEqual(renewals, 0);
+
         const result = await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
 
         Assert.strictEqual(renewals, 1);
-        Assert.deepStrictEqual(tokens, ['old-token', 'new-token']);
+        Assert.deepStrictEqual(tokens, ['old-token', 'old-token', 'new-token']);
         Assert.deepStrictEqual(result.deaths, []);
+    });
+
+    /*
+        A renewal mints a new token, and the relay only accepts the token of the handshake - the socket of the guild has
+        to be built again, otherwise every request of it is answered with not_found.
+    */
+    Test.it('rebuilds the socket of the guild after a renewal', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+
+        RustPlusLogin.renewAuth = async () => ({ steamId: STEAM_ID, token: 'new-token', servers: [] });
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        const history = async () => {
+            const error = new Error('History request failed with status 401.');
+            error.status = 401;
+            throw error;
+        };
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+        const rebuilds = [];
+
+        client.rustplusInstances[GUILD_ID] = {
+            playerId: STEAM_ID,
+            rebuildConnection: (reason) => rebuilds.push(reason),
+        };
+
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.deepStrictEqual(rebuilds, ['the account token was renewed']);
+    });
+
+    /* A 403 comes from a proxy in front of the API, it says nothing about the token. */
+    Test.it('does not treat a 403 as a rejected token', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+        let renewals = 0;
+
+        RustPlusLogin.renewAuth = async () => {
+            renewals += 1;
+            return { steamId: STEAM_ID, token: 'new-token', servers: [] };
+        };
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        const history = async () => {
+            const error = new Error('History request failed with status 403.');
+            error.status = 403;
+            throw error;
+        };
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.strictEqual(renewals, 0);
+    });
+
+    Test.it('starts counting again after a read that went through', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+        let renewals = 0;
+
+        RustPlusLogin.renewAuth = async () => {
+            renewals += 1;
+            return { steamId: STEAM_ID, token: 'new-token', servers: [] };
+        };
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        let fail = true;
+        const history = async () => {
+            if (fail) {
+                const error = new Error('History request failed with status 401.');
+                error.status = 401;
+                throw error;
+            }
+
+            return [];
+        };
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        fail = false;
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        fail = true;
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.strictEqual(renewals, 0, 'the read in between reset the count');
     });
 
     Test.it('stops asking while the token cannot be renewed', async (t) => {
@@ -621,8 +756,8 @@ Test.describe('RustPlusHistory.refresh', () => {
         const history = async () => {
             historyReads += 1;
 
-            const error = new Error('History request failed with status 403.');
-            error.status = 403;
+            const error = new Error('History request failed with status 401.');
+            error.status = 401;
             throw error;
         };
 
@@ -630,9 +765,10 @@ Test.describe('RustPlusHistory.refresh', () => {
 
         await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
         await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
 
-        /* The second run is skipped by the backoff, the account is not asked again yet. */
-        Assert.strictEqual(historyReads, 1);
+        /* The first read is the first strike, the second asks Steam, the third run is skipped by the backoff. */
+        Assert.strictEqual(historyReads, 2);
     });
 
     /*
