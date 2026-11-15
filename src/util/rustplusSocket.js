@@ -80,6 +80,10 @@ function startHeartbeat(rustplus, websocket, WebSocketImpl = WebSocket) {
 
         if (!alive) {
             /* terminate() fires close, which runs the reconnect of the instance. */
+            rustplus.relayHeartbeatMissed = true;
+
+            logSocket(rustplus, 'DISCONNECTED', 'The relay did not answer the heartbeat, the socket is closed.', 'warn');
+
             websocket.terminate();
             return;
         }
@@ -98,6 +102,36 @@ function stopHeartbeat(rustplus) {
         clearInterval(rustplus.relayHeartbeatTimer);
         rustplus.relayHeartbeatTimer = null;
     }
+}
+
+/*
+    The close code of a socket is the only evidence of why it ended: 1000 normal, 1001 the endpoint goes away (server
+    restart), 1006 without a close frame (the network dropped it, or this code terminated it after a missed heartbeat),
+    1012 the service restarts. Without it every reconnect of the log looked the same.
+*/
+function describeClose(code, reason) {
+    const text = `${reason === undefined || reason === null ? '' : reason}`.trim();
+
+    return (text === '') ? `code ${code}` : `code ${code}: ${text.slice(0, 120)}`;
+}
+
+/* "2h 5m", "7m 30s", "42s" - how long a socket was up before it closed. */
+function describeUptime(fromMs, toMs = Date.now()) {
+    if (!Number.isFinite(fromMs)) return null;
+
+    const seconds = Math.max(0, Math.round((toMs - fromMs) / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+
+    return `${seconds}s`;
+}
+
+/* The instance writes into the guild log, a socket that a test builds has no logger. */
+function logSocket(rustplus, cap, text, level) {
+    if (rustplus && typeof rustplus.log === 'function') rustplus.log(cap, text, level);
 }
 
 function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
@@ -167,6 +201,10 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
         websocket.on('open', () => {
             stopConnectTimer();
             startHeartbeat(rustplus, websocket, WebSocketImpl);
+
+            rustplus.relayConnectedAtMs = Date.now();
+            rustplus.relayHeartbeatMissed = false;
+
             rustplus.emit('connected');
         });
 
@@ -221,9 +259,21 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
             rustplus.emit('message', message);
         });
 
-        websocket.on('close', () => {
+        websocket.on('close', (code, reason) => {
             stopConnectTimer();
             stopHeartbeat(rustplus);
+
+            /* The close code is the only evidence of why the relay socket ended, see describeClose above. */
+            const uptime = describeUptime(rustplus.relayConnectedAtMs);
+
+            logSocket(rustplus, 'DISCONNECTED',
+                `The relay socket was closed (${describeClose(code, reason)})` +
+                `${uptime === null ? '' : ` after ${uptime}`}` +
+                `${rustplus.relayHeartbeatMissed ? ', the heartbeat was not answered' : ''}.`, 'warn');
+
+            rustplus.relayConnectedAtMs = null;
+            rustplus.relayHeartbeatMissed = false;
+
             rustplus.emit('disconnected');
         });
     }).catch((e) => rustplus.emit('error', e));
@@ -234,4 +284,6 @@ module.exports = {
     HEARTBEAT_INTERVAL_MS: HEARTBEAT_INTERVAL_MS,
     CONNECT_TIMEOUT_MS: CONNECT_TIMEOUT_MS,
     connectAuthenticatedSocket: connectAuthenticatedSocket,
+    describeClose: describeClose,
+    describeUptime: describeUptime,
 };

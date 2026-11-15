@@ -19,6 +19,7 @@
 */
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
 
 const Config = require('../../config');
@@ -65,8 +66,14 @@ module.exports = {
             if (current && current !== rustplus) return;
 
             if (!client.rustplusReconnecting[guildId]) {
-                await DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 1);
-                await DiscordMessages.sendServerMessage(guildId, serverId, 2);
+                /*
+                    A reconnect after a few seconds is no outage: the embed and the grey server message are only posted
+                    when the guild is still not connected after the delay (see util/offlineAnnouncement.js).
+                */
+                OfflineAnnouncement.schedule(client, guildId, async () => {
+                    await DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 1);
+                    await DiscordMessages.sendServerMessage(guildId, serverId, 2);
+                });
             }
 
             client.rustplusReconnecting[guildId] = true;

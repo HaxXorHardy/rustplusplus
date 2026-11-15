@@ -22,6 +22,7 @@ const ClanChatHandler = require('../handlers/clanChatHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Info = require('../structures/Info');
 const Map = require('../structures/Map');
+const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const PollingHandler = require('../handlers/pollingHandler.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 
@@ -139,7 +140,13 @@ module.exports = {
                 client.rustplusReconnectTimers[guildId] = null;
             }
 
-            await DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 0);
+            /* The reconnect came within the delay, the pending offline message of the blip is dropped. */
+            OfflineAnnouncement.cancel(client, guildId);
+
+            /* `online` is only worth a message when the outage was announced. */
+            if (OfflineAnnouncement.takeAnnounced(client, guildId)) {
+                await DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 0);
+            }
         }
 
         await DiscordMessages.sendServerMessage(guildId, serverId, null);

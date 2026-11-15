@@ -126,6 +126,12 @@ Every failing `isResponseValid()` line names the caller as `(file:line)` (`util/
 the poll, to a device round, to the pairing history and to a button, and the console line used to look the same for all
 of them.
 
+A closed socket names its reason: `The relay socket was closed (code 1006) after 2h 34m`. `1001` and `1012` mean the
+endpoint went away (relay or server restart, the 4 a.m. restart answers `502` at the handshake), `1006` means no close
+frame came - the network dropped it, or the 30 s heartbeat closed it (the line says so). An outage is only announced in
+Discord when the reconnect is still not through after a minute (`util/offlineAnnouncement.js`), so a short blip no longer
+posts `server just went offline` plus `online`. 
+
 ### Rendering
 
 The sample index -> pixel mapping is a shuffle (seeded xorshift, seed 1337) that every client has to apply, and the

@@ -80,10 +80,14 @@ function rejection(statusCode, statusMessage) {
 function fakeRustplus() {
     const rustplus = {
         events: [],
+        logs: [],
         websocket: null,
         relayConnectTimer: null,
         relayHeartbeatTimer: null,
+        relayConnectedAtMs: null,
+        relayHeartbeatMissed: false,
         disconnect: () => { rustplus.websocket = null; },
+        log: (cap, text, level) => { rustplus.logs.push({ cap: cap, text: text, level: level }); },
         emit: (event, ...args) => {
             rustplus.events.push({ event, args });
             return true;
@@ -181,5 +185,56 @@ Test.describe('Rust+ authenticated socket', () => {
         socket.emit('close', 1006, '');
 
         Assert.deepStrictEqual(eventNames(rustplus), ['connecting', 'connected', 'disconnected']);
+    });
+});
+
+Test.describe('Rust+ socket close diagnostics', () => {
+    Test.it('names the close code and the uptime of a closed socket', async () => {
+        const rustplus = fakeRustplus();
+        const socket = await connect(rustplus);
+
+        socket.emit('open');
+        rustplus.relayConnectedAtMs = Date.now() - 5000;
+
+        socket.emit('close', 1006, '');
+
+        const line = rustplus.logs[rustplus.logs.length - 1];
+
+        Assert.strictEqual(line.cap, 'DISCONNECTED');
+        Assert.strictEqual(line.level, 'warn');
+        Assert.ok(line.text.includes('code 1006'), line.text);
+        Assert.ok(line.text.includes('after 5s'), line.text);
+        Assert.deepStrictEqual(eventNames(rustplus).slice(-1), ['disconnected']);
+    });
+
+    Test.it('says when the heartbeat closed the socket', async () => {
+        const rustplus = fakeRustplus();
+        const socket = await connect(rustplus);
+
+        socket.emit('open');
+        rustplus.relayHeartbeatMissed = true;
+
+        socket.emit('close', 1006, '');
+
+        const line = rustplus.logs[rustplus.logs.length - 1];
+
+        Assert.ok(line.text.includes('the heartbeat was not answered'), line.text);
+    });
+
+    Test.it('keeps the reason of the relay and cuts it', () => {
+        Assert.strictEqual(RustPlusSocket.describeClose(1001, ''), 'code 1001');
+        Assert.strictEqual(RustPlusSocket.describeClose(1001, 'Server shutting down'),
+            'code 1001: Server shutting down');
+        Assert.strictEqual(RustPlusSocket.describeClose(4001, 'x'.repeat(200)).length, 'code 4001: '.length + 120);
+        Assert.strictEqual(RustPlusSocket.describeClose(1006, undefined), 'code 1006');
+    });
+
+    Test.it('formats the uptime of a socket', () => {
+        const now = 10_000_000;
+
+        Assert.strictEqual(RustPlusSocket.describeUptime(null, now), null);
+        Assert.strictEqual(RustPlusSocket.describeUptime(now - 42_000, now), '42s');
+        Assert.strictEqual(RustPlusSocket.describeUptime(now - (7 * 60 + 30) * 1000, now), '7m 30s');
+        Assert.strictEqual(RustPlusSocket.describeUptime(now - (2 * 3600 + 5 * 60) * 1000, now), '2h 5m');
     });
 });
