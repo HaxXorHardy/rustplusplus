@@ -18,6 +18,7 @@
 
 */
 
+const BackgroundHandler = require('../handlers/backgroundHandler.js');
 const ClanChatHandler = require('../handlers/clanChatHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Info = require('../structures/Info');
@@ -187,6 +188,10 @@ module.exports = {
         rustplus.tokensUpdatedMs = Date.now();
         rustplus.tokensReplenishTaskId = setInterval(rustplus.replenishTokens.bind(rustplus), 1000);
         rustplus.pollingTaskId = setInterval(PollingHandler.pollingHandler, client.pollingIntervalMs, rustplus, client);
+
+        /* The embeds and the storage monitors run in their own cycle, they must not hold up the poll. */
+        BackgroundHandler.start(rustplus, client);
+
         rustplus.isOperational = true;
 
         /* The server answers, the next disconnect starts with the shortest delay again. */

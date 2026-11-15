@@ -30,6 +30,13 @@ const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Scrape = require('../util/scrape.js');
 
+/*
+    The information order check fetches up to 100 messages of the information channel. It is only needed after the
+    channel was rebuilt (a /reset discord, a restart), so it runs once and then at most every 15 minutes - it used to
+    be the most expensive Discord call of the bot, once per minute.
+*/
+const INFORMATION_ORDER_INTERVAL_MS = 15 * 60 * 1000;
+
 module.exports = {
     sendMessage: async function (guildId, content, messageId, channelId, interaction = null) {
         if (interaction) {
@@ -528,6 +535,14 @@ module.exports = {
         const instance = Client.client.getInstance(rustplus.guildId);
         const channel = DiscordTools.getTextChannelById(rustplus.guildId, instance.channelId.information);
         if (!channel) return;
+
+        const now = Date.now();
+        if (Number.isFinite(rustplus.lastInformationOrderCheckMs) &&
+            (now - rustplus.lastInformationOrderCheckMs) < INFORMATION_ORDER_INTERVAL_MS) {
+            return;
+        }
+
+        rustplus.lastInformationOrderCheckMs = now;
 
         const order = ['map', 'server', 'monument', 'event', 'team', 'battlemetricsPlayers'];
 

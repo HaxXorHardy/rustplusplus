@@ -18,6 +18,7 @@
 
 */
 
+const BackgroundHandler = require('../handlers/backgroundHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
@@ -49,6 +50,7 @@ module.exports = {
         /* Stop current tasks */
         clearInterval(rustplus.pollingTaskId);
         clearInterval(rustplus.tokensReplenishTaskId);
+        BackgroundHandler.stop(rustplus);
         clearTimeout(rustplus.inGameChatTimeout);
 
         /* Reset map markers, timers & arrays */

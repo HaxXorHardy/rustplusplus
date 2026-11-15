@@ -126,6 +126,13 @@ Every failing `isResponseValid()` line names the caller as `(file:line)` (`util/
 the poll, to a device round, to the pairing history and to a button, and the console line used to look the same for all
 of them.
 
+The poll never waits for Discord: the information embeds, the storage monitors and the order check run in their own
+60 s cycle (`handlers/backgroundHandler.js`), and every awaited step of the poll has a 10 s deadline
+(`util/withTimeout.js`). A cycle that hangs longer than 60 s is reported in the log and releases the `isPolling` flag,
+the second one in a row rebuilds the connection - one Discord call waiting on a rate limit used to freeze every
+poll-based update for minutes without a single line in the log. The order check fetches the channel once and then at
+most every 15 minutes instead of once per minute.
+
 A closed socket names its reason: `The relay socket was closed (code 1006) after 2h 34m`. `1001` and `1012` mean the
 endpoint went away (relay or server restart, the 4 a.m. restart answers `502` at the handshake), `1006` means no close
 frame came - the network dropped it, or the 30 s heartbeat closed it (the line says so). An outage is only announced in

@@ -20,24 +20,26 @@
 
 const Info = require('../structures/Info');
 const CameraWatchHandler = require('../handlers/cameraWatchHandler.js');
-const InformationHandler = require('../handlers/informationHandler.js');
 const MapMarkers = require('../structures/MapMarkers.js');
 const SmartAlarmHandler = require('../handlers/smartAlarmHandler.js');
 const SmartSwitchHandler = require('../handlers/smartSwitchHandler.js');
-const StorageMonitorHandler = require('../handlers/storageMonitorHandler.js');
 const Team = require('../structures/Team');
 const TeamHandler = require('../handlers/teamHandler.js');
 const Time = require('../structures/Time');
 const TimeHandler = require('../handlers/timeHandler.js');
 const VendingMachines = require('../handlers/vendingMachineHandler.js');
+const WithTimeout = require('../util/withTimeout.js');
 
 /*
     Runs one handler of the poll. A failing handler must not stop the others and must not end as an unhandled rejection
     on every poll (the poll runs every few seconds).
 */
 async function runHandler(rustplus, client, label, handler) {
+    rustplus.pollPhase = label;
+    rustplus.log(client.intlGet(null, 'infoCap'), `poll: ${label}`, 'debug');
+
     try {
-        await handler();
+        await WithTimeout.withTimeout(handler(), HANDLER_TIMEOUT_MS, label);
     }
     catch (e) {
         rustplus.log(client.intlGet(null, 'warningCap'),
@@ -47,6 +49,15 @@ async function runHandler(rustplus, client, label, handler) {
 
 /* A poll cycle can wait up to 30 s for a free token or a request timeout - the interval must not stack cycles. */
 const MAX_FAILED_POLLS = 6;
+
+/* A handler that hangs on Discord (rate limit) must not freeze the cycle: every step gets a deadline. */
+const HANDLER_TIMEOUT_MS = 10 * 1000;
+
+/* A cycle that runs longer than this releases the isPolling flag, so the loop recovers on its own. */
+const POLL_WATCHDOG_MS = 60 * 1000;
+
+/* The second overlong cycle in a row rebuilds the connection instead of waiting for more. */
+const POLL_WATCHDOG_RECONNECT_AFTER = 2;
 
 /* Stops the polling loop of an instance that must not poll anymore. */
 function stopPolling(rustplus) {
@@ -114,8 +125,15 @@ function forceReconnect(rustplus, client) {
 
 module.exports = {
     pollingHandler: async function (rustplus, client) {
-        /* One cycle at a time: the previous one may still wait for a token or for a response. */
-        if (rustplus.isPolling) return;
+        /*
+            One cycle at a time: the previous one may still wait for a token or for a response. A skipped tick is part of
+            the delay of every poll-based announcement, so it is written to the log.
+        */
+        if (rustplus.isPolling) {
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                'The previous poll cycle is still running, this tick is skipped.', 'debug');
+            return;
+        }
 
         if (!isCurrentInstance(rustplus, client)) {
             stopPolling(rustplus);
@@ -126,6 +144,39 @@ module.exports = {
 
         rustplus.isPolling = true;
 
+        const cycleId = (rustplus.pollCycleId || 0) + 1;
+        rustplus.pollCycleId = cycleId;
+        rustplus.pollPhase = 'start';
+
+        const startedMs = Date.now();
+
+        /*
+            The watchdog releases the flag of a cycle that never finishes (a hung await). Without it the loop stayed
+            silent for as long as the caller waited - measured: 15 minutes without a poll and without one log line.
+        */
+        const watchdog = setTimeout(() => {
+            if (rustplus.isDeleted || rustplus.pollCycleId !== cycleId) return;
+
+            rustplus.pollWatchdogHits = (rustplus.pollWatchdogHits || 0) + 1;
+
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `The poll cycle runs longer than ${POLL_WATCHDOG_MS / 1000} s (phase: ${rustplus.pollPhase}), ` +
+                'the flag is released.', 'warn');
+
+            rustplus.isPolling = false;
+
+            if (rustplus.pollWatchdogHits >= POLL_WATCHDOG_RECONNECT_AFTER) {
+                rustplus.pollWatchdogHits = 0;
+
+                rustplus.log(client.intlGet(null, 'warningCap'),
+                    'Poll cycles keep hanging, the connection is rebuilt.', 'warn');
+
+                forceReconnect(rustplus, client);
+            }
+        }, POLL_WATCHDOG_MS);
+
+        if (typeof watchdog.unref === 'function') watchdog.unref();
+
         let success = false;
         try {
             success = await module.exports.poll(rustplus, client);
@@ -135,8 +186,16 @@ module.exports = {
                 `The poll failed: ${e && e.message ? e.message : e}`, 'warn');
         }
         finally {
-            rustplus.isPolling = false;
+            clearTimeout(watchdog);
+
+            if (rustplus.pollCycleId === cycleId) rustplus.isPolling = false;
+
+            rustplus.pollPhase = 'idle';
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `Poll cycle: ${Date.now() - startedMs} ms.`, 'debug');
         }
+
+        if (success) rustplus.pollWatchdogHits = 0;
 
         updatePollHealth(rustplus, client, success);
     },
@@ -185,9 +244,11 @@ module.exports = {
         rustplus.info.updateInfo(info.info);
         rustplus.mapMarkers.updateMapMarkers(mapMarkers.mapMarkers);
 
-        await runHandler(rustplus, client, 'the information', () => InformationHandler.handler(rustplus));
-        await runHandler(rustplus, client, 'the storage monitors',
-            () => StorageMonitorHandler.handler(rustplus, client));
+        /*
+            The information embeds and the storage monitors run in their own cycle (handlers/backgroundHandler.js):
+            they fetch 100 messages and post several embeds, and one Discord call waiting on a rate limit froze this
+            cycle (all poll-based updates) before.
+        */
         await runHandler(rustplus, client, 'the smart alarms', () => SmartAlarmHandler.handler(rustplus, client));
 
         /*

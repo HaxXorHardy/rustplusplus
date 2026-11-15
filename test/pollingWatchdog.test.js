@@ -147,5 +147,46 @@ Test.describe('pollingHandler', () => {
 
         Assert.strictEqual(rustplus.consecutiveFailedPolls, 0);
         Assert.strictEqual(rustplus.disconnects, 0);
+    });
+    /*
+        A cycle that hangs (a request that is never answered, a Discord call waiting on a rate limit) froze the loop:
+        isPolling stayed true and every further tick was skipped - measured 15 minutes without a poll and without one
+        line in the log.
+    */
+    Test.it('releases a cycle that hangs longer than 60 s', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+
+        const rustplus = fakeRustplus(fakeClient(), { hang: true });
+        const client = fakeClient();
+
+        /* The cycle never finishes, so it is not awaited here - the timers are ticked instead. */
+        PollingHandler.pollingHandler(rustplus, client);
+        await Promise.resolve();
+
+        Assert.strictEqual(rustplus.isPolling, true);
+
+        t.mock.timers.tick(60 * 1000);
+
+        Assert.strictEqual(rustplus.isPolling, false, 'the watchdog releases the flag');
+        Assert.ok(rustplus.logs.some((line) => line.level === 'warn' && line.text.includes('runs longer than')));
+    });
+
+    Test.it('rebuilds the connection when the cycles keep hanging', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+
+        const rustplus = fakeRustplus(fakeClient(), { hang: true });
+        const client = fakeClient({ testguild: rustplus });
+        client.createRustplusInstance = () => { client.created = (client.created || 0) + 1; };
+
+        PollingHandler.pollingHandler(rustplus, client);
+        await Promise.resolve();
+        t.mock.timers.tick(60 * 1000);
+
+        /* The flag was released, the next tick starts a new cycle that hangs as well. */
+        PollingHandler.pollingHandler(rustplus, client);
+        await Promise.resolve();
+        t.mock.timers.tick(60 * 1000);
+
+        Assert.strictEqual(rustplus.disconnects, 1, 'the second overlong cycle rebuilds the connection');
     });
 });
