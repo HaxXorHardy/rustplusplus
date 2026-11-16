@@ -670,8 +670,12 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.deepStrictEqual(rebuilds, ['the account token was renewed']);
     });
 
-    /* A 403 comes from a proxy in front of the API, it says nothing about the token. */
-    Test.it('does not treat a 403 as a rejected token', async (t) => {
+    /*
+        Facepunch answers 403 for an account token it does not accept anymore (measured live: the token minted at 17:33
+        was rejected from 18:57 on, the bot retried with it for hours). A 403 counts as an auth failure now - after the
+        second one in a row, like a 401.
+    */
+    Test.it('renews the token when the API answers 403 twice', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
@@ -687,17 +691,70 @@ Test.describe('RustPlusHistory.refresh', () => {
             RustPlusLogin.renewAuth = originalRenewAuth;
         });
 
-        const history = async () => {
-            const error = new Error('History request failed with status 403.');
-            error.status = 403;
-            throw error;
+        const tokens = [];
+        const history = async (token) => {
+            tokens.push(token);
+
+            if (token === 'old-token') {
+                const error = new Error('History request failed with status 403.');
+                error.status = 403;
+                throw error;
+            }
+
+            return [];
         };
 
         const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+        Assert.strictEqual(renewals, 0, 'one 403 is no proof of a dead token');
+
+        await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
+
+        Assert.strictEqual(renewals, 1);
+        Assert.deepStrictEqual(tokens, ['old-token', 'old-token', 'new-token']);
+    });
+
+    /* A reconnect that waits on the backoff would sit there up to five minutes, although the token is usable again. */
+    Test.it('reconnects right away after a renewal', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+
+        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+        const originalRenewAuth = RustPlusLogin.renewAuth;
+
+        RustPlusLogin.renewAuth = async () => ({ steamId: STEAM_ID, token: 'new-token', servers: [] });
+
+        t.after(() => {
+            RustPlusLogin.renewAuth = originalRenewAuth;
+        });
+
+        const history = async () => {
+            const error = new Error('History request failed with status 401.');
+            error.status = 401;
+            throw error;
+        };
+
+        const instance = {
+            activeServer: SERVER_ID,
+            serverList: { [SERVER_ID]: { serverIp: 'relay-' + SERVER_ID, appPort: 28082, steamId: STEAM_ID, playerToken: 42 } },
+            trackers: {},
+        };
+
+        const client = fakeClient(instance);
+        client.rustplusReconnectAttempts = {};
+        client.rustplusReconnectTimers[GUILD_ID] = setTimeout(() => undefined, 60 * 1000);
+        client.rustplusReconnectAttempts[GUILD_ID] = 4;
+
+        t.after(() => {
+            if (client.rustplusReconnectTimers[GUILD_ID]) clearTimeout(client.rustplusReconnectTimers[GUILD_ID]);
+        });
+
         await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
         await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
 
-        Assert.strictEqual(renewals, 0);
+        Assert.strictEqual(client.rustplusReconnectTimers[GUILD_ID], null);
+        Assert.strictEqual(client.rustplusReconnectAttempts[GUILD_ID], 0);
+        Assert.strictEqual(client.createdRustplusInstances.length, 1);
     });
 
     Test.it('starts counting again after a read that went through', async (t) => {

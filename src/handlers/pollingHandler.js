@@ -35,15 +35,38 @@ const WithTimeout = require('../util/withTimeout.js');
     on every poll (the poll runs every few seconds).
 */
 async function runHandler(rustplus, client, label, handler) {
+    rustplus.pollPending = rustplus.pollPending || new Object();
+
+    /* A handler that is still running is skipped instead of started twice (both wait for the same rate limit). */
+    if (rustplus.pollPending[label]) {
+        rustplus.log(client.intlGet(null, 'infoCap'),
+            `poll: ${label} is still running, it is skipped.`, 'debug');
+        return;
+    }
+
+    rustplus.pollPending[label] = true;
     rustplus.pollPhase = label;
     rustplus.log(client.intlGet(null, 'infoCap'), `poll: ${label}`, 'debug');
 
+    const work = (async () => {
+        try {
+            await handler();
+        }
+        catch (e) {
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `The handler for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
+        finally {
+            delete rustplus.pollPending[label];
+        }
+    })();
+
     try {
-        await WithTimeout.withTimeout(handler(), HANDLER_TIMEOUT_MS, label);
+        await WithTimeout.withTimeout(work, HANDLER_TIMEOUT_MS, label);
     }
     catch (e) {
         rustplus.log(client.intlGet(null, 'warningCap'),
-            `The handler for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+            `The handler for ${label} is slow (${e && e.message ? e.message : e}), it keeps running.`, 'warn');
     }
 }
 

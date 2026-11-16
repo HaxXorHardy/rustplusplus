@@ -343,6 +343,7 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
                     }
 
                     rebuildInstanceConnection(client, guildId, steamId, 'the account token was renewed');
+                    reconnectNow(client, guildId);
 
                     try {
                         accountServers = await readAccountServers(client, steamId, auth, fetchSyncFn);
@@ -507,9 +508,14 @@ function resetAccountStateCache() {
     authFailureStrikes.clear();
 }
 
-/* Only 401 says "this token is not accepted anymore". A 403 is a refusal by a proxy, not a dead token. */
+/*
+    Facepunch answers 403 (ASP.NET "Forbidden" with a traceId) for an account token it does not accept anymore, not
+    only 401 - measured live: the token minted at 17:33 was rejected with 403 from 18:57 on, and the bot kept retrying
+    with it because a 403 did not count as an auth failure. Both statuses count now; the strike counter below still
+    keeps a single fluke from minting a new token (every renewal kills the token of the running socket).
+*/
 function isAuthFailure(error) {
-    return Boolean(error) && (error.status === 401);
+    return Boolean(error) && (error.status === 401 || error.status === 403);
 }
 
 /*
@@ -524,6 +530,28 @@ function rebuildInstanceConnection(client, guildId, steamId, reason) {
     if (rustplus.playerId !== undefined && `${rustplus.playerId}` !== `${steamId}`) return;
 
     rustplus.rebuildConnection(reason);
+}
+
+/*
+    A renewed token makes the connection usable again, so a reconnect that waits on the backoff (up to five minutes) has
+    no reason to wait: the timer is replaced with an attempt that starts now.
+*/
+function reconnectNow(client, guildId) {
+    const timers = client.rustplusReconnectTimers;
+    if (!timers || !timers[guildId]) return false;
+
+    clearTimeout(timers[guildId]);
+    timers[guildId] = null;
+
+    if (client.rustplusReconnectAttempts) client.rustplusReconnectAttempts[guildId] = 0;
+
+    const instance = client.getInstance(guildId);
+    const server = (instance && instance.serverList) ? instance.serverList[instance.activeServer] : null;
+    if (!server) return false;
+
+    client.createRustplusInstance(guildId, server.serverIp, server.appPort, server.steamId, server.playerToken);
+
+    return true;
 }
 
 async function renewRejectedAuth(client, steamId) {

@@ -42,15 +42,42 @@ function stop(rustplus) {
 }
 
 async function step(rustplus, client, label, handler) {
+    rustplus.backgroundPending = rustplus.backgroundPending || new Object();
+
+    /* A step that is still running is not started a second time: both copies would wait for the same rate limit. */
+    if (rustplus.backgroundPending[label]) {
+        rustplus.log(client.intlGet(null, 'infoCap'),
+            `background: ${label} is still running, it is skipped.`, 'debug');
+        return;
+    }
+
+    rustplus.backgroundPending[label] = true;
     rustplus.backgroundPhase = label;
     rustplus.log(client.intlGet(null, 'infoCap'), `background: ${label}`, 'debug');
 
+    const work = (async () => {
+        try {
+            await handler();
+        }
+        catch (e) {
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `The background step for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
+        finally {
+            delete rustplus.backgroundPending[label];
+        }
+    })();
+
+    /*
+        A slow step is reported and the cycle moves on, but the step is not abandoned: its pending flag keeps a second
+        copy out, otherwise the copies pile up in front of the same Discord rate limit.
+    */
     try {
-        await WithTimeout.withTimeout(handler(), STEP_TIMEOUT_MS, label);
+        await WithTimeout.withTimeout(work, STEP_TIMEOUT_MS, label);
     }
     catch (e) {
         rustplus.log(client.intlGet(null, 'warningCap'),
-            `The background step for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+            `The background step for ${label} is slow (${e && e.message ? e.message : e}), it keeps running.`, 'warn');
     }
 }
 
