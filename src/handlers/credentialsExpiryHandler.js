@@ -27,8 +27,7 @@
 const Config = require('../../config');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
-const DiscordTools = require('../discordTools/discordTools.js');
-const InstanceUtils = require('../util/instanceUtils.js');
+const CredentialOwner = require('../util/credentialOwner.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 
 const STATE_EXPIRED = 'expired';
@@ -57,19 +56,7 @@ function getExpiryState(expireDate, now, warningSeconds) {
 
 /* The Discord user that logged in with this steam account, null when the guild does not know it. */
 async function getOwner(guildId, steamId) {
-    let credentials = null;
-
-    try {
-        credentials = InstanceUtils.readCredentialsFile(guildId);
-    }
-    catch (e) {
-        return null;
-    }
-
-    const owner = (credentials && credentials[steamId]) ? credentials[steamId].discord_user_id : null;
-    if (!owner) return null;
-
-    return await DiscordTools.getUserById(guildId, owner);
+    return await CredentialOwner.getOwner(guildId, steamId);
 }
 
 /* Every state is announced once per token: a renewed token carries a new expiry and is announced again. */

@@ -20,6 +20,7 @@
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
+const TokenRecovery = require('../util/tokenRecovery.js');
 
 module.exports = {
     name: 'error',
@@ -72,7 +73,17 @@ module.exports = {
                 Reported as a single line above. The reconnect is not scheduled here: closing the rejected socket
                 emits 'disconnected', which runs the reconnect of the instance.
             */
-            case 'ERELAYREJECTED':
+            case 'ERELAYREJECTED': {
+                /*
+                    A 403 at the handshake is the relay refusing the account token. Renew it right away instead of
+                    waiting for the history read, so the connection is back within seconds (throttled in the recovery).
+                */
+                if (rustplus.playerId && `${err.message}`.includes('403')) {
+                    TokenRecovery.reportRejected(client, rustplus.guildId, rustplus.playerId,
+                        'the handshake was refused with 403').catch(() => undefined);
+                }
+            } break;
+
             case 'ERELAYTIMEOUT': break;
 
             default: {

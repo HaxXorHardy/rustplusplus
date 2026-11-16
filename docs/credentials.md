@@ -73,3 +73,14 @@ needs the account token for it. The push notifications of the app are not needed
 account (`POST /api/history/read`) carries the pairings, so devices are adopted without FCM.
 
 See also: [FAQ.md](../FAQ.md#do-i-still-need-fcm-credentials), [Commands](commands.md#credentials).
+
+## What happens when Facepunch rejects the token
+
+The account token can be refused at any time - `401` or `403` (ASP.NET "Forbidden" with a traceId), for the history read
+and for the socket handshake alike. `util/tokenRecovery.js` holds one policy for every source of a rejection:
+
+- the second rejection in a row renews the token with the stored Steam refresh token,
+- at most one renewal every two minutes, so a dead token cannot flood Steam with logins,
+- after three renewals without a working connection the account is left alone for 30 minutes and the owner of the
+  credentials gets a direct message to run `/credentials login`,
+- a working connection resets all of it, and a reconnect that waits on the backoff starts right away after a renewal.

@@ -26,6 +26,7 @@ const Map = require('../structures/Map');
 const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const PollingHandler = require('../handlers/pollingHandler.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
+const TokenRecovery = require('../util/tokenRecovery.js');
 
 /*
     Runs one device setup step. A failure is logged and must not abort the steps after it: when a single message could
@@ -107,6 +108,9 @@ module.exports = {
             return;
         }
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'rustplusOperational'));
+
+        /* The connection works: the strikes, the renewal count and the backoff of the account are forgotten. */
+        if (rustplus.playerId) TokenRecovery.markHealthy(rustplus.playerId);
 
         const info = await rustplus.getInfoAsync();
         if (await rustplus.isResponseValid(info)) rustplus.info = new Info(info.info)

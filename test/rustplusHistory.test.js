@@ -596,7 +596,8 @@ Test.describe('RustPlusHistory.refresh', () => {
     });
 
     Test.it('renews the token when two reads in a row are rejected', async (t) => {
-        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+        const auth = { steamId: STEAM_ID, token: 'old-token', servers: [] };
+        stubAuth(t, auth);
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
         const originalRenewAuth = RustPlusLogin.renewAuth;
@@ -604,6 +605,10 @@ Test.describe('RustPlusHistory.refresh', () => {
 
         RustPlusLogin.renewAuth = async () => {
             renewals += 1;
+
+            /* The renewal stores the new token, the read after it uses that one. */
+            auth.token = 'new-token';
+
             return { steamId: STEAM_ID, token: 'new-token', servers: [] };
         };
 
@@ -676,7 +681,8 @@ Test.describe('RustPlusHistory.refresh', () => {
         second one in a row, like a 401.
     */
     Test.it('renews the token when the API answers 403 twice', async (t) => {
-        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+        const auth = { steamId: STEAM_ID, token: 'old-token', servers: [] };
+        stubAuth(t, auth);
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
         const originalRenewAuth = RustPlusLogin.renewAuth;
@@ -684,6 +690,8 @@ Test.describe('RustPlusHistory.refresh', () => {
 
         RustPlusLogin.renewAuth = async () => {
             renewals += 1;
+            auth.token = 'new-token';
+
             return { steamId: STEAM_ID, token: 'new-token', servers: [] };
         };
 
@@ -795,13 +803,15 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(renewals, 0, 'the read in between reset the count');
     });
 
-    Test.it('stops asking while the token cannot be renewed', async (t) => {
+    Test.it('does not ask Steam again right away when the renewal fails', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
         const originalRenewAuth = RustPlusLogin.renewAuth;
+        let renewals = 0;
 
         RustPlusLogin.renewAuth = async () => {
+            renewals += 1;
             throw new Error('No Steam refresh token stored, a new login is required.');
         };
 
@@ -824,8 +834,12 @@ Test.describe('RustPlusHistory.refresh', () => {
         await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
         await RustPlusHistory.refresh(client, history, async () => ({ servers: [] }));
 
-        /* The first read is the first strike, the second asks Steam, the third run is skipped by the backoff. */
-        Assert.strictEqual(historyReads, 2);
+        /*
+            The reads keep failing (the token is dead), but Steam is asked once: the second login is throttled by the
+            recovery (util/tokenRecovery.js), not by the history.
+        */
+        Assert.strictEqual(historyReads, 3);
+        Assert.strictEqual(renewals, 1);
     });
 
     /*
