@@ -51,6 +51,19 @@ const BACKOFF_MS = 30 * 60 * 1000;
 /* How often the expiry of the stored tokens is checked, and how long a failed proactive renewal waits. */
 const EXPIRY_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
+/*
+    A renewal that does not move the expiry out of the renewal window (Facepunch hands out the same token, or tokens
+    that live shorter than RPP_RUSTPLUS_TOKEN_RENEW_BEFORE) is not repeated for this long - otherwise the hourly check
+    renews and rebuilds every socket every hour.
+*/
+const USELESS_RENEWAL_PAUSE_MS = 12 * 60 * 60 * 1000;
+
+/*
+    A socket that answered a poll this recently proves that its token works. A refused history read or handshake is
+    then not about the token (a proxy, a rate limit, a hiccup of Facepunch), and renewing would only kill that socket.
+*/
+const LIVE_SOCKET_PROOF_MS = 2 * 60 * 1000;
+
 const states = new Map();   /* steamId -> state */
 let expiryTimer = null;
 
@@ -66,6 +79,7 @@ function stateOf(steamId) {
             inflight: null,         /* the running renewal (promise), shared by every caller */
             backoffUntilMs: 0,      /* no renewal before this */
             lastProactiveFailMs: null, /* a proactive renewal that failed is retried after EXPIRY_CHECK_INTERVAL_MS */
+            proactivePausedUntilMs: 0, /* no proactive renewal before this (the last one did not help) */
         };
 
         states.set(key, state);
@@ -85,15 +99,14 @@ function markHealthy(steamId) {
     const state = states.get(`${steamId}`);
     if (!state) return;
 
-    /* A renewal that is still running keeps its state, its callers wait for it. */
-    if (state.inflight) {
-        state.strikes = 0;
-        state.renewals = 0;
-        state.backoffUntilMs = 0;
-        return;
-    }
-
-    states.delete(`${steamId}`);
+    /*
+        Only the counters of the rejections are forgotten. The throttle and the pause of the proactive renewal stay:
+        every renewal is followed by a working connection, so forgetting them here would let the next renewal start
+        right away (that is how the hourly renewal kept rebuilding the sockets).
+    */
+    state.strikes = 0;
+    state.renewals = 0;
+    state.backoffUntilMs = 0;
 }
 
 function isBackedOff(steamId, now = Date.now()) {
@@ -221,6 +234,25 @@ function guildOf(client, steamId, guildId) {
 }
 
 /*
+    A connection of this account that runs on the stored token and answered a poll a moment ago: the token works.
+    Returns that connection or null.
+*/
+function liveSocketOf(client, steamId, now = Date.now()) {
+    const auth = RustPlusAuth.readAuth(steamId);
+    if (auth === null) return null;
+
+    for (const rustplus of Object.values(client.rustplusInstances || {})) {
+        if (!rustplus || `${rustplus.playerId}` !== `${steamId}`) continue;
+        if (!rustplus.isOperational || rustplus.authToken !== auth.token) continue;
+
+        const lastPoll = rustplus.lastSuccessfulPollMs || 0;
+        if (lastPoll !== 0 && (now - lastPoll) <= LIVE_SOCKET_PROOF_MS) return rustplus;
+    }
+
+    return null;
+}
+
+/*
     Renew the token of the account. Returns 'renewed', 'failed' or 'skipped' (backoff or throttle). A caller that comes
     while a renewal is running waits for it and gets its result instead of starting a second login.
 
@@ -251,7 +283,10 @@ async function renew(client, steamId, reason, options = {}) {
 
     state.inflight = (async () => {
         try {
-            await RustPlusLogin.renewAuth(steamId,
+            const before = RustPlusAuth.readAuth(steamId);
+            const oldToken = before ? before.token : null;
+
+            const renewed = await RustPlusLogin.renewAuth(steamId,
                 (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
 
             if (!options.proactive) state.renewals += 1;
@@ -261,6 +296,27 @@ async function renew(client, steamId, reason, options = {}) {
                 `The Rust+ account token of ${steamId} was renewed (${reason}).` :
                 `The Rust+ account token of ${steamId} was rejected (${reason}) and renewed ` +
                 `(${state.renewals}/${MAX_RENEWALS} since the last working connection).`);
+
+            /* A renewal that does not reach out of the renewal window is not repeated by the hourly check. */
+            if (options.proactive && RustPlusAuth.isTokenExpiringSoon(renewed || RustPlusAuth.readAuth(steamId),
+                Config.general.rustplusTokenRenewBeforeSeconds)) {
+                state.proactivePausedUntilMs = Date.now() + USELESS_RENEWAL_PAUSE_MS;
+
+                const expiry = RustPlusAuth.getTokenExpiry(renewed || RustPlusAuth.readAuth(steamId));
+                client.log(client.intlGet(null, 'warningCap'),
+                    `The renewed token of ${steamId} expires ` +
+                    `${expiry === null ? 'at an unknown time' : new Date(expiry * 1000).toISOString()}, still inside ` +
+                    'RPP_RUSTPLUS_TOKEN_RENEW_BEFORE. No further proactive renewal for ' +
+                    `${USELESS_RENEWAL_PAUSE_MS / 3600000} hours.`, 'warn');
+            }
+
+            /* Facepunch handed out the token the sockets already use: nothing was invalidated, nothing to rebuild. */
+            const stored = RustPlusAuth.readAuth(steamId);
+            if (oldToken !== null && stored !== null && stored.token === oldToken) {
+                client.log(client.intlGet(null, 'infoCap'),
+                    `Facepunch returned the same token for ${steamId}, the connections are kept.`, 'debug');
+                return 'renewed';
+            }
 
             const touched = rebuildAll(client, steamId, 'the account token was renewed');
 
@@ -321,6 +377,17 @@ async function reportRejected(client, guildId, steamId, reason) {
         return 'skipped';
     }
 
+    /* The token is evidently fine, a renewal would only invalidate the socket that proves it. */
+    const live = liveSocketOf(client, steamId);
+    if (live !== null) {
+        state.strikes = 0;
+
+        client.log(client.intlGet(null, 'infoCap'),
+            `A Rust+ request of ${steamId} was refused (${reason}), but the connection of ${live.guildId} works with ` +
+            'the same token - not renewing.', 'debug');
+        return 'skipped';
+    }
+
     state.strikes += 1;
 
     if (state.strikes < STRIKES_BEFORE_RENEW) {
@@ -348,6 +415,11 @@ async function renewIfDue(client, steamId, now = Date.now()) {
 
     const state = stateOf(steamId);
     if (state.inflight) return await state.inflight;
+
+    /* The last renewal did not help (same token or a short-lived one): wait, unless the token is gone. */
+    if (state.proactivePausedUntilMs > now && !RustPlusAuth.isTokenExpired(auth, Math.floor(now / 1000))) {
+        return 'skipped';
+    }
 
     /* A proactive renewal that failed is not repeated on every connect, the token is usually still valid. */
     if (state.lastProactiveFailMs !== null && (now - state.lastProactiveFailMs) < EXPIRY_CHECK_INTERVAL_MS &&
@@ -396,6 +468,8 @@ module.exports = {
     MAX_RENEWALS: MAX_RENEWALS,
     BACKOFF_MS: BACKOFF_MS,
     EXPIRY_CHECK_INTERVAL_MS: EXPIRY_CHECK_INTERVAL_MS,
+    USELESS_RENEWAL_PAUSE_MS: USELESS_RENEWAL_PAUSE_MS,
+    LIVE_SOCKET_PROOF_MS: LIVE_SOCKET_PROOF_MS,
     renew: renew,
     renewIfDue: renewIfDue,
     reportRejected: reportRejected,
@@ -403,6 +477,7 @@ module.exports = {
     markReadSuccessful: markReadSuccessful,
     isBackedOff: isBackedOff,
     isRenewing: isRenewing,
+    liveSocketOf: liveSocketOf,
     renewalCount: renewalCount,
     rebuildAll: rebuildAll,
     /* The old name, kept for callers outside of this repository. */
