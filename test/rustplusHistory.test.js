@@ -727,12 +727,17 @@ Test.describe('RustPlusHistory.refresh', () => {
         to be built again, otherwise every request of it is answered with not_found.
     */
     Test.it('rebuilds the socket of the guild after a renewal', async (t) => {
-        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+        const stored = { steamId: STEAM_ID, token: 'old-token', servers: [] };
+        stubAuth(t, stored);
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
         const originalRenewAuth = RustPlusLogin.renewAuth;
 
-        RustPlusLogin.renewAuth = async () => ({ steamId: STEAM_ID, token: 'new-token', servers: [] });
+        /* Like the real one: the new token is stored. */
+        RustPlusLogin.renewAuth = async () => {
+            stored.token = 'new-token';
+            return { steamId: STEAM_ID, token: 'new-token', servers: [] };
+        };
 
         t.after(() => {
             RustPlusLogin.renewAuth = originalRenewAuth;
@@ -808,12 +813,17 @@ Test.describe('RustPlusHistory.refresh', () => {
 
     /* A reconnect that waits on the backoff would sit there up to five minutes, although the token is usable again. */
     Test.it('reconnects right away after a renewal', async (t) => {
-        stubAuth(t, { steamId: STEAM_ID, token: 'old-token', servers: [] });
+        const stored = { steamId: STEAM_ID, token: 'old-token', servers: [] };
+        stubAuth(t, stored);
 
         const RustPlusLogin = require('../src/util/rustplusLogin.js');
         const originalRenewAuth = RustPlusLogin.renewAuth;
 
-        RustPlusLogin.renewAuth = async () => ({ steamId: STEAM_ID, token: 'new-token', servers: [] });
+        /* Like the real one: the new token is stored. */
+        RustPlusLogin.renewAuth = async () => {
+            stored.token = 'new-token';
+            return { steamId: STEAM_ID, token: 'new-token', servers: [] };
+        };
 
         t.after(() => {
             RustPlusLogin.renewAuth = originalRenewAuth;
