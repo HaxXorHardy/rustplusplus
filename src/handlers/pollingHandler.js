@@ -45,8 +45,8 @@ async function runHandler(rustplus, client, label, handler) {
     }
 
     rustplus.pollPending[label] = true;
+    /* No log line per handler (five per cycle, every 10 s): the watchdog and the timeout name the phase that hangs. */
     rustplus.pollPhase = label;
-    rustplus.log(client.intlGet(null, 'infoCap'), `poll: ${label}`, 'debug');
 
     const work = (async () => {
         try {
@@ -78,6 +78,34 @@ const HANDLER_TIMEOUT_MS = 10 * 1000;
 
 /* A cycle that runs longer than this releases the isPolling flag, so the loop recovers on its own. */
 const POLL_WATCHDOG_MS = 60 * 1000;
+
+/*
+    The duration of the poll cycles is logged as one summary per POLL_SUMMARY_CYCLES cycles (once a minute at the
+    default interval) instead of one line every 10 s; a cycle slower than POLL_SLOW_MS is logged right away.
+*/
+const POLL_SUMMARY_CYCLES = 6;
+const POLL_SLOW_MS = 5 * 1000;
+
+function recordPollCycle(rustplus, client, durationMs) {
+    const stats = rustplus.pollCycleStats || { count: 0, totalMs: 0, maxMs: 0 };
+
+    stats.count += 1;
+    stats.totalMs += durationMs;
+    stats.maxMs = Math.max(stats.maxMs, durationMs);
+    rustplus.pollCycleStats = stats;
+
+    if (durationMs >= POLL_SLOW_MS) {
+        rustplus.log(client.intlGet(null, 'infoCap'), `Slow poll cycle: ${durationMs} ms.`, 'debug');
+    }
+
+    if (stats.count < POLL_SUMMARY_CYCLES) return;
+
+    rustplus.log(client.intlGet(null, 'infoCap'),
+        `Poll cycles: ${stats.count}, average ${Math.round(stats.totalMs / stats.count)} ms, ` +
+        `max ${stats.maxMs} ms.`, 'debug');
+
+    rustplus.pollCycleStats = { count: 0, totalMs: 0, maxMs: 0 };
+}
 
 /* The second overlong cycle in a row rebuilds the connection instead of waiting for more. */
 const POLL_WATCHDOG_RECONNECT_AFTER = 2;
@@ -228,8 +256,7 @@ module.exports = {
             if (rustplus.pollCycleId === cycleId) rustplus.isPolling = false;
 
             rustplus.pollPhase = 'idle';
-            rustplus.log(client.intlGet(null, 'infoCap'),
-                `Poll cycle: ${Date.now() - startedMs} ms.`, 'debug');
+            recordPollCycle(rustplus, client, Date.now() - startedMs);
         }
 
         if (success) rustplus.pollWatchdogHits = 0;
