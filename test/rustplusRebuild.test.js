@@ -138,68 +138,48 @@ Test.describe('RustPlus.isResponseValid', () => {
     });
 });
 
-Test.describe('RustPlus.checkAuthTokenRenewal', () => {
-    Test.it('rebuilds the connection after the token was renewed', async (t) => {
-        const RustPlusAuth = require('../src/util/rustplusAuth.js');
-        const RustPlusLogin = require('../src/util/rustplusLogin.js');
+Test.describe('RustPlus.rebuildConnection after a renewal', () => {
+    Test.it('ignores the throttle when the token was renewed', () => {
+        const socket = fakeSocket();
+        const rustplus = fakeRustPlus({ websocket: socket, lastConnectionRebuildMs: Date.now() });
 
-        const originalReadAuth = RustPlusAuth.readAuth;
-        const originalRenewAuth = RustPlusLogin.renewAuth;
-
-        RustPlusAuth.readAuth = () => ({
-            steamId: STEAM_ID,
-            token: 'old-token',
-            steamRefreshToken: 'refresh-token',
-            tokenExpiresAt: Math.floor(Date.now() / 1000) + 60,
-            servers: [],
-        });
-
-        RustPlusLogin.renewAuth = async () => ({ steamId: STEAM_ID, token: 'new-token', servers: [] });
-
-        t.after(() => {
-            RustPlusAuth.readAuth = originalReadAuth;
-            RustPlusLogin.renewAuth = originalRenewAuth;
-        });
-
-        const reasons = [];
-        const rustplus = fakeRustPlus({
-            authToken: 'old-token',
-            applyRenewedAccountState: () => undefined,
-            rebuildConnection: (reason) => reasons.push(reason),
-        });
-
-        await rustplus.checkAuthTokenRenewal();
-
-        Assert.strictEqual(rustplus.authToken, 'new-token');
-        Assert.deepStrictEqual(reasons, ['the account token was renewed in the background']);
+        Assert.strictEqual(rustplus.rebuildConnection('burst'), false);
+        Assert.strictEqual(rustplus.rebuildConnection('the account token was renewed', { force: true }), true);
+        Assert.strictEqual(socket.closed, 1);
     });
 
-    Test.it('does not rebuild when there was nothing to renew', async (t) => {
-        const RustPlusAuth = require('../src/util/rustplusAuth.js');
-        const originalReadAuth = RustPlusAuth.readAuth;
+    Test.it('leaves a connect alone that waits for this renewal', () => {
+        const rustplus = fakeRustPlus({ awaitingTokenRenewal: true });
 
-        /* A token that is valid for weeks is not renewed. */
-        RustPlusAuth.readAuth = () => ({
-            steamId: STEAM_ID,
-            token: 'old-token',
-            steamRefreshToken: 'refresh-token',
-            tokenExpiresAt: Math.floor(Date.now() / 1000) + (30 * 24 * 3600),
-            servers: [],
-        });
+        Assert.strictEqual(rustplus.rebuildConnection('the account token was renewed', { force: true }), false);
+        Assert.strictEqual(rustplus.connectCalls, 0, 'the waiting connect uses the new token anyway');
+    });
+});
 
-        t.after(() => {
-            RustPlusAuth.readAuth = originalReadAuth;
-        });
+Test.describe('RustPlus.hasStaleAuthToken', () => {
+    const RustPlusAuth = require('../src/util/rustplusAuth.js');
 
-        const reasons = [];
-        const rustplus = fakeRustPlus({
-            authToken: 'old-token',
-            rebuildConnection: (reason) => reasons.push(reason),
-        });
+    function stubReadAuth(t, auth) {
+        const original = RustPlusAuth.readAuth;
+        RustPlusAuth.readAuth = () => auth;
+        t.after(() => { RustPlusAuth.readAuth = original; });
+    }
 
-        await rustplus.checkAuthTokenRenewal();
+    Test.it('is true when the stored token is newer than the one of the socket', (t) => {
+        stubReadAuth(t, { token: 'new-token' });
 
-        Assert.strictEqual(rustplus.authToken, 'old-token');
-        Assert.deepStrictEqual(reasons, []);
+        Assert.strictEqual(fakeRustPlus({ authToken: 'old-token' }).hasStaleAuthToken(), true);
+    });
+
+    Test.it('is false while the socket uses the stored token', (t) => {
+        stubReadAuth(t, { token: 'token' });
+
+        Assert.strictEqual(fakeRustPlus({ authToken: 'token' }).hasStaleAuthToken(), false);
+    });
+
+    Test.it('is false without a login', (t) => {
+        stubReadAuth(t, null);
+
+        Assert.strictEqual(fakeRustPlus({ authToken: null }).hasStaleAuthToken(), false);
     });
 });

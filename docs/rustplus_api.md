@@ -112,10 +112,11 @@ as the websocket subprotocol). Facepunch keeps the newest token of an account, s
 and then answers the requests of the *old* socket with `not_found` - the same answer a stale `playerToken` gets, which
 makes it look like a lost pairing (the pairing itself is fine, the notification history keeps delivering).
 
-For that reason `RustPlus.rebuildConnection()` closes the socket after a renewal (`util/rustplusHistory.js` and
-`checkAuthTokenRenewal()`): the reconnect reads the stored token and the connection works again. A renewal is only asked
-for after **two** rejected reads in a row, because every renewal itself invalidates the running socket - and a `403`
-is a proxy refusal, not a dead token.
+For that reason the token is renewed in one place only (`util/tokenRecovery.js`, see
+[credentials.md](credentials.md#what-happens-when-facepunch-rejects-the-token)): the renewal is single-flight per
+account and rebuilds every socket of the account afterwards (`RustPlus.rebuildConnection(reason, { force: true })`).
+`connect()` reads the stored token on every attempt, and a failed poll whose socket holds an older token than the stored
+one (`RustPlus.hasStaleAuthToken()`) rebuilds the socket right away instead of renewing again.
 
 A device that the server does not know anymore (`not_found` for its `entityId`, e.g. destroyed in game or lost with a
 wipe) answers that way forever. The device round of the poll runs every 30 polls (5 minutes), so `util/unreachableDevices.js`

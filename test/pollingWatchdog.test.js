@@ -53,7 +53,6 @@ function fakeRustplus(client, options = {}) {
         logs: [],
         log: (title, text, level) => rustplus.logs.push({ level: level, text: text }),
         disconnect: () => { rustplus.disconnects += 1; },
-        checkAuthTokenRenewal: async () => undefined,
         getInfoAsync: async () => {
             rustplus.infoCalls += 1;
             return options.valid ? { info: {} } : { error: 'not_found' };

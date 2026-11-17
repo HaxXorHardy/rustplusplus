@@ -426,6 +426,89 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.ok(client.warnings.some((text) => text.includes('is not paired with')));
     });
 
+    function pairedServerInstance() {
+        const serverKey = `relay-${SERVER_ID}`;
+
+        return {
+            serverKey: serverKey,
+            instance: {
+                activeServer: serverKey,
+                serverList: {
+                    [serverKey]: {
+                        title: "Captain's Quarters",
+                        guid: SERVER_ID,
+                        steamId: STEAM_ID,
+                        playerToken: 42,
+                        switches: {},
+                        alarms: {},
+                        storageMonitors: {},
+                    },
+                },
+                trackers: {},
+            },
+        };
+    }
+
+    /* The history drops old notifications: without the account state nothing proves that a pairing is gone. */
+    Test.it('does not mark a server unpaired when the account state could not be read', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { serverKey, instance } = pairedServerInstance();
+        const client = fakeClient(instance);
+
+        await RustPlusHistory.refresh(client, async () => [], async () => { throw new Error('timeout'); });
+
+        Assert.notStrictEqual(instance.serverList[serverKey].paired, false);
+        Assert.strictEqual(instance.activeServer, serverKey);
+    });
+
+    Test.it('does not mark the server of a working connection unpaired', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { serverKey, instance } = pairedServerInstance();
+        const client = fakeClient(instance);
+        client.rustplusInstances[GUILD_ID] = { serverId: serverKey, isOperational: true };
+
+        await RustPlusHistory.refresh(client, async () => [], async () => ({ servers: [] }));
+
+        Assert.notStrictEqual(instance.serverList[serverKey].paired, false);
+        Assert.strictEqual(instance.activeServer, serverKey);
+    });
+
+    /* Two guilds with the same account used to ask Facepunch twice per run. */
+    Test.it('reads an account once for every guild that uses it', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const first = pairedServerInstance().instance;
+        const second = pairedServerInstance().instance;
+        const client = fakeClient(null);
+
+        client.instances = { a: {}, b: {} };
+        client.getInstance = (guildId) => (guildId === 'a' ? first : second);
+
+        let historyReads = 0;
+        let syncReads = 0;
+
+        await RustPlusHistory.refresh(client, async () => { historyReads += 1; return []; },
+            async () => { syncReads += 1; return { servers: [{ id: SERVER_ID, name: 'x', playerToken: 42 }] }; });
+
+        Assert.strictEqual(historyReads, 1);
+        Assert.strictEqual(syncReads, 1);
+    });
+
+    Test.it('limits a targeted run to the accounts it names', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { instance } = pairedServerInstance();
+        const client = fakeClient(instance);
+        let historyReads = 0;
+
+        await RustPlusHistory.refresh(client, async () => { historyReads += 1; return []; },
+            async () => ({ servers: [] }), { steamIds: ['76561198000000999'] });
+
+        Assert.strictEqual(historyReads, 0);
+    });
+
     Test.it('keeps a server that the account is still paired with', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
 

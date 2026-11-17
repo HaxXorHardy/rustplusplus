@@ -28,6 +28,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
+const TokenRecovery = require('../util/tokenRecovery.js');
 const RustPlusLogin = require('../util/rustplusLogin.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
@@ -268,6 +269,9 @@ async function finish(client, interaction, { steamId, token, servers, refreshTok
     try {
         /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
         const stored = RustPlusLogin.storeAuth(steamId, token, servers, refreshToken);
+
+        /* A fresh login ends the backoff of a token that kept being rejected. */
+        TokenRecovery.markHealthy(steamId);
 
         /* The login registers the Discord user as the owner of the steam account, /credentials show lists it. */
         registerCredentials(guildId, steamId, interaction.member.user.id);

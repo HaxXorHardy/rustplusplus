@@ -19,20 +19,28 @@
 */
 
 /*
-    Facepunch rejects an account token at any time - 403 (ASP.NET "Forbidden" with a traceId) or 401, for the history
-    read and for the socket handshake. Measured live: a token minted at 17:33 was refused from 18:57 on, and the bot kept
-    retrying with it every five minutes because the handshake path renewed nothing.
+    The one place that renews the Rust+ account token of a steam account.
 
-    One policy for every source of a rejection instead of one per caller:
-    - the second rejection in a row renews the token with the stored Steam refresh token,
+    Facepunch keeps one token per account: a renewal mints a new one and the relay answers the requests of every socket
+    that was opened with the old one with `not_found`. Before this module there were four uncoordinated renewal paths
+    (connect(), the poll, the history read and the handshake error) and every one of them only rebuilt the socket of
+    its own guild - two of them could run at the same time and each renewal killed the socket the other one had just
+    opened. Everything goes through here now:
+
+    - renew() is single-flight per steam id: a second caller waits for the running renewal and gets its result,
     - at most one renewal every RENEW_MIN_INTERVAL_MS, so a broken token cannot flood Steam with logins,
-    - after MAX_RENEWALS renewals that do not lead to a stable connection the account is left alone for BACKOFF_MS and
-      the owner of the credentials is asked for a new login,
-    - a working connection (markHealthy) resets everything,
-    - after a renewal the connection is rebuilt, or a reconnect that waits on the backoff starts right away.
+    - a rejected token (401/403 of the history read or the handshake) is renewed on the second rejection in a row,
+    - after MAX_RENEWALS renewals that do not lead to a working connection the account is left alone for BACKOFF_MS
+      and the owner of the credentials is asked for a new login,
+    - a token that expires soon is renewed by one hourly check (start()), not by every connection on its own,
+    - after every renewal ALL connections of the account are rebuilt (every guild, the team leader connections and the
+      reconnects that wait on their backoff), because all of them hold the token that was just invalidated,
+    - a working connection (markHealthy) resets the counters.
 */
 
+const Config = require('../../config');
 const CredentialOwner = require('./credentialOwner.js');
+const RustPlusAuth = require('./rustplusAuth.js');
 const RustPlusLogin = require('./rustplusLogin.js');
 
 const STRIKES_BEFORE_RENEW = 2;
@@ -40,7 +48,11 @@ const RENEW_MIN_INTERVAL_MS = 2 * 60 * 1000;
 const MAX_RENEWALS = 3;
 const BACKOFF_MS = 30 * 60 * 1000;
 
+/* How often the expiry of the stored tokens is checked, and how long a failed proactive renewal waits. */
+const EXPIRY_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
 const states = new Map();   /* steamId -> state */
+let expiryTimer = null;
 
 function stateOf(steamId) {
     const key = `${steamId}`;
@@ -48,11 +60,12 @@ function stateOf(steamId) {
 
     if (state === undefined) {
         state = {
-            strikes: 0,          /* rejections in a row */
-            renewals: 0,         /* renewals since the last working connection */
-            lastRenewMs: 0,      /* throttle of the renewals */
-            renewing: false,     /* a renewal is running right now */
-            backoffUntilMs: 0,   /* no renewal before this */
+            strikes: 0,             /* rejections in a row */
+            renewals: 0,            /* renewals because of a rejection since the last working connection */
+            lastRenewMs: 0,         /* throttle of the renewals */
+            inflight: null,         /* the running renewal (promise), shared by every caller */
+            backoffUntilMs: 0,      /* no renewal before this */
+            lastProactiveFailMs: null, /* a proactive renewal that failed is retried after EXPIRY_CHECK_INTERVAL_MS */
         };
 
         states.set(key, state);
@@ -64,22 +77,42 @@ function stateOf(steamId) {
 /* For tests and for a full reset. */
 function reset() {
     states.clear();
+    stop();
 }
 
 /* The connection works again: strikes, renewals and the backoff of this account are forgotten. */
 function markHealthy(steamId) {
+    const state = states.get(`${steamId}`);
+    if (!state) return;
+
+    /* A renewal that is still running keeps its state, its callers wait for it. */
+    if (state.inflight) {
+        state.strikes = 0;
+        state.renewals = 0;
+        state.backoffUntilMs = 0;
+        return;
+    }
+
     states.delete(`${steamId}`);
 }
 
 function isBackedOff(steamId, now = Date.now()) {
-    const state = stateOf(steamId);
+    const state = states.get(`${steamId}`);
 
-    return state.backoffUntilMs > now;
+    return Boolean(state) && state.backoffUntilMs > now;
+}
+
+function isRenewing(steamId) {
+    const state = states.get(`${steamId}`);
+
+    return Boolean(state) && state.inflight !== null;
 }
 
 /* The count of renewals since the last working connection (for tests and the log). */
 function renewalCount(steamId) {
-    return stateOf(steamId).renewals;
+    const state = states.get(`${steamId}`);
+
+    return state ? state.renewals : 0;
 }
 
 /*
@@ -87,36 +120,63 @@ function renewalCount(steamId) {
     only a working connection (markHealthy) proves that a renewal helped.
 */
 function markReadSuccessful(steamId) {
-    stateOf(steamId).strikes = 0;
+    const state = states.get(`${steamId}`);
+    if (state) state.strikes = 0;
 }
 
 /*
-    Rebuild the connection of the guild, or start a reconnect that waits on the backoff right away. A renewed token is
-    usable immediately, waiting up to five minutes for it makes no sense.
+    Every connection that uses the token of this steam account is rebuilt: they all hold the token that was just
+    replaced. Returns the count of connections that were touched.
 */
-function reconnect(client, guildId, steamId, reason) {
+function rebuildAll(client, steamId, reason) {
+    let touched = 0;
     const instances = client.rustplusInstances || {};
-    const rustplus = instances[guildId];
 
-    if (rustplus && typeof rustplus.rebuildConnection === 'function' &&
-        (rustplus.playerId === undefined || `${rustplus.playerId}` === `${steamId}`)) {
-        rustplus.rebuildConnection(reason);
-        return;
+    for (const rustplus of Object.values(instances)) {
+        if (!rustplus) continue;
+
+        if (`${rustplus.playerId}` === `${steamId}`) {
+            if (typeof rustplus.rebuildConnection === 'function') {
+                rustplus.rebuildConnection(reason, { force: true });
+                touched += 1;
+            }
+        }
+
+        /* The connection of the team leader is a second socket of another (or the same) account. */
+        const lite = rustplus.leaderRustPlusInstance;
+        if (lite && `${lite.playerId}` === `${steamId}` && lite.websocket &&
+            typeof lite.websocket.close === 'function') {
+            try {
+                /* The lite instance reconnects on its own and reads the stored token then. */
+                lite.websocket.close();
+                touched += 1;
+            }
+            catch (e) {
+                /* Already closed, its reconnect runs anyway. */
+            }
+        }
     }
 
-    const timers = client.rustplusReconnectTimers;
-    if (!timers || !timers[guildId]) return;
+    /* A guild that waits on the backoff of its reconnect would wait up to five minutes with a usable token. */
+    const timers = client.rustplusReconnectTimers || {};
 
-    clearTimeout(timers[guildId]);
-    timers[guildId] = null;
+    for (const guildId of Object.keys(timers)) {
+        if (!timers[guildId] || instances[guildId]) continue;
 
-    if (client.rustplusReconnectAttempts) client.rustplusReconnectAttempts[guildId] = 0;
+        const instance = typeof client.getInstance === 'function' ? client.getInstance(guildId) : null;
+        const server = (instance && instance.serverList) ? instance.serverList[instance.activeServer] : null;
+        if (!server || `${server.steamId}` !== `${steamId}`) continue;
 
-    const instance = client.getInstance(guildId);
-    const server = (instance && instance.serverList) ? instance.serverList[instance.activeServer] : null;
-    if (!server) return;
+        clearTimeout(timers[guildId]);
+        timers[guildId] = null;
 
-    client.createRustplusInstance(guildId, server.serverIp, server.appPort, server.steamId, server.playerToken);
+        if (client.rustplusReconnectAttempts) client.rustplusReconnectAttempts[guildId] = 0;
+
+        client.createRustplusInstance(guildId, server.serverIp, server.appPort, server.steamId, server.playerToken);
+        touched += 1;
+    }
+
+    return touched;
 }
 
 /* Tell the owner of the credentials that the token needs a new login. */
@@ -149,21 +209,117 @@ async function notifyOwner(client, guildId, steamId) {
     }
 }
 
+/* A guild that knows this account, for the direct message to the owner. */
+function guildOf(client, steamId, guildId) {
+    if (guildId) return guildId;
+
+    for (const [id, rustplus] of Object.entries(client.rustplusInstances || {})) {
+        if (rustplus && `${rustplus.playerId}` === `${steamId}`) return id;
+    }
+
+    return Object.keys(client.instances || {})[0] || null;
+}
+
 /*
-    Report a rejected token. Returns 'skipped' (not enough strikes, throttled, a renewal is running or the account is in
-    backoff), 'renewed' or 'failed'.
+    Renew the token of the account. Returns 'renewed', 'failed' or 'skipped' (backoff or throttle). A caller that comes
+    while a renewal is running waits for it and gets its result instead of starting a second login.
+
+    options.proactive: the token is about to expire, not rejected. Such a renewal does not count towards MAX_RENEWALS.
+    options.guildId: the guild that asked, used to find the owner for the direct message.
 */
-async function reportRejected(client, guildId, steamId, reason) {
-    const now = Date.now();
+async function renew(client, steamId, reason, options = {}) {
     const state = stateOf(steamId);
 
+    if (state.inflight) return await state.inflight;
+
+    const now = Date.now();
+
     if (state.backoffUntilMs > now) {
+        client.log(client.intlGet(null, 'infoCap'),
+            `The Rust+ token of ${steamId} is not renewed (${reason}): the backoff is not over yet.`, 'debug');
+        return 'skipped';
+    }
+
+    if (state.lastRenewMs && (now - state.lastRenewMs) < RENEW_MIN_INTERVAL_MS) {
+        client.log(client.intlGet(null, 'infoCap'),
+            `The token of ${steamId} was renewed a moment ago, no second login for ${reason}.`, 'debug');
+        return 'skipped';
+    }
+
+    state.lastRenewMs = now;
+    state.strikes = 0;
+
+    state.inflight = (async () => {
+        try {
+            await RustPlusLogin.renewAuth(steamId,
+                (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
+
+            if (!options.proactive) state.renewals += 1;
+            state.lastProactiveFailMs = null;
+
+            client.log(client.intlGet(null, 'infoCap'), options.proactive ?
+                `The Rust+ account token of ${steamId} was renewed (${reason}).` :
+                `The Rust+ account token of ${steamId} was rejected (${reason}) and renewed ` +
+                `(${state.renewals}/${MAX_RENEWALS} since the last working connection).`);
+
+            const touched = rebuildAll(client, steamId, 'the account token was renewed');
+
+            if (touched !== 0) {
+                client.log(client.intlGet(null, 'infoCap'),
+                    `${touched} Rust+ connection(s) of ${steamId} are rebuilt with the new token.`, 'debug');
+            }
+
+            if (!options.proactive && state.renewals >= MAX_RENEWALS) {
+                state.backoffUntilMs = Date.now() + BACKOFF_MS;
+
+                client.log(client.intlGet(null, 'warningCap'),
+                    `${state.renewals} renewals did not lead to a working connection, no new login for ` +
+                    `${BACKOFF_MS / 60000} minutes.`, 'warn');
+
+                await notifyOwner(client, guildOf(client, steamId, options.guildId), steamId);
+            }
+
+            return 'renewed';
+        }
+        catch (e) {
+            if (options.proactive) state.lastProactiveFailMs = Date.now();
+            else state.renewals += 1;
+
+            client.log(client.intlGet(null, 'warningCap'),
+                `The Rust+ account token of ${steamId} could not be renewed (${e && e.message ? e.message : e}). ` +
+                'Use "/credentials login" in Discord.', 'warn');
+
+            if (!options.proactive && state.renewals >= MAX_RENEWALS) {
+                state.backoffUntilMs = Date.now() + BACKOFF_MS;
+
+                await notifyOwner(client, guildOf(client, steamId, options.guildId), steamId);
+            }
+
+            return 'failed';
+        }
+        finally {
+            state.inflight = null;
+        }
+    })();
+
+    return await state.inflight;
+}
+
+/*
+    Report a rejected token (401/403 of the history read or of the handshake). One rejection may be a fluke, the second
+    one in a row renews the token. Returns 'skipped', 'renewed' or 'failed'.
+*/
+async function reportRejected(client, guildId, steamId, reason) {
+    const state = stateOf(steamId);
+
+    /* The renewal that runs answers this rejection as well. */
+    if (state.inflight) return await state.inflight;
+
+    if (state.backoffUntilMs > Date.now()) {
         client.log(client.intlGet(null, 'infoCap'),
             `The Rust+ token of ${steamId} is rejected (${reason}), no new login until the backoff is over.`, 'debug');
         return 'skipped';
     }
-
-    if (state.renewing) return 'skipped';
 
     state.strikes += 1;
 
@@ -174,56 +330,63 @@ async function reportRejected(client, guildId, steamId, reason) {
         return 'skipped';
     }
 
-    if (state.lastRenewMs && (now - state.lastRenewMs) < RENEW_MIN_INTERVAL_MS) {
-        client.log(client.intlGet(null, 'infoCap'),
-            `The token of ${steamId} was renewed a moment ago, no second login for ${reason}.`, 'debug');
+    return await renew(client, steamId, reason, { guildId: guildId });
+}
+
+/*
+    Renew the token when it expires within RPP_RUSTPLUS_TOKEN_RENEW_BEFORE and a Steam refresh token is stored.
+    An expired token without a refresh token cannot be renewed here, the credentials expiry handler tells the owner.
+*/
+async function renewIfDue(client, steamId, now = Date.now()) {
+    const auth = RustPlusAuth.readAuth(steamId);
+    if (auth === null || !auth.steamRefreshToken) return 'skipped';
+
+    if (!RustPlusAuth.isTokenExpiringSoon(auth, Config.general.rustplusTokenRenewBeforeSeconds,
+        Math.floor(now / 1000))) {
         return 'skipped';
     }
 
-    state.strikes = 0;
-    state.lastRenewMs = now;
-    state.renewing = true;
+    const state = stateOf(steamId);
+    if (state.inflight) return await state.inflight;
 
-    try {
-        await RustPlusLogin.renewAuth(steamId, (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug'));
+    /* A proactive renewal that failed is not repeated on every connect, the token is usually still valid. */
+    if (state.lastProactiveFailMs !== null && (now - state.lastProactiveFailMs) < EXPIRY_CHECK_INTERVAL_MS &&
+        !RustPlusAuth.isTokenExpired(auth, Math.floor(now / 1000))) {
+        return 'skipped';
+    }
 
-        state.renewals += 1;
+    return await renew(client, steamId, 'the token expires soon', { proactive: true });
+}
 
-        client.log(client.intlGet(null, 'infoCap'),
-            `The Rust+ account token of ${steamId} was rejected (${reason}) and renewed ` +
-            `(${state.renewals}/${MAX_RENEWALS} since the last working connection).`);
-
-        reconnect(client, guildId, steamId, 'the account token was renewed');
-
-        if (state.renewals >= MAX_RENEWALS) {
-            state.backoffUntilMs = Date.now() + BACKOFF_MS;
-
+/* The hourly check of every stored login. */
+async function checkAll(client) {
+    for (const steamId of RustPlusAuth.listSteamIds()) {
+        try {
+            await renewIfDue(client, steamId);
+        }
+        catch (e) {
             client.log(client.intlGet(null, 'warningCap'),
-                `${state.renewals} renewals did not lead to a stable connection, no new login for ` +
-                `${BACKOFF_MS / 60000} minutes.`, 'warn');
-
-            await notifyOwner(client, guildId, steamId);
+                `The expiry check of ${steamId} failed: ${e && e.message ? e.message : e}`, 'warn');
         }
-
-        return 'renewed';
     }
-    catch (e) {
-        state.renewals += 1;
+}
 
-        client.log(client.intlGet(null, 'warningCap'),
-            `The Rust+ account token of ${steamId} could not be renewed (${e && e.message ? e.message : e}). ` +
-            'Use "/credentials login" in Discord.', 'warn');
+function start(client) {
+    stop();
 
-        if (state.renewals >= MAX_RENEWALS) {
-            state.backoffUntilMs = Date.now() + BACKOFF_MS;
+    expiryTimer = setInterval(() => {
+        checkAll(client).catch(() => undefined);
+    }, EXPIRY_CHECK_INTERVAL_MS);
 
-            await notifyOwner(client, guildId, steamId);
-        }
+    if (typeof expiryTimer.unref === 'function') expiryTimer.unref();
 
-        return 'failed';
-    }
-    finally {
-        state.renewing = false;
+    return checkAll(client);
+}
+
+function stop() {
+    if (expiryTimer !== null) {
+        clearInterval(expiryTimer);
+        expiryTimer = null;
     }
 }
 
@@ -232,11 +395,20 @@ module.exports = {
     RENEW_MIN_INTERVAL_MS: RENEW_MIN_INTERVAL_MS,
     MAX_RENEWALS: MAX_RENEWALS,
     BACKOFF_MS: BACKOFF_MS,
+    EXPIRY_CHECK_INTERVAL_MS: EXPIRY_CHECK_INTERVAL_MS,
+    renew: renew,
+    renewIfDue: renewIfDue,
     reportRejected: reportRejected,
     markHealthy: markHealthy,
     markReadSuccessful: markReadSuccessful,
     isBackedOff: isBackedOff,
+    isRenewing: isRenewing,
     renewalCount: renewalCount,
-    reconnect: reconnect,
+    rebuildAll: rebuildAll,
+    /* The old name, kept for callers outside of this repository. */
+    reconnect: (client, guildId, steamId, reason) => rebuildAll(client, steamId, reason),
+    checkAll: checkAll,
+    start: start,
+    stop: stop,
     reset: reset,
 };

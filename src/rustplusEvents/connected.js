@@ -76,9 +76,9 @@ module.exports = {
             const reason = (map && map.error) ? `${map.error}` : 'unknown';
 
             /*
-                not_found on a fresh connection is the relay refusing the token of the handshake (a login elsewhere
-                minted a new one, and the relay only accepts the newest). The history refresh below renews it and the
-                instance that reconnects uses the stored token - so that case is a warning, not a server failure.
+                not_found on a fresh connection has two causes: the stored account token was renewed after this socket
+                read it (then the reconnect simply uses the stored one), or the server was paired again and the player
+                token is stale (then the pairing history carries the new one). Neither is a server failure.
             */
             const isStaleToken = reason === 'not_found';
 
@@ -87,17 +87,20 @@ module.exports = {
                     reason: reason
                 }), isStaleToken ? 'warn' : 'error');
 
-            /*
-                A player token that the server does not accept anymore (the server was paired again) answers with
-                not_found as well. Read the newest pairing before the reconnect, otherwise the same token is tried
-                again and again.
-            */
-            try {
-                await RustPlusHistory.refresh(client);
-            }
-            catch (e) {
-                rustplus.log(client.intlGet(null, 'warningCap'),
-                    `Could not refresh the Rust+ pairing: ${e && e.message ? e.message : e}`, 'debug');
+            const tokenWasRenewed = typeof rustplus.hasStaleAuthToken === 'function' && rustplus.hasStaleAuthToken();
+
+            if (isStaleToken && !tokenWasRenewed) {
+                /*
+                    Only the account of this connection is read, and at most every two minutes: a server that keeps
+                    answering not_found must not ask Facepunch for every guild on every reconnect.
+                */
+                try {
+                    await RustPlusHistory.refreshAccount(client, rustplus.playerId);
+                }
+                catch (e) {
+                    rustplus.log(client.intlGet(null, 'warningCap'),
+                        `Could not refresh the Rust+ pairing: ${e && e.message ? e.message : e}`, 'debug');
+                }
             }
 
             /*

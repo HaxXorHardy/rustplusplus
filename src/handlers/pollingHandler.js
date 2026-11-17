@@ -113,6 +113,17 @@ function updatePollHealth(rustplus, client, success) {
     }
 
     rustplus.consecutiveFailedPolls = (rustplus.consecutiveFailedPolls || 0) + 1;
+
+    /*
+        The token was renewed elsewhere (another guild, the login, the renewal script): the relay answers this socket
+        with not_found until it is opened again with the stored token. No need to wait for more failed polls.
+    */
+    if (typeof rustplus.hasStaleAuthToken === 'function' && rustplus.hasStaleAuthToken()) {
+        rustplus.consecutiveFailedPolls = 0;
+        rustplus.rebuildConnection('the stored account token is newer than the one of this socket', { force: true });
+        return;
+    }
+
     if (rustplus.consecutiveFailedPolls < MAX_FAILED_POLLS) return;
 
     rustplus.consecutiveFailedPolls = 0;
@@ -244,9 +255,6 @@ module.exports = {
         }
 
         await module.exports.handlers(rustplus, client, info, mapMarkers, teamInfo, time);
-
-        /* Cheap (one file read per hour): keeps the stored account token fresh while the connection runs. */
-        await rustplus.checkAuthTokenRenewal();
 
         rustplus.isFirstPoll = false;
 
