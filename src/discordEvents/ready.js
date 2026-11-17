@@ -27,6 +27,7 @@ const CredentialsExpiryHandler = require('../handlers/credentialsExpiryHandler.j
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
+const RustPlusPushListener = require('../util/rustplusPushListener.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const ServerAddressHandler = require('../handlers/serverAddressHandler.js');
 const SetupServerList = require('../discordTools/SetupServerList.js');
@@ -136,8 +137,8 @@ module.exports = {
             Adopt servers and devices that were paired in-game. The notification history of the account knows them,
             so this works without FCM credentials.
         */
-        const refreshPairingHistory = async () => {
-            const { devices, deaths } = await RustPlusHistory.refresh(client);
+        const runPairingHistory = async (options = {}) => {
+            const { devices, deaths } = await RustPlusHistory.refresh(client, undefined, undefined, options);
             const refreshedStorageMonitors = new Set();
 
             for (const device of devices) {
@@ -225,12 +226,33 @@ module.exports = {
         };
 
         /*
+            One run at a time: the timer and a pairing push notification (options.steamIds) must not adopt the same
+            device twice. The push listener reaches it through client.refreshPairingHistory.
+        */
+        let pairingHistoryChain = Promise.resolve();
+        const refreshPairingHistory = (options = {}) => {
+            pairingHistoryChain = pairingHistoryChain.then(() => runPairingHistory(options)).catch((e) => {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `The pairing history could not be read: ${e && e.message ? e.message : e}`, 'warn');
+            });
+
+            return pairingHistoryChain;
+        };
+        client.refreshPairingHistory = refreshPairingHistory;
+
+        /*
             Awaited on purpose: a renewed pairing carries the player token the connection needs, so the history is
             adopted before the server is connected.
         */
         await refreshPairingHistory();
-        client.pairingHistoryIntervalId = setInterval(refreshPairingHistory,
+        client.pairingHistoryIntervalId = setInterval(() => refreshPairingHistory(),
             Config.general.rustplusHistoryIntervalMs);
+
+        /* Push notifications in real time (raid alarms, team logins, pairings). Optional, not awaited. */
+        RustPlusPushListener.start(client).catch((e) => {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Rust+ push notifications could not be started: ${e && e.message ? e.message : e}`, 'warn');
+        });
 
         /*
             Servers and devices that were adopted from the account state (login, notification history) still need

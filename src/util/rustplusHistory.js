@@ -455,6 +455,11 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
 
     const only = Array.isArray(options.steamIds) ? options.steamIds.map((id) => `${id}`) : null;
 
+    /* A run that was asked for by a pairing (push notification) must not answer from the cached account state. */
+    if (options.freshAccountState && only !== null) {
+        for (const steamId of only) accountStateCache.delete(steamId);
+    }
+
     /* steamId -> guild ids, in the order of the guilds. */
     const accounts = new Map();
 
@@ -670,5 +675,6 @@ module.exports = {
     applyPairingEntries: applyPairingEntries,
     refresh: refresh,
     refreshAccount: refreshAccount,
+    steamIdsOfGuild: steamIdsOfGuild,
     resetAccountStateCache: resetAccountStateCache,
 };
