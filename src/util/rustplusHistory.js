@@ -548,6 +548,7 @@ const accountStateCache = new Map();   /* steamId -> { servers, at } */
 */
 function resetAccountStateCache() {
     accountStateCache.clear();
+    accountStateFailures.clear();
     accountRefreshAt.clear();
     TokenRecovery.reset();
 }
@@ -556,6 +557,9 @@ function resetAccountStateCache() {
 function isAuthFailure(error) {
     return Boolean(error) && (error.status === 401 || error.status === 403);
 }
+
+/* steamId -> ms of the last account state read that failed. */
+const accountStateFailures = new Map();
 
 function cachedAccountServers(steamId, now) {
     const cached = accountStateCache.get(`${steamId}`);
@@ -569,19 +573,31 @@ async function readAccountServers(client, steamId, auth, fetchSyncFn, now = Date
     const cached = cachedAccountServers(steamId, now);
     if (cached !== null) return cached;
 
+    /* A refused account state is not asked again on every history run (that can be every few seconds). */
+    const failedAt = accountStateFailures.get(`${steamId}`);
+    if (failedAt !== undefined && (now - failedAt) < Config.general.rustplusSyncDataIntervalMs) return null;
+
     try {
         const sync = await fetchSyncFn(auth.token);
         if (!sync || !Array.isArray(sync.servers)) return null;
 
         accountStateCache.set(`${steamId}`, { servers: sync.servers, at: now });
+        accountStateFailures.delete(`${steamId}`);
 
         return sync.servers;
     }
     catch (e) {
-        if (isAuthFailure(e)) throw e;
+        /*
+            Not even a 401/403 of the account state stops the run: it is only the slow snapshot, the history is the
+            source of the pairings and decides about the token (measured live: /api/syncData answered 403 for hours
+            while the socket and the history worked with the same token - and the 403 used to block the history).
+        */
+        accountStateFailures.set(`${steamId}`, now);
 
         client.log(client.intlGet(null, 'warningCap'),
-            `Could not read the Rust+ account state of ${steamId}: ${e && e.message ? e.message : e}`, 'debug');
+            `Could not read the Rust+ account state of ${steamId} (${e && e.message ? e.message : e}), the history ` +
+            `is read without it. Next attempt in ${Math.round(Config.general.rustplusSyncDataIntervalMs / 60000)} ` +
+            'minute(s).', isAuthFailure(e) ? 'warn' : 'debug');
 
         return null;
     }
