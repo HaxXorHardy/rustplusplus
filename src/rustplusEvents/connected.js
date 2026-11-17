@@ -27,6 +27,30 @@ const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const PollingHandler = require('../handlers/pollingHandler.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const TokenRecovery = require('../util/tokenRecovery.js');
+const WithTimeout = require('../util/withTimeout.js');
+
+/*
+    How long the connect flow waits for one Discord step before it goes on. The polling only starts at the end of this
+    flow: a Discord call that never answered (the information queue behind a hung request) kept a connected server
+    without a single poll for five hours - and without a poll, util/tokenRecovery.js could not see that the token
+    works and renewed it on every refused history read.
+*/
+const DISCORD_STEP_TIMEOUT_MS = 30 * 1000;
+const SETUP_STEP_TIMEOUT_MS = 2 * 60 * 1000;
+
+/* Runs one Discord step of the connect flow with a deadline. A failure or a timeout is logged, the flow goes on. */
+async function discordStep(client, rustplus, label, step, timeoutMs = DISCORD_STEP_TIMEOUT_MS) {
+    try {
+        await WithTimeout.withTimeout(Promise.resolve().then(step), timeoutMs, label);
+    }
+    catch (e) {
+        const timedOut = Boolean(e) && e.code === 'ESTEPTIMEOUT';
+
+        rustplus.log(client.intlGet(null, 'warningCap'), timedOut ?
+            `${e.message} The connection goes on without it.` :
+            `${label} failed: ${e && e.message ? e.message : e}`, 'warn');
+    }
+}
 
 /*
     Runs one device setup step. A failure is logged and must not abort the steps after it: when a single message could
@@ -34,13 +58,8 @@ const TokenRecovery = require('../util/tokenRecovery.js');
     unhandled one that stopped the whole connect flow).
 */
 async function runSetup(client, rustplus, label, setupPath) {
-    try {
-        await require(setupPath)(client, rustplus);
-    }
-    catch (e) {
-        rustplus.log(client.intlGet(null, 'warningCap'),
-            `The setup of ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
-    }
+    await discordStep(client, rustplus, `The setup of ${label}`, () => require(setupPath)(client, rustplus),
+        SETUP_STEP_TIMEOUT_MS);
 }
 
 module.exports = {
@@ -118,27 +137,18 @@ module.exports = {
         const info = await rustplus.getInfoAsync();
         if (await rustplus.isResponseValid(info)) rustplus.info = new Info(info.info)
 
-        if (client.rustplusMaps.hasOwnProperty(guildId)) {
-            if (client.isJpgImageChanged(guildId, map.map)) {
-                rustplus.map = new Map(map.map, rustplus);
+        const wiped = client.rustplusMaps.hasOwnProperty(guildId) && client.isJpgImageChanged(guildId, map.map);
 
-                await rustplus.map.writeMap(false, true);
-                await DiscordMessages.sendServerWipeDetectedMessage(guildId, serverId);
-                await DiscordMessages.sendInformationMapMessage(guildId);
-            }
-            else {
-                rustplus.map = new Map(map.map, rustplus);
+        rustplus.map = new Map(map.map, rustplus);
+        await rustplus.map.writeMap(false, true);
 
-                await rustplus.map.writeMap(false, true);
-                await DiscordMessages.sendInformationMapMessage(guildId);
-            }
+        if (wiped) {
+            await discordStep(client, rustplus, 'The wipe message',
+                () => DiscordMessages.sendServerWipeDetectedMessage(guildId, serverId));
         }
-        else {
-            rustplus.map = new Map(map.map, rustplus);
 
-            await rustplus.map.writeMap(false, true);
-            await DiscordMessages.sendInformationMapMessage(guildId);
-        }
+        await discordStep(client, rustplus, 'The map message',
+            () => DiscordMessages.sendInformationMapMessage(guildId));
 
         if (client.rustplusReconnecting[guildId]) {
             client.rustplusReconnecting[guildId] = false;
@@ -153,11 +163,13 @@ module.exports = {
 
             /* `online` is only worth a message when the outage was announced. */
             if (OfflineAnnouncement.takeAnnounced(client, guildId)) {
-                await DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 0);
+                await discordStep(client, rustplus, 'The online message',
+                    () => DiscordMessages.sendServerChangeStateMessage(guildId, serverId, 0));
             }
         }
 
-        await DiscordMessages.sendServerMessage(guildId, serverId, null);
+        await discordStep(client, rustplus, 'The server message',
+            () => DiscordMessages.sendServerMessage(guildId, serverId, null));
 
         /* A replaced instance must not set up devices, subscribe entities or poll for the guild. */
         if (client.rustplusInstances[guildId] !== rustplus) return;
