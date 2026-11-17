@@ -29,6 +29,7 @@ const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const WithTimeout = require('../util/withTimeout.js');
+const RustPlusMap = require('../structures/Map.js');
 const Scrape = require('../util/scrape.js');
 
 /*
@@ -309,8 +310,7 @@ module.exports = {
 
         const content = {
             embeds: [DiscordEmbeds.getServerWipeDetectedEmbed(guildId, serverId)],
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))],
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(guildId))],
             content: instance.generalSettings.mapWipeNotifyEveryone ? '@everyone' : ''
         }
 
@@ -330,8 +330,7 @@ module.exports = {
     /* Posted when the map is ready (rustplusEvents/connected.js) and as part of the information cycle. */
     sendInformationMapMessage: async function (guildId) {
         await sendInformationMessage(guildId, 'map', {
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))]
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(guildId))]
         });
     },
 
@@ -484,8 +483,7 @@ module.exports = {
 
     sendUpdateMapInformationMessage: async function (rustplus) {
         await sendInformationMessage(rustplus.guildId, 'map', {
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${rustplus.guildId}_map_full.png`))]
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(rustplus.guildId))]
         });
     },
 
