@@ -31,6 +31,7 @@ const RustPlusSync = require('../util/rustplusSync.js');
 const ServerAddressHandler = require('../handlers/serverAddressHandler.js');
 const SetupServerList = require('../discordTools/SetupServerList.js');
 const StorageMonitorHandler = require('../handlers/storageMonitorHandler.js');
+const TokenRecovery = require('../util/tokenRecovery.js');
 
 /*
     Storage monitors are polled every 30 polls (about five minutes at the default polling interval), so a monitor that
@@ -118,6 +119,18 @@ module.exports = {
         await CredentialsExpiryHandler.handler(client, true);
         client.credentialsExpiryIntervalId = setInterval(CredentialsExpiryHandler.handler,
             Config.general.credentialsExpiryCheckIntervalMs, client, false);
+
+        /*
+            The one renewal of tokens that expire soon (every hour, every stored login). Awaited once, so a token that
+            expired while the bot was down is renewed before the servers are connected.
+        */
+        try {
+            await TokenRecovery.start(client);
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `The expiry check of the Rust+ tokens failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
 
         /*
             Adopt servers and devices that were paired in-game. The notification history of the account knows them,

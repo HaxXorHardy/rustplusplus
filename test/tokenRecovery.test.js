@@ -208,6 +208,132 @@ Test.describe('TokenRecovery.reconnect', () => {
     });
 });
 
+/*
+    The renewal is single-flight per account and rebuilds every connection of the account: before, every caller renewed
+    on its own and only rebuilt its own guild, and two renewals in a row killed each other's sockets.
+*/
+Test.describe('TokenRecovery.renew', () => {
+    Test.it('runs one login for callers that come at the same time', async (t) => {
+        const client = fakeClient();
+        let renewals = 0;
+        let release = null;
+
+        stubRenew(t, () => new Promise((resolve) => {
+            renewals += 1;
+            release = () => resolve({ token: 'new' });
+        }));
+        TokenRecovery.reset();
+
+        const first = TokenRecovery.renew(client, '1', 'expired', { proactive: true });
+        const second = TokenRecovery.renew(client, '1', 'history 403');
+        const third = TokenRecovery.reportRejected(client, 'guild', '1', 'handshake 403');
+
+        Assert.strictEqual(TokenRecovery.isRenewing('1'), true);
+
+        await new Promise((resolve) => setImmediate(resolve));
+        release();
+
+        Assert.deepStrictEqual(await Promise.all([first, second, third]), ['renewed', 'renewed', 'renewed']);
+        Assert.strictEqual(renewals, 1);
+        Assert.strictEqual(TokenRecovery.isRenewing('1'), false);
+    });
+
+    Test.it('rebuilds every connection of the account, and only those', async (t) => {
+        const client = fakeClient();
+        const rebuilt = [];
+        const leaderSocket = { closed: 0, close: () => { leaderSocket.closed += 1; } };
+
+        client.rustplusInstances = {
+            a: { playerId: '1', rebuildConnection: (reason, options) => rebuilt.push(['a', options.force]) },
+            b: { playerId: '1', rebuildConnection: (reason, options) => rebuilt.push(['b', options.force]) },
+            c: {
+                playerId: '2',
+                rebuildConnection: () => rebuilt.push(['c']),
+                leaderRustPlusInstance: { playerId: '1', websocket: leaderSocket },
+            },
+        };
+
+        stubRenew(t, async () => ({ token: 'new' }));
+        TokenRecovery.reset();
+
+        Assert.strictEqual(await TokenRecovery.renew(client, '1', 'test'), 'renewed');
+
+        Assert.deepStrictEqual(rebuilt, [['a', true], ['b', true]]);
+        Assert.strictEqual(leaderSocket.closed, 1, 'the team leader connection of the account reconnects as well');
+    });
+});
+
+Test.describe('TokenRecovery.renewIfDue', () => {
+    const RustPlusAuth = require('../src/util/rustplusAuth.js');
+
+    function stubAuth(t, auth) {
+        const original = RustPlusAuth.readAuth;
+        RustPlusAuth.readAuth = () => auth;
+        t.after(() => { RustPlusAuth.readAuth = original; });
+    }
+
+    const now = () => Math.floor(Date.now() / 1000);
+
+    Test.it('renews a token that expires soon without counting it as a rejection', async (t) => {
+        const client = fakeClient();
+        let renewals = 0;
+
+        stubAuth(t, { token: 'old', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 3600 });
+        stubRenew(t, async () => { renewals += 1; return { token: 'new' }; });
+        TokenRecovery.reset();
+
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'renewed');
+        Assert.strictEqual(renewals, 1);
+        Assert.strictEqual(TokenRecovery.renewalCount('1'), 0);
+    });
+
+    Test.it('leaves a fresh token alone', async (t) => {
+        const client = fakeClient();
+        let renewals = 0;
+
+        stubAuth(t, { token: 'old', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 10 * 24 * 3600 });
+        stubRenew(t, async () => { renewals += 1; return { token: 'new' }; });
+        TokenRecovery.reset();
+
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'skipped');
+        Assert.strictEqual(renewals, 0);
+    });
+
+    Test.it('cannot renew a login without a Steam refresh token', async (t) => {
+        const client = fakeClient();
+        let renewals = 0;
+
+        stubAuth(t, { token: 'old', tokenExpiresAt: now() + 60 });
+        stubRenew(t, async () => { renewals += 1; return { token: 'new' }; });
+        TokenRecovery.reset();
+
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'skipped');
+        Assert.strictEqual(renewals, 0);
+    });
+
+    Test.it('does not repeat a failed renewal within the hour while the token still works', async (t) => {
+        t.mock.timers.enable({ apis: ['Date'] });
+
+        const client = fakeClient();
+        let renewals = 0;
+
+        stubAuth(t, { token: 'old', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 24 * 3600 });
+        stubRenew(t, async () => { renewals += 1; throw new Error('steam says no'); });
+        TokenRecovery.reset();
+
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'failed');
+
+        t.mock.timers.tick(TokenRecovery.RENEW_MIN_INTERVAL_MS + 1000);
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'skipped');
+
+        t.mock.timers.tick(TokenRecovery.EXPIRY_CHECK_INTERVAL_MS);
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'failed');
+
+        Assert.strictEqual(renewals, 2);
+        Assert.strictEqual(TokenRecovery.renewalCount('1'), 0, 'a proactive renewal is no rejection');
+    });
+});
+
 Test.describe('error event', () => {
     /* The handshake itself reports a refused token, so the bot does not have to wait for the history read. */
     Test.it('reports a 403 handshake to the recovery', async (t) => {
