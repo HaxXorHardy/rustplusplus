@@ -55,9 +55,19 @@ async function step(rustplus, client, label, handler) {
     /* No log line per step: a slow step is reported below with its name, the cycle line carries the duration. */
     rustplus.backgroundPhase = label;
 
+    const startedMs = Date.now();
+    let reportedSlow = false;
+
     const work = (async () => {
         try {
             await handler();
+
+            /* A step that was reported as slow says when it is done, so the log shows how long it really took. */
+            if (reportedSlow) {
+                rustplus.log(client.intlGet(null, 'infoCap'),
+                    `The background step for ${label} finished after ${Math.round((Date.now() - startedMs) / 1000)} s.`,
+                    'debug');
+            }
         }
         catch (e) {
             rustplus.log(client.intlGet(null, 'warningCap'),
@@ -76,8 +86,15 @@ async function step(rustplus, client, label, handler) {
         await WithTimeout.withTimeout(work, STEP_TIMEOUT_MS, label);
     }
     catch (e) {
+        reportedSlow = true;
+
+        /* The phase names the part that waits (the information step sets it, see handlers/informationHandler.js). */
+        const where = (rustplus.backgroundPhase && rustplus.backgroundPhase !== label) ?
+            `, waiting in ${rustplus.backgroundPhase}` : '';
+
         rustplus.log(client.intlGet(null, 'warningCap'),
-            `The background step for ${label} is slow (${e && e.message ? e.message : e}), it keeps running.`, 'warn');
+            `The background step for ${label} is slow (${e && e.message ? e.message : e}${where}), it keeps running.`,
+            'warn');
     }
 }
 
