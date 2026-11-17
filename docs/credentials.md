@@ -58,8 +58,11 @@ of their token, `/credentials remove` and `/credentials set_hoster` manage them.
 ## Token renewal and the DM reminder
 
 * A login with a refresh token renews itself: `RPP_RUSTPLUS_TOKEN_RENEW_BEFORE` (default 3 days) before the expiry the
-  bot fetches a new token (fresh Steam cookies over the refresh token, no password, no Steam Guard). It also runs once an
-  hour in the background while the bot is connected, and `node scripts/rustplusLogin.js --renew` does it from cron.
+  bot fetches a new token (fresh Steam cookies over the refresh token, no password, no Steam Guard). One hourly check
+  (`util/tokenRecovery.js`) does that for every stored login, a connect only renews a token that has already expired.
+* `node scripts/rustplusLogin.js --renew` is meant for a bot that is **not** running. Every renewal invalidates the
+  previous token, a running bot notices the newer stored token on the next failed poll and reconnects - but there is no
+  reason to renew behind its back.
 * A login without one (pasted token) is reported to its owner: the bot checks every
   `RPP_CREDENTIALS_EXPIRY_CHECK_INTERVAL` (default 1 hour) and sends a direct message before and after the expiry, each
   state once per token.
@@ -76,11 +79,23 @@ See also: [FAQ.md](../FAQ.md#do-i-still-need-fcm-credentials), [Commands](comman
 
 ## What happens when Facepunch rejects the token
 
-The account token can be refused at any time - `401` or `403` (ASP.NET "Forbidden" with a traceId), for the history read
-and for the socket handshake alike. `util/tokenRecovery.js` holds one policy for every source of a rejection:
+Facepunch keeps one token per account: a renewal mints a new one and the relay answers every socket that was opened with
+the old one with `not_found`. So the token is renewed in exactly one place, `util/tokenRecovery.js`:
 
-- the second rejection in a row renews the token with the stored Steam refresh token,
-- at most one renewal every two minutes, so a dead token cannot flood Steam with logins,
+- a renewal is single-flight per steam account - whoever asks while one runs (connect, history read, handshake error)
+  waits for it and uses its result, there is never a second login in parallel,
+- after a renewal **every** connection of the account is rebuilt: all guilds, the team leader connections and the
+  reconnects that wait on their backoff,
+- a rejected token (`401`/`403` of the history read or of the handshake) is renewed on the second rejection in a row,
+  at most once every two minutes,
 - after three renewals without a working connection the account is left alone for 30 minutes and the owner of the
   credentials gets a direct message to run `/credentials login`,
-- a working connection resets all of it, and a reconnect that waits on the backoff starts right away after a renewal.
+- a socket whose token is older than the stored one (renewed by another guild, the login or the script) is rebuilt on
+  the next failed poll without renewing anything,
+- a working connection resets all of it.
+
+The pairing history (`POST /api/history/read`) and the account state (`/api/syncData`) are read once per account and
+run, whatever the number of guilds that use it. A connection that answers `not_found` right after the handshake reads
+only its own account, at most every two minutes. A server is only marked as unpaired when the account state could be
+read and the server is not answering at that moment - the history drops old notifications, so its silence proves
+nothing.
