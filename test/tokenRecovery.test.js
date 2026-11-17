@@ -334,6 +334,107 @@ Test.describe('TokenRecovery.renewIfDue', () => {
     });
 });
 
+/*
+    The renewals that were not needed: a refused read while the socket with the same token answers, Facepunch handing
+    out the same token, and a renewal that does not reach out of the renewal window (it used to repeat every hour and
+    rebuild every socket each time).
+*/
+Test.describe('TokenRecovery, needless renewals', () => {
+    const RustPlusAuth = require('../src/util/rustplusAuth.js');
+
+    function stubStoredAuth(t, auth) {
+        const original = RustPlusAuth.readAuth;
+        RustPlusAuth.readAuth = () => auth;
+        t.after(() => { RustPlusAuth.readAuth = original; });
+    }
+
+    const now = () => Math.floor(Date.now() / 1000);
+
+    Test.it('does not renew while a connection with the same token answers', async (t) => {
+        const client = fakeClient();
+        let renewals = 0;
+
+        stubStoredAuth(t, { token: 'token', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 10 * 86400 });
+        stubRenew(t, async () => { renewals += 1; return { token: 'new' }; });
+        TokenRecovery.reset();
+
+        client.rustplusInstances.guild = {
+            guildId: 'guild', playerId: '1', authToken: 'token', isOperational: true,
+            lastSuccessfulPollMs: Date.now(), rebuildConnection: () => undefined,
+        };
+
+        for (let i = 0; i < 5; i++) {
+            Assert.strictEqual(await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403'), 'skipped');
+        }
+
+        Assert.strictEqual(renewals, 0);
+    });
+
+    Test.it('renews when the connection holds an older token or has not answered for a while', async (t) => {
+        const client = fakeClient();
+        let renewals = 0;
+
+        stubStoredAuth(t, { token: 'token', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 10 * 86400 });
+        stubRenew(t, async () => { renewals += 1; return { token: 'new' }; });
+        TokenRecovery.reset();
+
+        client.rustplusInstances.guild = {
+            guildId: 'guild', playerId: '1', authToken: 'token', isOperational: true,
+            lastSuccessfulPollMs: Date.now() - TokenRecovery.LIVE_SOCKET_PROOF_MS - 1000,
+            rebuildConnection: () => undefined,
+        };
+
+        await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403');
+        Assert.strictEqual(await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403'), 'renewed');
+        Assert.strictEqual(renewals, 1);
+    });
+
+    Test.it('keeps the connections when Facepunch returns the same token', async (t) => {
+        const client = fakeClient();
+        const rebuilt = [];
+
+        stubStoredAuth(t, { token: 'same', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 10 * 86400 });
+        stubRenew(t, async () => ({ token: 'same', tokenExpiresAt: now() + 10 * 86400 }));
+        TokenRecovery.reset();
+
+        client.rustplusInstances.guild = { playerId: '1', rebuildConnection: (reason) => rebuilt.push(reason) };
+
+        Assert.strictEqual(await TokenRecovery.renew(client, '1', 'test'), 'renewed');
+        Assert.deepStrictEqual(rebuilt, []);
+    });
+
+    Test.it('pauses the hourly renewal when the renewed token still expires soon', async (t) => {
+        t.mock.timers.enable({ apis: ['Date'], now: 1_800_000_000_000 });
+
+        const client = fakeClient();
+        const auth = { token: 'a', steamRefreshToken: 'refresh', tokenExpiresAt: now() + 3600 };
+        let renewals = 0;
+
+        stubStoredAuth(t, auth);
+        stubRenew(t, async () => {
+            renewals += 1;
+            auth.token = `t${renewals}`;
+            auth.tokenExpiresAt = now() + 24 * 3600;  /* shorter than the default window of three days */
+            return auth;
+        });
+        TokenRecovery.reset();
+
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'renewed');
+
+        /* A working connection in between must not lift the pause. */
+        TokenRecovery.markHealthy('1');
+
+        t.mock.timers.tick(TokenRecovery.EXPIRY_CHECK_INTERVAL_MS);
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'skipped');
+
+        t.mock.timers.tick(TokenRecovery.USELESS_RENEWAL_PAUSE_MS);
+        Assert.strictEqual(await TokenRecovery.renewIfDue(client, '1'), 'renewed');
+
+        Assert.strictEqual(renewals, 2);
+        Assert.ok(client.logs.some((entry) => entry.text.includes('still inside')));
+    });
+});
+
 Test.describe('error event', () => {
     /* The handshake itself reports a refused token, so the bot does not have to wait for the history read. */
     Test.it('reports a 403 handshake to the recovery', async (t) => {

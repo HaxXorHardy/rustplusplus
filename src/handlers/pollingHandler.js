@@ -109,6 +109,9 @@ function isCurrentInstance(rustplus, client) {
 function updatePollHealth(rustplus, client, success) {
     if (success) {
         rustplus.consecutiveFailedPolls = 0;
+
+        /* Proof that the account token of this socket works (util/tokenRecovery.js trusts it over a refused read). */
+        rustplus.lastSuccessfulPollMs = Date.now();
         return;
     }
 

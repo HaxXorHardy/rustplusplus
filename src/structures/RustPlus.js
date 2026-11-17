@@ -100,6 +100,7 @@ class RustPlus extends RustPlusLib {
         */
         this.tokensUpdatedMs = Date.now();
         this.consecutiveFailedPolls = 0;            /* Polls in a row that got no valid answer from the server. */
+        this.lastSuccessfulPollMs = 0;              /* Last poll the server answered, proves the account token works. */
         this.isPolling = false;                     /* Is a poll cycle running right now? */
         this.timers = new Object();                 /* Stores all custom timers that are created. */
         this.markers = new Object();                /* Stores all custom markers that are created. */
