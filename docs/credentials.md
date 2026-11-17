@@ -90,6 +90,10 @@ the old one with `not_found`. So the token is renewed in exactly one place, `uti
   at most once every two minutes,
 - after three renewals without a working connection the account is left alone for 30 minutes and the owner of the
   credentials gets a direct message to run `/credentials login`,
+- no renewal while a connection of the account runs on the stored token and answered a poll within the last two
+  minutes - the token evidently works, the refusal is a proxy, a rate limit or a hiccup of Facepunch,
+- a renewal that returns the same token rebuilds nothing; a proactive renewal whose new token still expires inside
+  `RPP_RUSTPLUS_TOKEN_RENEW_BEFORE` is not repeated for 12 hours (it used to repeat every hour),
 - a socket whose token is older than the stored one (renewed by another guild, the login or the script) is rebuilt on
   the next failed poll without renewing anything,
 - a working connection resets all of it.
