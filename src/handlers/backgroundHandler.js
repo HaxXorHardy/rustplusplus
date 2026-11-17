@@ -52,8 +52,8 @@ async function step(rustplus, client, label, handler) {
     }
 
     rustplus.backgroundPending[label] = true;
+    /* No log line per step: a slow step is reported below with its name, the cycle line carries the duration. */
     rustplus.backgroundPhase = label;
-    rustplus.log(client.intlGet(null, 'infoCap'), `background: ${label}`, 'debug');
 
     const work = (async () => {
         try {
