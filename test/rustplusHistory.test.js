@@ -509,6 +509,48 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(historyReads, 0);
     });
 
+    /*
+        Measured live: /api/syncData answered 403 every run while the socket and the history worked with the same token,
+        and the 403 blocked the whole run - no pairing was adopted anymore.
+    */
+    Test.it('adopts the history when the account state is refused', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const instance = { activeServer: null, serverList: {}, serverListLite: {}, deletedServers: {}, trackers: {} };
+        const client = fakeClient(instance);
+
+        const refused = async () => {
+            const error = new Error('Sync request failed with status 403.');
+            error.status = 403;
+            throw error;
+        };
+
+        await RustPlusHistory.refresh(client, async () => [serverPairEntry(42, 1, '2026-11-17T10:00:00+00:00')],
+            refused);
+
+        Assert.strictEqual(Object.keys(instance.serverList).length, 1, 'the server of the history was adopted');
+    });
+
+    Test.it('does not ask for a refused account state on every run', async (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const client = fakeClient({ activeServer: null, serverList: {}, trackers: {} });
+        let syncReads = 0;
+
+        const refused = async () => {
+            syncReads += 1;
+            const error = new Error('Sync request failed with status 403.');
+            error.status = 403;
+            throw error;
+        };
+
+        await RustPlusHistory.refresh(client, async () => [], refused);
+        await RustPlusHistory.refresh(client, async () => [], refused);
+        await RustPlusHistory.refresh(client, async () => [], refused);
+
+        Assert.strictEqual(syncReads, 1);
+    });
+
     Test.it('keeps a server that the account is still paired with', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
 
