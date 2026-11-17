@@ -103,3 +103,31 @@ run, whatever the number of guilds that use it. A connection that answers `not_f
 only its own account, at most every two minutes. A server is only marked as unpaired when the account state could be
 read and the server is not answering at that moment - the history drops old notifications, so its silence proves
 nothing.
+
+## Push notifications (FCM)
+
+With `RPP_PUSH_ENABLED=true` (default) the bot registers every stored login as a device of the Rust+ app, the same
+way the Rust+ app and the rustplusplus credential application do (`util/rustplusPush.js`):
+
+1. the account token of the Steam login (nothing to do, `/credentials login` stored it),
+2. a registration with Google as an Android device of the Rust+ app (android id, security token, FCM token),
+3. an Expo push token for that device,
+4. `POST /api/push/register`: Facepunch sends the notifications of the account to that device.
+
+Steps 2 and 3 run once, step 4 again after every new account token and a day before the registration expires. The
+result is stored in `credentials/rustplusPush/<steamId>.json`; the account token itself is not copied there. The bot
+shows up as one more device in the Rust+ account. Delete that file to register a new device.
+
+What the notifications are used for (`util/rustplusPushNotifications.js`):
+
+| Notification | What happens |
+| --- | --- |
+| Raid alarm of the [raid-alarm plugin](https://umod.org/plugins/raid-alarm) | `@everyone` in the activity channel, the team chat in-game when connected to that server |
+| Smart alarm | reported when the bot is **not** connected to that server (`RPP_PUSH_ALARMS_OTHER_SERVERS`); the connected server reports its alarms over the socket |
+| Team login | reported when the bot is **not** connected to that server; the team poll reports the rest |
+| Pairing | the history of the account is read right away instead of on the next run |
+| Death | left to the history, it reports deaths already |
+| anything else | logged in full (`Rust+ push: unhandled notification ...`) |
+
+Everything is optional: a failed registration or connection is logged once an hour and the bot keeps running on the
+history. A device whose FCM connection fails three times in a row is registered anew.

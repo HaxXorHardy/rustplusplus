@@ -65,6 +65,7 @@ const USELESS_RENEWAL_PAUSE_MS = 12 * 60 * 60 * 1000;
 const LIVE_SOCKET_PROOF_MS = 2 * 60 * 1000;
 
 const states = new Map();   /* steamId -> state */
+const tokenListeners = new Set();   /* called with the steam id after the stored token changed */
 let expiryTimer = null;
 
 function stateOf(steamId) {
@@ -234,6 +235,27 @@ function guildOf(client, steamId, guildId) {
 }
 
 /*
+    Subscribe to new account tokens (a renewal here, a login). Returns the function that unsubscribes. The push
+    registration (util/rustplusPushListener.js) uses it: Facepunch sends the notifications to the token it was made with.
+*/
+function onTokenChanged(listener) {
+    tokenListeners.add(listener);
+
+    return () => tokenListeners.delete(listener);
+}
+
+function notifyTokenChanged(steamId) {
+    for (const listener of tokenListeners) {
+        try {
+            listener(`${steamId}`);
+        }
+        catch (e) {
+            /* A listener must not break the renewal. */
+        }
+    }
+}
+
+/*
     A connection of this account that runs on the stored token and answered a poll a moment ago: the token works.
     Returns that connection or null.
 */
@@ -317,6 +339,8 @@ async function renew(client, steamId, reason, options = {}) {
                     `Facepunch returned the same token for ${steamId}, the connections are kept.`, 'debug');
                 return 'renewed';
             }
+
+            notifyTokenChanged(steamId);
 
             const touched = rebuildAll(client, steamId, 'the account token was renewed');
 
@@ -478,6 +502,8 @@ module.exports = {
     isBackedOff: isBackedOff,
     isRenewing: isRenewing,
     liveSocketOf: liveSocketOf,
+    onTokenChanged: onTokenChanged,
+    notifyTokenChanged: notifyTokenChanged,
     renewalCount: renewalCount,
     rebuildAll: rebuildAll,
     /* The old name, kept for callers outside of this repository. */
