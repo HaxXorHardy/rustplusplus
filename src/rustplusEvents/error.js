@@ -78,9 +78,11 @@ module.exports = {
                     A 403 at the handshake is the relay refusing the account token. Renew it right away instead of
                     waiting for the history read, so the connection is back within seconds (throttled in the recovery).
                 */
-                if (rustplus.playerId && `${err.message}`.includes('403')) {
+                const status = /HTTP (401|403)\b/.exec(`${err.message}`);
+
+                if (rustplus.playerId && status !== null) {
                     TokenRecovery.reportRejected(client, rustplus.guildId, rustplus.playerId,
-                        'the handshake was refused with 403').catch(() => undefined);
+                        `the handshake was refused with ${status[1]}`).catch(() => undefined);
                 }
             } break;
 

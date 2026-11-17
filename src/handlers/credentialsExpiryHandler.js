@@ -84,7 +84,7 @@ async function handleGuild(client, guildId, now, warningSeconds) {
         const state = getExpiryState(expiresAt, now, warningSeconds);
         if (state === null) continue;
 
-        /* An account that can renew itself needs no user, the bot fetches a new token on the next connect. */
+        /* An account that can renew itself needs no user, the hourly check of util/tokenRecovery.js renews it. */
         if (state === STATE_EXPIRING_SOON && auth.steamRefreshToken) continue;
         if (alreadyNotified(client, `${steamId}:${state}:${expiresAt}`)) continue;
 

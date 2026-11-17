@@ -271,189 +271,268 @@ function setReportedDeath(instance, steamId, at) {
 }
 
 /*
+    The steam accounts a guild reads: the account of its active (or first) server, or every stored login when the
+    guild has no server at all (everything was removed, or a fresh container that only carries the stored login).
+*/
+function steamIdsOfGuild(instance) {
+    const serverList = instance.serverList || {};
+    const server = serverList[instance.activeServer] || serverList[Object.keys(serverList)[0]];
+
+    return (server && server.steamId) ? [`${server.steamId}`] : RustPlusAuth.listSteamIds();
+}
+
+/*
+    Reads the account state and the notification history of one account - once per run, however many guilds use it.
+    A token the API rejects goes to util/tokenRecovery.js; a renewal that worked is used right away. Returns null when
+    the account cannot be read now.
+*/
+async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn) {
+    /* A token that keeps being rejected is left alone until the backoff of the recovery is over. */
+    if (TokenRecovery.isBackedOff(steamId)) return null;
+
+    let auth = RustPlusAuth.readAuth(steamId);
+    if (auth === null) return null;
+
+    const read = async () => ({
+        accountServers: await readAccountServers(client, steamId, auth, fetchSyncFn),
+        entries: parsePairingEntries(await fetchHistoryFn(auth.token)),
+    });
+
+    let result = null;
+
+    try {
+        result = await read();
+    }
+    catch (e) {
+        if (!isAuthFailure(e)) throw e;
+
+        /* One policy for every source of a rejected token: strikes, throttle, renewal, rebuild of the sockets. */
+        const recovery = await TokenRecovery.reportRejected(client, guildId, steamId,
+            `the history read was refused with ${e.status}`);
+
+        /* A renewal that worked is used right away, everything else waits for the next run. */
+        if (recovery !== 'renewed') throw e;
+
+        auth = RustPlusAuth.readAuth(steamId);
+        if (auth === null) throw e;
+
+        accountStateCache.delete(`${steamId}`);
+        result = await read();
+    }
+
+    /* The token works, a rejection that follows starts at one again. */
+    TokenRecovery.markReadSuccessful(steamId);
+
+    if (result.accountServers !== null) {
+        /* Keep the stored snapshot current, the token renewal and the login use it. */
+        try {
+            RustPlusAuth.writeAuth(steamId, Object.assign({}, RustPlusAuth.readAuth(steamId) || auth,
+                { servers: result.accountServers }));
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Could not store the account state of ${steamId}: ${e && e.message ? e.message : e}`, 'debug');
+        }
+    }
+
+    return { auth: auth, accountServers: result.accountServers, entries: result.entries };
+}
+
+/*
+    The death notifications of the account that were not reported to this guild yet, oldest first. The newest reported
+    one is remembered per account, so the replay of the history does not repeat it. The first run only records the
+    newest one: the history keeps old deaths and nobody wants them as a direct message days later.
+*/
+function takeNewDeaths(instance, steamId, entries) {
+    const reportedDeath = getReportedDeath(instance, steamId);
+    const deathEntries = entries
+        .filter((entry) => entry.kind === 'death')
+        .map((entry) => ({ entry: entry, at: entry.date ? Date.parse(entry.date) : NaN }))
+        .filter((death) => Number.isFinite(death.at));
+
+    if (deathEntries.length === 0) return { changed: false, deaths: [] };
+
+    if (reportedDeath === null) {
+        setReportedDeath(instance, steamId, Math.max(...deathEntries.map((death) => death.at)));
+        return { changed: true, deaths: [] };
+    }
+
+    const newDeaths = deathEntries.filter((death) => death.at > reportedDeath);
+    if (newDeaths.length === 0) return { changed: false, deaths: [] };
+
+    setReportedDeath(instance, steamId, Math.max(...newDeaths.map((death) => death.at)));
+
+    return { changed: true, deaths: [...newDeaths].reverse().map((death) => death.entry) };
+}
+
+/*
+    Writes what one account knows into one guild: deaths, the paired servers and devices, the unpaired servers. Returns
+    the devices that were added and the deaths to report.
+*/
+function applyAccount(client, guildId, instance, steamId, account) {
+    const intlGet = (key) => client.intlGet(guildId, key);
+    const { auth, accountServers, entries } = account;
+    const added = [];
+
+    const death = takeNewDeaths(instance, steamId, entries);
+    let changed = death.changed;
+
+    /*
+        Only the account state is a complete list of the pairings, the history drops old notifications. So a server is
+        only marked as unpaired when the account state could be read, and never while its connection works.
+    */
+    const pairedIds = (accountServers === null) ? null : pairedServerIds(accountServers, entries);
+    if (markUnpairedServers(client, instance, pairedIds, guildId) !== 0) changed = true;
+
+    const servers = (accountServers === null) ? (auth.servers || []) : accountServers;
+
+    /*
+        The account state is fresh but not complete: the app does not always list a server that was paired in-game, and
+        its token can lag behind. So it never overwrites a token, only fills in what is missing. The history is applied
+        after it and decides about the newest player token.
+    */
+    const synced = RustPlusSync.applySyncServers(instance, steamId, servers, intlGet, { keepCredentials: true });
+
+    const applied = (entries.length === 0) ? emptyPairingResult() :
+        applyPairingEntries(instance, steamId, entries, intlGet);
+
+    if (synced.created !== 0 || synced.updated !== 0 || applied.devices !== 0 ||
+        applied.created !== 0 || applied.updated !== 0) {
+        changed = true;
+    }
+
+    if (!changed) return { added: added, deaths: death.deaths };
+
+    /*
+        Only a run that adopted something activates a server. A guild whose connection was ended in Discord
+        (activeServer === null by the disconnect button) stays disconnected: the user decided that, the refresh must not
+        connect it again every five minutes.
+    */
+    const firstServerKey = Object.keys(instance.serverList)
+        .find((key) => instance.serverList[key] && instance.serverList[key].paired !== false);
+    let activatedKey = null;
+
+    if (instance.activeServer === null && firstServerKey && (synced.created !== 0 || applied.created !== 0 ||
+        applied.devices !== 0 || applied.updated !== 0)) {
+        instance.activeServer = firstServerKey;
+        activatedKey = firstServerKey;
+
+        client.log(client.intlGet(null, 'infoCap'),
+            `Activating "${instance.serverList[firstServerKey].title}", the guild had no active server.`);
+    }
+
+    client.setInstance(guildId, instance);
+
+    for (const device of applied.added) added.push({ guildId: guildId, ...device });
+
+    /* Only a pairing notification tells about a new player token, the account snapshot does not. */
+    reconnectRenewedServers(client, guildId, instance, applied.updatedKeys);
+
+    /* A server that is adopted while the bot runs has no connection: the startup connects the servers only once. */
+    const activatedServer = activatedKey ? instance.serverList[activatedKey] : null;
+    const alreadyConnected = client.rustplusInstances && client.rustplusInstances[guildId];
+
+    if (activatedServer && !alreadyConnected) {
+        client.createRustplusInstance(guildId, activatedServer.serverIp, activatedServer.appPort,
+            activatedServer.steamId, activatedServer.playerToken);
+    }
+
+    return { added: added, deaths: death.deaths };
+}
+
+/*
     Runs on a timer: adopts servers and devices that were paired in-game since the last run and returns the devices
     that were added, so the caller can post their Discord messages. Deaths of the account are reported as well
     (`deaths`), they replace the direct message the removed FCM listener sent.
 
-    A renewed pairing of the active server (new player token) reconnects the instance, otherwise the bot would keep
-    asking with credentials the server does not accept (`not_found` on every request).
+    Every account is read once per run and applied to every guild that uses it (the old version asked Facepunch once
+    per guild). options.steamIds limits the run to these accounts (the targeted refresh of a connection).
 */
-async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = RustPlusLogin.fetchSyncData) {
+async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = RustPlusLogin.fetchSyncData,
+    options = {}) {
     const added = [];
     const deaths = [];
 
+    const only = Array.isArray(options.steamIds) ? options.steamIds.map((id) => `${id}`) : null;
+
+    /* steamId -> guild ids, in the order of the guilds. */
+    const accounts = new Map();
+
     for (const guildId of Object.keys(client.instances || {})) {
+        let instance = null;
+
         try {
-            const instance = client.getInstance(guildId);
-            const serverList = instance.serverList || {};
-            const server = serverList[instance.activeServer] ||
-                serverList[Object.keys(serverList)[0]];
+            instance = client.getInstance(guildId);
+        }
+        catch (e) {
+            continue;
+        }
 
-            /*
-                The account is known by the steam id of a configured server. A guild without any server (everything
-                was removed, or a fresh container that only carries the stored login) would never adopt a server
-                again, so every stored login is asked then.
-            */
-            const steamIds = (server && server.steamId) ? [`${server.steamId}`] : RustPlusAuth.listSteamIds();
+        if (!instance) continue;
 
-            for (const steamId of steamIds) {
-                /* A token that keeps being rejected is left alone until the backoff of the recovery is over. */
-                if (TokenRecovery.isBackedOff(steamId)) continue;
+        for (const steamId of steamIdsOfGuild(instance)) {
+            if (only !== null && !only.includes(`${steamId}`)) continue;
 
-                let auth = RustPlusAuth.readAuth(steamId);
-                if (auth === null) continue;
+            if (!accounts.has(steamId)) accounts.set(steamId, []);
+            accounts.get(steamId).push(guildId);
+        }
+    }
 
-                const intlGet = (key) => client.intlGet(guildId, key);
+    for (const [steamId, guildIds] of accounts) {
+        let account = null;
 
-                /*
-                    The account state (app) and the pairing notifications (server) are both evidence of a pairing. A
-                    token the API rejects is renewed once and the read is repeated; an account that cannot be renewed
-                    is left alone for a while instead of retrying every few seconds.
-                */
-                let accountServers = null;
-                let entries = null;
-
-                try {
-                    accountServers = await readAccountServers(client, steamId, auth, fetchSyncFn);
-                    entries = parsePairingEntries(await fetchHistoryFn(auth.token));
-                }
-                catch (e) {
-                    if (!isAuthFailure(e)) throw e;
-
-                    /* One policy for every source of a rejected token: strikes, throttle, renewal, reconnect. */
-                    const recovery = await TokenRecovery.reportRejected(client, guildId, steamId,
-                        'the history read was refused');
-
-                    /* A renewal that worked is used right away, everything else waits for the next run. */
-                    if (recovery !== 'renewed') throw e;
-
-                    auth = RustPlusAuth.readAuth(steamId);
-                    if (auth === null) throw e;
-
-                    accountServers = await readAccountServers(client, steamId, auth, fetchSyncFn);
-                    entries = parsePairingEntries(await fetchHistoryFn(auth.token));
-                }
-
-                /* The token works, a rejection that follows starts at one again. */
-                TokenRecovery.markReadSuccessful(steamId);
-
-                let changed = false;
-
-                /*
-                    A death notification is reported once as a direct message (the job of the removed FCM listener).
-                    The newest reported one is remembered per account, so the replay of the history does not repeat it.
-                    The first run only records the newest one: the history keeps old deaths and nobody wants them as a
-                    direct message days later.
-                */
-                const reportedDeath = getReportedDeath(instance, steamId);
-                const deathEntries = entries
-                    .filter((entry) => entry.kind === 'death')
-                    .map((entry) => ({ entry: entry, at: entry.date ? Date.parse(entry.date) : NaN }))
-                    .filter((death) => Number.isFinite(death.at));
-
-                if (reportedDeath === null) {
-                    if (deathEntries.length !== 0) {
-                        setReportedDeath(instance, steamId, Math.max(...deathEntries.map((death) => death.at)));
-                        changed = true;
-                    }
-                }
-                else {
-                    const newDeaths = deathEntries.filter((death) => death.at > reportedDeath);
-
-                    if (newDeaths.length !== 0) {
-                        /* Oldest first, the user should read them in the order they happened. */
-                        for (const death of [...newDeaths].reverse()) {
-                            deaths.push({ guildId: guildId, steamId: steamId, death: death.entry });
-                        }
-
-                        setReportedDeath(instance, steamId, Math.max(...newDeaths.map((death) => death.at)));
-                        changed = true;
-                    }
-                }
-
-                if (accountServers !== null) {
-                    /* Keep the stored snapshot current, the token renewal and the login use it. */
-                    try {
-                        RustPlusAuth.writeAuth(steamId, Object.assign({}, auth, { servers: accountServers }));
-                    }
-                    catch (e) {
-                        client.log(client.intlGet(null, 'warningCap'),
-                            `Could not store the account state of ${steamId}: ${e && e.message ? e.message : e}`,
-                            'debug');
-                    }
-                }
-
-                /* Servers whose pairing is gone are not connected anymore, their entry stays. */
-                const pairedIds = (accountServers === null && entries.length === 0) ? null :
-                    pairedServerIds(accountServers, entries);
-
-                if (markUnpairedServers(client, instance, pairedIds) !== 0) changed = true;
-
-                const servers = (accountServers === null) ? (auth.servers || []) : accountServers;
-
-                /*
-                    The account state is fresh but not complete: the app does not always list a server that was paired
-                    in-game, and its token can lag behind. So it never overwrites a token, only fills in what is
-                    missing. The history is applied after it and decides about the newest player token.
-                */
-                const synced = RustPlusSync.applySyncServers(instance, steamId, servers, intlGet,
-                    { keepCredentials: true });
-
-                const applied = (entries.length === 0) ? emptyPairingResult() :
-                    applyPairingEntries(instance, steamId, entries, intlGet);
-
-                if (synced.created !== 0 || synced.updated !== 0 || applied.devices !== 0 ||
-                    applied.created !== 0 || applied.updated !== 0) {
-                    changed = true;
-                }
-
-                /*
-                    Only a run that adopted something activates a server. A guild whose connection was ended in Discord
-                    (activeServer === null by the disconnect button) stays disconnected: the user decided that, the
-                    refresh must not connect it again every five minutes.
-                */
-                if (!changed) continue;
-
-                const firstServerKey = Object.keys(instance.serverList)
-                    .find((key) => instance.serverList[key] && instance.serverList[key].paired !== false);
-                let activatedKey = null;
-
-                if (instance.activeServer === null && firstServerKey) {
-                    instance.activeServer = firstServerKey;
-                    activatedKey = firstServerKey;
-
-                    client.log(client.intlGet(null, 'infoCap'),
-                        `Activating "${instance.serverList[firstServerKey].title}", the guild had no active server.`);
-                }
-
-                /* Devices and servers that were adopted now need their Discord messages and their connection. */
-                client.setInstance(guildId, instance);
-
-                for (const device of applied.added) added.push({ guildId: guildId, ...device });
-
-                /* Only a pairing notification tells about a new player token, the account snapshot does not. */
-                reconnectRenewedServers(client, guildId, instance, applied.updatedKeys);
-
-                /*
-                    A server that is adopted while the bot runs has no connection: the startup path connects the
-                    servers of the instance only once.
-                */
-                const activatedServer = activatedKey ? instance.serverList[activatedKey] : null;
-                const alreadyConnected = client.rustplusInstances && client.rustplusInstances[guildId];
-
-                if (activatedServer && !alreadyConnected) {
-                    client.createRustplusInstance(guildId, activatedServer.serverIp, activatedServer.appPort,
-                        activatedServer.steamId, activatedServer.playerToken);
-                }
-            }
+        try {
+            account = await readAccount(client, guildIds[0], steamId, fetchHistoryFn, fetchSyncFn);
         }
         catch (e) {
             client.log(client.intlGet(null, 'warningCap'),
-                `Could not read the pairing history of ${guildId}: ${e && e.message ? e.message : e}`, 'debug');
+                `Could not read the pairing history of ${steamId}: ${e && e.message ? e.message : e}`, 'debug');
+            continue;
+        }
+
+        if (account === null) continue;
+
+        for (const guildId of guildIds) {
+            try {
+                const instance = client.getInstance(guildId);
+                const result = applyAccount(client, guildId, instance, steamId, account);
+
+                added.push(...result.added);
+
+                for (const death of result.deaths) {
+                    deaths.push({ guildId: guildId, steamId: steamId, death: death });
+                }
+            }
+            catch (e) {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `Could not apply the pairing history of ${steamId} to ${guildId}: ` +
+                    `${e && e.message ? e.message : e}`, 'debug');
+            }
         }
     }
 
     return { devices: added, deaths: deaths };
+}
+
+/*
+    The targeted refresh of one account, for a connection whose server answers not_found (a new player token after a
+    re-pairing). Throttled: a connection that keeps failing must not ask Facepunch on every reconnect.
+*/
+const ACCOUNT_REFRESH_MIN_MS = 2 * 60 * 1000;
+const accountRefreshAt = new Map();   /* steamId -> ms */
+
+async function refreshAccount(client, steamId, now = Date.now()) {
+    const key = `${steamId}`;
+    const last = accountRefreshAt.get(key);
+
+    if (last !== undefined && (now - last) < ACCOUNT_REFRESH_MIN_MS) return null;
+
+    accountRefreshAt.set(key, now);
+
+    /* The account state is read fresh: a new pairing must not wait for the cache. */
+    accountStateCache.delete(key);
+
+    return await refresh(client, fetchHistory, RustPlusLogin.fetchSyncData, { steamIds: [key] });
 }
 
 /*
@@ -469,6 +548,7 @@ const accountStateCache = new Map();   /* steamId -> { servers, at } */
 */
 function resetAccountStateCache() {
     accountStateCache.clear();
+    accountRefreshAt.clear();
     TokenRecovery.reset();
 }
 
@@ -526,15 +606,19 @@ function pairedServerIds(accountServers, entries) {
     Marks the servers of the instance that neither the account state nor the history knows anymore. Their player token
     is invalid, so the bot stops connecting them instead of ending in a reconnect loop of `not_found` answers.
 */
-function markUnpairedServers(client, instance, pairedIds) {
+function markUnpairedServers(client, instance, pairedIds, guildId = null) {
     if (!(pairedIds instanceof Set)) return 0;
 
     let changed = 0;
+    const rustplus = (guildId !== null && client.rustplusInstances) ? client.rustplusInstances[guildId] : null;
 
     for (const [key, server] of Object.entries(instance.serverList)) {
         if (!server) continue;
 
-        const paired = !server.guid || pairedIds.has(`${server.guid}`);
+        /* A server that answers right now is paired, whatever the lists say. */
+        const isWorking = Boolean(rustplus && rustplus.serverId === key && rustplus.isOperational);
+
+        const paired = isWorking || !server.guid || pairedIds.has(`${server.guid}`);
         if (server.paired === paired) continue;
 
         server.paired = paired;
@@ -585,5 +669,6 @@ module.exports = {
     parsePairingEntries: parsePairingEntries,
     applyPairingEntries: applyPairingEntries,
     refresh: refresh,
+    refreshAccount: refreshAccount,
     resetAccountStateCache: resetAccountStateCache,
 };
