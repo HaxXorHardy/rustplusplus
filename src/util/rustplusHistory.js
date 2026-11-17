@@ -286,9 +286,13 @@ function steamIdsOfGuild(instance) {
     A token the API rejects goes to util/tokenRecovery.js; a renewal that worked is used right away. Returns null when
     the account cannot be read now.
 */
-async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn) {
+async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn, now = Date.now()) {
     /* A token that keeps being rejected is left alone until the backoff of the recovery is over. */
     if (TokenRecovery.isBackedOff(steamId)) return null;
+
+    /* The history refused a token that a live socket proves: no new read (and no log line) until the pause is over. */
+    const pausedUntil = historyPausedUntil.get(`${steamId}`);
+    if (pausedUntil !== undefined && pausedUntil > now) return null;
 
     let auth = RustPlusAuth.readAuth(steamId);
     if (auth === null) return null;
@@ -310,6 +314,20 @@ async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn
         const recovery = await TokenRecovery.reportRejected(client, guildId, steamId,
             `the history read was refused with ${e.status}`);
 
+        /*
+            The token works (a socket with it answers its polls), only the history refuses it - measured: about 30
+            minutes after every renewal at a 15 s interval. Asking again every 15 s changes nothing and fills the
+            log, so the history of this account is paused.
+        */
+        if (recovery !== 'renewed' && TokenRecovery.liveSocketOf(client, steamId) !== null) {
+            historyPausedUntil.set(`${steamId}`, Date.now() + HISTORY_REFUSED_PAUSE_MS);
+
+            client.log(client.intlGet(null, 'infoCap'),
+                `The Rust+ history of ${steamId} was refused with ${e.status} while the connection works with the ` +
+                `same token, it is read again in ${HISTORY_REFUSED_PAUSE_MS / 60000} minutes.`, 'debug');
+            return null;
+        }
+
         /* A renewal that worked is used right away, everything else waits for the next run. */
         if (recovery !== 'renewed') throw e;
 
@@ -322,6 +340,7 @@ async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn
 
     /* The token works, a rejection that follows starts at one again. */
     TokenRecovery.markReadSuccessful(steamId);
+    historyPausedUntil.delete(`${steamId}`);
 
     if (result.accountServers !== null) {
         /* Keep the stored snapshot current, the token renewal and the login use it. */
@@ -542,6 +561,10 @@ async function refreshAccount(client, steamId, now = Date.now()) {
 */
 const accountStateCache = new Map();   /* steamId -> { servers, at } */
 
+/* How long the history of an account is not read after it refused a token that a live socket proves. */
+const HISTORY_REFUSED_PAUSE_MS = 5 * 60 * 1000;
+const historyPausedUntil = new Map();   /* steamId -> ms */
+
 /*
     Facepunch rejects a token with 401 or 403 (the history read and the socket handshake alike). The policy for that
     lives in util/tokenRecovery.js: strikes, throttle, backoff, renewal and the reconnect after it.
@@ -550,6 +573,7 @@ function resetAccountStateCache() {
     accountStateCache.clear();
     accountStateFailures.clear();
     accountRefreshAt.clear();
+    historyPausedUntil.clear();
     TokenRecovery.reset();
 }
 
@@ -681,6 +705,7 @@ function reconnectRenewedServers(client, guildId, instance, updatedKeys) {
 
 module.exports = {
     HISTORY_URL: HISTORY_URL,
+    HISTORY_REFUSED_PAUSE_MS: HISTORY_REFUSED_PAUSE_MS,
     fetchHistory: fetchHistory,
     parsePairingEntries: parsePairingEntries,
     applyPairingEntries: applyPairingEntries,

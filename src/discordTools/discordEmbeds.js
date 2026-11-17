@@ -691,7 +691,7 @@ module.exports = {
         return module.exports.getEmbed({
             color: Constants.COLOR_DEFAULT,
             title: Client.client.intlGet(guildId, 'wipeDetected'),
-            image: `attachment://${guildId}_map_full.png`,
+            image: `attachment://${guildId}_map_full.jpg`,
             timestamp: true,
             footer: { text: server.title }
         });

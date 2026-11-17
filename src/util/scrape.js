@@ -47,7 +47,7 @@ module.exports = {
         for (let attempt = 1; attempt <= Constants.SCRAPE_MAX_ATTEMPTS; attempt += 1) {
             let response = {};
             try {
-                response = await Axios.get(url, { headers: REQUEST_HEADERS });
+                response = await Axios.get(url, { headers: REQUEST_HEADERS, timeout: Constants.SCRAPE_TIMEOUT_MS });
             }
             catch (e) {
                 response = e.response || {};
