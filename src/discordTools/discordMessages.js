@@ -28,6 +28,8 @@ const DiscordEmbeds = require('./discordEmbeds.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
+const WithTimeout = require('../util/withTimeout.js');
+const RustPlusMap = require('../structures/Map.js');
 const Scrape = require('../util/scrape.js');
 
 /*
@@ -308,8 +310,7 @@ module.exports = {
 
         const content = {
             embeds: [DiscordEmbeds.getServerWipeDetectedEmbed(guildId, serverId)],
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))],
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(guildId))],
             content: instance.generalSettings.mapWipeNotifyEveryone ? '@everyone' : ''
         }
 
@@ -329,8 +330,7 @@ module.exports = {
     /* Posted when the map is ready (rustplusEvents/connected.js) and as part of the information cycle. */
     sendInformationMapMessage: async function (guildId) {
         await sendInformationMessage(guildId, 'map', {
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))]
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(guildId))]
         });
     },
 
@@ -483,8 +483,7 @@ module.exports = {
 
     sendUpdateMapInformationMessage: async function (rustplus) {
         await sendInformationMessage(rustplus.guildId, 'map', {
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${rustplus.guildId}_map_full.png`))]
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(rustplus.guildId))]
         });
     },
 
@@ -775,14 +774,28 @@ async function sendInformationMessage(guildId, messageType, content) {
 const informationMessageQueues = new Object();
 const informationMessageOperationsUnlocked = new Object();
 
-function queueInformationMessageOperation(guildId, operation) {
+/*
+    The queue waits for each operation at most this long. One operation that never finished (a request without an
+    answer) used to hold the queue of its guild forever: every later information update waited behind it, and so did
+    the connect flow (rustplusEvents/connected.js posts the map) - measured: five hours without a single poll after a
+    reconnect. The operation keeps running, the queue moves on.
+*/
+const INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS = 60 * 1000;
+
+function queueInformationMessageOperation(guildId, operation, label = 'an information message operation') {
     const previous = informationMessageQueues[guildId] || Promise.resolve();
 
     const current = previous
         .catch(() => undefined)
-        .then(operation);
+        .then(() => WithTimeout.withTimeout(operation(), module.exports.INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS,
+            label));
 
-    informationMessageQueues[guildId] = current.catch(() => undefined);
+    informationMessageQueues[guildId] = current.catch((e) => {
+        if (e && e.code === 'ESTEPTIMEOUT') {
+            Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                `${e.message} The information messages of ${guildId} go on without it.`, 'warn');
+        }
+    });
 
     return current;
 }
@@ -811,6 +824,9 @@ for (const operation of informationMessageOperations) {
         if (guildId === null) return informationMessageOperationsUnlocked[operation].apply(module.exports, args);
 
         return queueInformationMessageOperation(guildId, () =>
-            informationMessageOperationsUnlocked[operation].apply(module.exports, args));
+            informationMessageOperationsUnlocked[operation].apply(module.exports, args), operation);
     };
 }
+
+/* Exported so a test can shorten it. */
+module.exports.INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS = INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS;
