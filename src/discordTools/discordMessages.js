@@ -433,7 +433,8 @@ module.exports = {
                 timestamp: true
             })],
             files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', `resources/images/electrics/${entity.image}`))]
+                Path.join(__dirname, '..', `resources/images/electrics/${entity.image}`))],
+            content: entity.everyone ? '@everyone' : ''
         };
 
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);

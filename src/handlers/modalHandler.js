@@ -342,6 +342,15 @@ module.exports = async (client, interaction) => {
         }));
 
         await DiscordMessages.sendStorageMonitorMessage(interaction.guildId, ids.serverId, ids.entityId);
+
+        /* New rules are checked against the current contents now (detached: the form must be answered in 3 s). */
+        const rustplus = client.rustplusInstances[guildId];
+        if (alerts.rules !== null && rustplus && rustplus.serverId === ids.serverId) {
+            StorageAlerts.check(client, rustplus, ids.entityId).catch((e) => {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `Storage monitor ${ids.entityId}: the alert rules could not be checked: ${e.message}`, 'warn');
+            });
+        }
     }
     else if (interaction.customId.startsWith('TrackerEdit')) {
         const ids = JSON.parse(interaction.customId.replace('TrackerEdit', ''));
