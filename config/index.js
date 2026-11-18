@@ -74,6 +74,14 @@ module.exports = {
             slower snapshot is cached in between (see util/rustplusHistory.js).
         */
         rustplusSyncDataIntervalMs: envInt('RPP_RUSTPLUS_SYNCDATA_INTERVAL', 5 * 60 * 1000), /* 5 min */
+        /*
+            Push notifications (FCM) of the Rust+ app: raid alarms, team logins, smart alarms of other servers and new
+            pairings in real time. The bot registers itself as a device of the account (util/rustplusPush.js). The
+            history keeps working without it.
+        */
+        pushEnabled: envBool('RPP_PUSH_ENABLED', true),
+        /* Report a smart alarm of a server the bot is not connected to (the connected server reports its own). */
+        pushAlarmsOtherServers: envBool('RPP_PUSH_ALARMS_OTHER_SERVERS', true),
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',
