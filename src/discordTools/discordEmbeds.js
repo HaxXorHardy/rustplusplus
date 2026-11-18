@@ -26,6 +26,8 @@ const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
+const SwitchGroupState = require('../util/switchGroupState.js');
+const SwitchTimeouts = require('../util/switchTimeouts.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 
 function isValidUrl(url) {
@@ -423,10 +425,46 @@ module.exports = {
         if (switchId === '') switchId = Client.client.intlGet(guildId, 'none');
         if (switchActive === '') switchActive = Client.client.intlGet(guildId, 'none');
 
+        const server = instance.serverList[serverId];
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const lines = [`**ID**: \`${groupId}\``];
+
+        /* At a glance: all on, some on, all off - of the switches that answer. */
+        const state = SwitchGroupState.getGroupState(server, group);
+        if (state.total !== 0) {
+            let status = `${Constants.ONLINE_EMOJI} ${intl('groupStatusAllOn')}`;
+            if (state.on === 0) status = `${Constants.OFFLINE_EMOJI} ${intl('groupStatusAllOff')}`;
+            else if (state.on !== state.total) {
+                status = `🟡 ${intl('groupStatusSomeOn', { on: `${state.on}`, total: `${state.total}` })}`;
+            }
+            lines.push(`**${intl('status')}**: ${status}`);
+        }
+
+        const mode = SwitchGroupState.getAutoDayNight(group);
+        if (mode !== 0) {
+            lines.push(`**${intl('groupAutomation')}**: ${intl(mode === 1 ? 'groupAutoDayDesc' : 'groupAutoNightDesc')}`);
+        }
+
+        const alarms = SwitchGroupState.getTriggerAlarms(server, group);
+        if (alarms.length !== 0) {
+            const seconds = SwitchGroupState.getAlarmOffAfterSeconds(group);
+            lines.push(`**${intl('groupAlarmTrigger')}**: ${alarms.map((id) => server.alarms[id].name).join(', ')} → ` +
+                (seconds !== 0 ? intl('groupAlarmOffAfter', { time: Timer.secondsToFullScale(seconds) }) :
+                    intl('groupAlarmStaysOn')));
+        }
+
+        const end = SwitchTimeouts.getEnd(guildId, serverId, SwitchTimeouts.groupKey(groupId));
+        if (end !== null) {
+            lines.push(`**${intl('timerCap')}** ⏱️ ${intl('groupTimerEnds', {
+                status: end.value ? intl('onCap') : intl('offCap'),
+                time: `<t:${Math.floor(end.endsAtMs / 1000)}:R>`
+            })}`);
+        }
+
         return module.exports.getEmbed({
             title: group.name,
             color: Constants.COLOR_DEFAULT,
-            description: `**ID**: \`${groupId}\``,
+            description: lines.join('\n'),
             thumbnail: `attachment://${group.image}`,
             footer: { text: `${instance.serverList[serverId].title}` },
             fields: [

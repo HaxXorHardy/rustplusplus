@@ -74,6 +74,14 @@ function drainStorageMonitorUpdates(key, state, guildId, serverId, entityId) {
     })();
 }
 
+/* The rows of a group message: the action buttons, the select menus (up to three), the management buttons (max 5). */
+function groupComponents(guildId, serverId, groupId) {
+    const buttons = DiscordButtons.getSmartSwitchGroupButtons(guildId, serverId, groupId);
+    const menus = DiscordSelectMenus.getSmartSwitchGroupSelectMenus(guildId, serverId, groupId);
+
+    return [buttons[0], ...menus.slice(0, 3), buttons[1]];
+}
+
 async function boundedDiscordCall(promise, label, onTimeout) {
     try {
         return await WithTimeout.withTimeout(promise, module.exports.SEND_MESSAGE_TIMEOUT_MS, label);
@@ -272,13 +280,16 @@ module.exports = {
         }
     },
 
+    /* exported for tests */
+    groupComponents: (guildId, serverId, groupId) => groupComponents(guildId, serverId, groupId),
+
     sendSmartSwitchGroupMessage: async function (guildId, serverId, groupId, interaction = null) {
         const instance = Client.client.getInstance(guildId);
         const group = instance.serverList[serverId].switchGroups[groupId];
 
         const content = {
             embeds: [DiscordEmbeds.getSmartSwitchGroupEmbed(guildId, serverId, groupId)],
-            components: DiscordButtons.getSmartSwitchGroupButtons(guildId, serverId, groupId),
+            components: groupComponents(guildId, serverId, groupId),
             files: [new Discord.AttachmentBuilder(
                 Path.join(__dirname, '..', `resources/images/electrics/${group.image}`))]
         }

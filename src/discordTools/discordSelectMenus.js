@@ -42,6 +42,8 @@ module.exports = {
             selectMenu.setOptions(options.options);
         }
         if (options.hasOwnProperty('disabled')) selectMenu.setDisabled(options.disabled);
+        if (options.hasOwnProperty('minValues')) selectMenu.setMinValues(options.minValues);
+        if (options.hasOwnProperty('maxValues')) selectMenu.setMaxValues(options.maxValues);
 
         return selectMenu;
     },
@@ -305,6 +307,80 @@ module.exports = {
                         value: '8'
                     }]
             }));
+    },
+
+    /*
+        The select menus of a switch group: which switches belong to it, the day/night automation and the alarms
+        that turn it on. Discord allows 25 options per menu: with more switches the menu offers the members and as
+        many others as fit, the "add/remove by ID" buttons stay for the rest.
+    */
+    getSmartSwitchGroupSelectMenus: function (guildId, serverId, groupId) {
+        const instance = Client.client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        const group = server.switchGroups[groupId];
+        const identifier = JSON.stringify({ "serverId": serverId, "groupId": groupId });
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const max = Constants.SELECT_MENU_MAX_OPTIONS || 25;
+        const label = (text) => `${text}`.substring(0, 100) || '-';
+        const rows = [];
+
+        const switchIds = Object.keys(server.switches);
+        if (switchIds.length !== 0) {
+            const members = switchIds.filter((id) => group.switches.includes(id));
+            const others = switchIds.filter((id) => !group.switches.includes(id));
+            const shown = members.concat(others).slice(0, max);
+
+            rows.push(new Discord.ActionRowBuilder().addComponents(module.exports.getSelectMenu({
+                customId: `GroupSwitches${identifier}`,
+                placeholder: intl('groupSwitchesPlaceholder', { count: `${members.length}` }),
+                minValues: 0,
+                maxValues: shown.length,
+                options: shown.map((id) => {
+                    const entity = server.switches[id];
+                    return {
+                        label: label(entity.name),
+                        description: `ID ${id}${entity.location ? ` (${entity.location})` : ''}`,
+                        value: id,
+                        default: group.switches.includes(id)
+                    };
+                })
+            })));
+        }
+
+        const mode = group.autoDayNight === 1 || group.autoDayNight === 2 ? group.autoDayNight : 0;
+        const modeNames = [intl('offCap'), intl('autoDayCap'), intl('autoNightCap')];
+        rows.push(new Discord.ActionRowBuilder().addComponents(module.exports.getSelectMenu({
+            customId: `GroupAuto${identifier}`,
+            placeholder: `${intl('autoSettingCap')}${modeNames[mode]}`,
+            options: [
+                { label: modeNames[0], description: intl('groupAutoOffDesc'), value: '0' },
+                { label: modeNames[1], description: intl('groupAutoDayDesc'), value: '1' },
+                { label: modeNames[2], description: intl('groupAutoNightDesc'), value: '2' }
+            ]
+        })));
+
+        const alarmIds = Object.keys(server.alarms || {}).slice(0, max);
+        if (alarmIds.length !== 0) {
+            const triggers = Array.isArray(group.alarms) ? group.alarms : [];
+
+            rows.push(new Discord.ActionRowBuilder().addComponents(module.exports.getSelectMenu({
+                customId: `GroupAlarms${identifier}`,
+                placeholder: intl('groupAlarmsPlaceholder'),
+                minValues: 0,
+                maxValues: alarmIds.length,
+                options: alarmIds.map((id) => {
+                    const alarm = server.alarms[id];
+                    return {
+                        label: label(alarm.name),
+                        description: `ID ${id}${alarm.location ? ` (${alarm.location})` : ''}`,
+                        value: id,
+                        default: triggers.includes(id)
+                    };
+                })
+            })));
+        }
+
+        return rows;
     },
 
     getSmartSwitchSelectMenu: function (guildId, serverId, entityId) {

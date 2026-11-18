@@ -218,6 +218,42 @@ module.exports = async (client, interaction) => {
 
         DiscordMessages.sendSmartSwitchMessage(guildId, ids.serverId, ids.entityId, interaction);
     }
+    else if (interaction.customId.startsWith('GroupSwitches') || interaction.customId.startsWith('GroupAuto') ||
+        interaction.customId.startsWith('GroupAlarms')) {
+        const prefix = ['GroupSwitches', 'GroupAuto', 'GroupAlarms'].find((p) => interaction.customId.startsWith(p));
+        const ids = JSON.parse(interaction.customId.replace(prefix, ''));
+        const server = instance.serverList[ids.serverId];
+
+        if (!server || !server.switchGroups.hasOwnProperty(ids.groupId)) {
+            await interaction.message.delete();
+            return;
+        }
+
+        const group = server.switchGroups[ids.groupId];
+        const values = interaction.values.map((v) => `${v}`);
+
+        if (prefix === 'GroupSwitches') {
+            /* Only the switches the menu offered are decided here, members beyond the 25 options stay. */
+            const offered = interaction.component && Array.isArray(interaction.component.options) ?
+                interaction.component.options.map((o) => `${o.value}`) : values;
+            group.switches = group.switches.filter((id) => !offered.includes(id))
+                .concat(values.filter((id) => server.switches.hasOwnProperty(id)));
+        }
+        else if (prefix === 'GroupAuto') {
+            group.autoDayNight = parseInt(values[0]) || 0;
+        }
+        else {
+            group.alarms = values.filter((id) => server.alarms && server.alarms.hasOwnProperty(id));
+        }
+        client.setInstance(guildId, instance);
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'selectMenuValueChange', {
+            id: `${verifyId}`,
+            value: `${prefix} ${values.join(',')}`
+        }));
+
+        await DiscordMessages.sendSmartSwitchGroupMessage(guildId, ids.serverId, ids.groupId, interaction);
+    }
 
     client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userSelectMenuInteractionSuccess', {
         id: `${verifyId}`

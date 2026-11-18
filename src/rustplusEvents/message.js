@@ -232,6 +232,13 @@ async function messageBroadcastEntityChangedSmartAlarm(rustplus, client, message
         if (instance.generalSettings.smartAlarmNotifyInGame) {
             rustplus.sendInGameMessage(`${server.alarms[entityId].name}: ${server.alarms[entityId].message}`);
         }
+
+        /* Groups with this alarm as their trigger are turned on (turrets, lights, ...). */
+        SmartSwitchGroupHandler.onAlarmTriggered(client, rustplus, entityId).catch((e) => {
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `The switch groups of the alarm ${entityId} could not be turned on: ${e && e.message ? e.message : e}`,
+                'warn');
+        });
     }
 
     DiscordMessages.sendSmartAlarmMessage(rustplus.guildId, rustplus.serverId, entityId);

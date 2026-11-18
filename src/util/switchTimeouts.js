@@ -27,6 +27,7 @@
 */
 
 const timeouts = new Map();    /* `${guildId}:${serverId}` -> { [entityId | groupId]: timeout handle } */
+const ends = new Map();        /* `${guildId}:${serverId}:${id}` -> { handle, endsAtMs, value } (shown in Discord) */
 
 function of(guildId, serverId) {
     const key = `${guildId}:${serverId}`;
@@ -48,16 +49,43 @@ function currentInstance(client, guildId, serverId) {
     return rustplus;
 }
 
+/* Remember when a timer ends and what it switches to, for the group message. */
+function setEnd(guildId, serverId, id, endsAtMs, value) {
+    ends.set(`${guildId}:${serverId}:${id}`, { handle: of(guildId, serverId)[id], endsAtMs: endsAtMs, value: value });
+}
+
+/* { endsAtMs, value } of a timer that still runs, or null (also when it was cancelled by clearTimeout + delete). */
+function getEnd(guildId, serverId, id, now = Date.now()) {
+    const end = ends.get(`${guildId}:${serverId}:${id}`);
+    if (!end) return null;
+
+    if (of(guildId, serverId)[id] !== end.handle || end.endsAtMs <= now) {
+        ends.delete(`${guildId}:${serverId}:${id}`);
+        return null;
+    }
+
+    return { endsAtMs: end.endsAtMs, value: end.value };
+}
+
+/* The key of a group timer: groups and switches share the timers of a server, their ids must not collide. */
+function groupKey(groupId) {
+    return `group-${groupId}`;
+}
+
 /* For tests. */
 function reset() {
     for (const entry of timeouts.values()) {
         for (const handle of Object.values(entry)) clearTimeout(handle);
     }
     timeouts.clear();
+    ends.clear();
 }
 
 module.exports = {
     of: of,
     currentInstance: currentInstance,
+    setEnd: setEnd,
+    groupKey: groupKey,
+    getEnd: getEnd,
     reset: reset,
 };

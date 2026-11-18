@@ -29,6 +29,8 @@ const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const Keywords = require('../util/keywords.js');
 const Scrape = require('../util/scrape.js');
+const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
+const Timer = require('../util/timer.js');
 const TrackerInputParser = require('../util/trackerInputParser.js');
 
 module.exports = async (client, interaction) => {
@@ -195,6 +197,16 @@ module.exports = async (client, interaction) => {
 
         server.switchGroups[ids.groupId].name = groupName;
 
+        /* Empty: a group turned on by an alarm stays on. Something that is no time leaves the setting alone. */
+        const alarmOffAfter = interaction.fields.getTextInputValue('GroupAlarmOffAfter').trim();
+        if (alarmOffAfter === '') {
+            server.switchGroups[ids.groupId].alarmOffAfterSeconds = 0;
+        }
+        else {
+            const seconds = Timer.getSecondsFromStringTime(alarmOffAfter);
+            if (seconds !== null && seconds > 0) server.switchGroups[ids.groupId].alarmOffAfterSeconds = seconds;
+        }
+
         if (groupCommand !== server.switchGroups[ids.groupId].command &&
             !Keywords.getListOfUsedKeywords(client, interaction.guildId, ids.serverId).includes(groupCommand)) {
             server.switchGroups[ids.groupId].command = groupCommand;
@@ -207,6 +219,43 @@ module.exports = async (client, interaction) => {
         }));
 
         await DiscordMessages.sendSmartSwitchGroupMessage(interaction.guildId, ids.serverId, ids.groupId);
+    }
+    else if (interaction.customId.startsWith('GroupTimer')) {
+        const ids = JSON.parse(interaction.customId.replace('GroupTimer', ''));
+        const server = instance.serverList[ids.serverId];
+        const rustplus = client.rustplusInstances[guildId];
+
+        const seconds = Timer.getSecondsFromStringTime(interaction.fields.getTextInputValue('GroupTimerDuration'));
+        const state = interaction.fields.getTextInputValue('GroupTimerState').trim().toLowerCase();
+        const onWords = ['on', 'an', 'ein', client.intlGet(guildId, 'onCap').toLowerCase()];
+        const offWords = ['off', 'aus', client.intlGet(guildId, 'offCap').toLowerCase()];
+        const active = onWords.includes(state) ? true : (offWords.includes(state) ? false : null);
+
+        if (!server || !server.switchGroups.hasOwnProperty(ids.groupId) || seconds === null || seconds <= 0 ||
+            active === null || !rustplus || rustplus.serverId !== ids.serverId) {
+            interaction.deferUpdate();
+            return;
+        }
+
+        if (instance.generalSettings.smartSwitchNotifyInGameWhenChangedFromDiscord) {
+            rustplus.sendInGameMessage(client.intlGet(guildId, 'userTurnedOnOffSmartSwitchGroupFromDiscord', {
+                user: interaction.user.username,
+                name: server.switchGroups[ids.groupId].name,
+                status: active ? client.intlGet(guildId, 'onCap') : client.intlGet(guildId, 'offCap')
+            }));
+        }
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'modalValueChange', {
+            id: `${verifyId}`,
+            value: `${active}, ${seconds}`
+        }));
+
+        /* Not awaited: switching a big group can take longer than Discord waits for the answer to the modal. */
+        SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active,
+            { seconds: seconds }).catch((e) => {
+            client.log(client.intlGet(null, 'warningCap'),
+                `The timer of switch group ${ids.groupId} failed: ${e && e.message ? e.message : e}`, 'warn');
+        });
     }
     else if (interaction.customId.startsWith('GroupAddSwitch')) {
         const ids = JSON.parse(interaction.customId.replace('GroupAddSwitch', ''));

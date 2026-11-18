@@ -22,6 +22,7 @@ const Discord = require('discord.js');
 
 const Client = require('../structures/clientRegistry.js');
 const TextInput = require('./discordTextInputs.js');
+const Timer = require('../util/timer.js');
 
 module.exports = {
     getModal: function (options = {}) {
@@ -231,6 +232,44 @@ module.exports = {
                 customId: 'GroupCommand',
                 label: Client.client.intlGet(guildId, 'customCommand'),
                 value: group.command,
+                style: Discord.TextInputStyle.Short
+            })),
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'GroupAlarmOffAfter',
+                label: Client.client.intlGet(guildId, 'groupAlarmOffAfterLabel'),
+                value: group.alarmOffAfterSeconds ? Timer.secondsToFullScale(group.alarmOffAfterSeconds) : '',
+                placeholder: '5m',
+                required: false,
+                style: Discord.TextInputStyle.Short
+            }))
+        );
+
+        return modal;
+    },
+
+    getGroupTimerModal(guildId, serverId, groupId) {
+        const instance = Client.client.getInstance(guildId);
+        const group = instance.serverList[serverId].switchGroups[groupId];
+        const identifier = JSON.stringify({ "serverId": serverId, "groupId": groupId });
+
+        const modal = module.exports.getModal({
+            customId: `GroupTimer${identifier}`,
+            title: Client.client.intlGet(guildId, 'groupTimerTitle', {
+                group: group.name.length > 25 ? `${group.name.slice(0, 25)}..` : group.name
+            })
+        });
+
+        modal.addComponents(
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'GroupTimerDuration',
+                label: Client.client.intlGet(guildId, 'groupTimerDuration'),
+                value: '10m',
+                style: Discord.TextInputStyle.Short
+            })),
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'GroupTimerState',
+                label: Client.client.intlGet(guildId, 'groupTimerState'),
+                value: Client.client.intlGet(guildId, 'onCap'),
                 style: Discord.TextInputStyle.Short
             }))
         );

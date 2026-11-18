@@ -195,33 +195,44 @@ module.exports = {
                 module.exports.getButton({
                     customId: `GroupTurnOn${identifier}`,
                     label: Client.client.intlGet(guildId, 'turnOnCap'),
-                    style: PRIMARY
+                    style: SUCCESS
                 }),
                 module.exports.getButton({
                     customId: `GroupTurnOff${identifier}`,
                     label: Client.client.intlGet(guildId, 'turnOffCap'),
+                    style: DANGER
+                }),
+                module.exports.getButton({
+                    customId: `GroupToggle${identifier}`,
+                    label: Client.client.intlGet(guildId, 'toggleCap'),
                     style: PRIMARY
+                }),
+                module.exports.getButton({
+                    customId: `GroupTimer${identifier}`,
+                    label: Client.client.intlGet(guildId, 'timerCap'),
+                    style: PRIMARY,
+                    emoji: '⏱️'
                 }),
                 module.exports.getButton({
                     customId: `GroupEdit${identifier}`,
                     label: Client.client.intlGet(guildId, 'editCap'),
-                    style: PRIMARY
-                }),
-                module.exports.getButton({
-                    customId: `GroupDelete${identifier}`,
-                    style: SECONDARY,
-                    emoji: '🗑️'
+                    style: SECONDARY
                 })),
             new Discord.ActionRowBuilder().addComponents(
                 module.exports.getButton({
                     customId: `GroupAddSwitch${identifier}`,
                     label: Client.client.intlGet(guildId, 'addSwitchCap'),
-                    style: SUCCESS
+                    style: SECONDARY
                 }),
                 module.exports.getButton({
                     customId: `GroupRemoveSwitch${identifier}`,
                     label: Client.client.intlGet(guildId, 'removeSwitchCap'),
-                    style: DANGER
+                    style: SECONDARY
+                }),
+                module.exports.getButton({
+                    customId: `GroupDelete${identifier}`,
+                    style: SECONDARY,
+                    emoji: '🗑️'
                 }))
         ];
     },
