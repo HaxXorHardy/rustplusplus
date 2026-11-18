@@ -983,5 +983,9 @@
     "raidReportCameOnline": "Kam online",
     "upkeepRunsOut": "{device}: der Unterhalt reicht nur noch {time}!",
     "upkeepRunsOutTitle": "{device}: der Unterhalt geht bald aus",
-    "upkeepRunsOutAt": "Der Werkzeugschrank beginnt {time} zu verfallen. Auffüllen!"
+    "upkeepRunsOutAt": "Der Werkzeugschrank beginnt {time} zu verfallen. Auffüllen!",
+    "storageMonitorAlertsLabel": "Alarme (z. B. Rifle Ammo < 100, Sulfur > 10k)",
+    "storageAlertFired": "{device}: {item} steht bei {quantity} ({rule})",
+    "groupScheduleLabel": "Zeitplan (z. B. 22:00-06:00 aus, 18:00-22:00 an)",
+    "groupSchedule": "Zeitplan"
 }

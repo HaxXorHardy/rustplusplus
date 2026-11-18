@@ -30,6 +30,8 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const Keywords = require('../util/keywords.js');
 const Scrape = require('../util/scrape.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
+const StorageAlerts = require('../util/storageAlerts.js');
+const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const Timer = require('../util/timer.js');
 const TrackerInputParser = require('../util/trackerInputParser.js');
 
@@ -207,6 +209,17 @@ module.exports = async (client, interaction) => {
             if (seconds !== null && seconds > 0) server.switchGroups[ids.groupId].alarmOffAfterSeconds = seconds;
         }
 
+        /* "22:00-06:00 off, 18:00-22:00 on", optionally with a time zone in front. Empty = no schedule. */
+        const schedule = SwitchGroupSchedule.parse(interaction.fields.getTextInputValue('GroupSchedule'),
+            ['on', 'an', 'ein', client.intlGet(guildId, 'onCap')], ['off', 'aus', client.intlGet(guildId, 'offCap')]);
+        if (schedule.rejected.length === 0 || schedule.schedule !== null) {
+            server.switchGroups[ids.groupId].schedule = schedule.schedule;
+        }
+        if (schedule.rejected.length !== 0) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Switch group ${ids.groupId}: no schedule in "${schedule.rejected.join('", "')}".`, 'warn');
+        }
+
         if (groupCommand !== server.switchGroups[ids.groupId].command &&
             !Keywords.getListOfUsedKeywords(client, interaction.guildId, ids.serverId).includes(groupCommand)) {
             server.switchGroups[ids.groupId].command = groupCommand;
@@ -343,6 +356,14 @@ module.exports = async (client, interaction) => {
         }
 
         server.storageMonitors[ids.entityId].name = storageMonitorName;
+
+        /* Alert rules such as "Rifle Ammo < 100"; parts that name no item are left out (and logged). */
+        const alerts = StorageAlerts.parse(client.items, interaction.fields.getTextInputValue('StorageMonitorAlerts'));
+        server.storageMonitors[ids.entityId].alerts = alerts.rules;
+        if (alerts.rejected.length !== 0) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Storage monitor ${ids.entityId}: no alert rule in "${alerts.rejected.join('", "')}".`, 'warn');
+        }
         client.setInstance(interaction.guildId, instance);
 
         client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'modalValueChange', {

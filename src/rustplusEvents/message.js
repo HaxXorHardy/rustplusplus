@@ -26,6 +26,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const InGameChatHandler = require('../handlers/inGameChatHandler.js');
 const RaidHandler = require('../handlers/raidHandler.js');
 const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js');
+const StorageAlerts = require('../util/storageAlerts.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const TeamChatHandler = require("../handlers/teamChatHandler.js");
 const TeamHandler = require('../handlers/teamHandler.js');
@@ -296,6 +297,7 @@ async function messageBroadcastEntityChangedStorageMonitor(rustplus, client, mes
         client.setInstance(rustplus.guildId, instance);
 
         await DiscordMessages.sendStorageMonitorMessage(rustplus.guildId, serverId, entityId);
+        await StorageAlerts.check(client, rustplus, entityId);
     }
 }
 
@@ -336,6 +338,7 @@ async function updateToolCupboard(rustplus, client, message) {
     }
 
     await DiscordMessages.sendStorageMonitorMessage(rustplus.guildId, rustplus.serverId, entityId);
+    await StorageAlerts.check(client, rustplus, entityId);
 }
 
 function getInGameCommandAccessMode(rustplus) {

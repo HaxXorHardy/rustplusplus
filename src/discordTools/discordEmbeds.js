@@ -26,6 +26,7 @@ const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
+const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const RustPlusSync = require('../util/rustplusSync.js');
@@ -443,6 +444,11 @@ module.exports = {
         const mode = SwitchGroupState.getAutoDayNight(group);
         if (mode !== 0) {
             lines.push(`**${intl('groupAutomation')}**: ${intl(mode === 1 ? 'groupAutoDayDesc' : 'groupAutoNightDesc')}`);
+        }
+
+        if (group.schedule) {
+            lines.push(`**${intl('groupSchedule')}**: ${SwitchGroupSchedule.format(group.schedule, intl('onCap'), intl('offCap'))}` +
+                `${group.schedule.timeZone ? '' : ` (${SwitchGroupSchedule.timeZoneOf(group.schedule)})`}`);
         }
 
         const alarms = SwitchGroupState.getTriggerAlarms(server, group);
