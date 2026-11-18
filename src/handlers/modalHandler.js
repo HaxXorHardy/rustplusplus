@@ -270,53 +270,6 @@ module.exports = async (client, interaction) => {
                 `The timer of switch group ${ids.groupId} failed: ${e && e.message ? e.message : e}`, 'warn');
         });
     }
-    else if (interaction.customId.startsWith('GroupAddSwitch')) {
-        const ids = JSON.parse(interaction.customId.replace('GroupAddSwitch', ''));
-        const server = instance.serverList[ids.serverId];
-        const switchId = interaction.fields.getTextInputValue('GroupAddSwitchId');
-
-        if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
-            interaction.deferUpdate();
-            return;
-        }
-
-        if (!Object.keys(server.switches).includes(switchId) ||
-            server.switchGroups[ids.groupId].switches.includes(switchId)) {
-            interaction.deferUpdate();
-            return;
-        }
-
-        server.switchGroups[ids.groupId].switches.push(switchId);
-        client.setInstance(interaction.guildId, instance);
-
-        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'modalValueChange', {
-            id: `${verifyId}`,
-            value: `${switchId}`
-        }));
-
-        await DiscordMessages.sendSmartSwitchGroupMessage(interaction.guildId, ids.serverId, ids.groupId);
-    }
-    else if (interaction.customId.startsWith('GroupRemoveSwitch')) {
-        const ids = JSON.parse(interaction.customId.replace('GroupRemoveSwitch', ''));
-        const server = instance.serverList[ids.serverId];
-        const switchId = interaction.fields.getTextInputValue('GroupRemoveSwitchId');
-
-        if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
-            interaction.deferUpdate();
-            return;
-        }
-
-        server.switchGroups[ids.groupId].switches =
-            server.switchGroups[ids.groupId].switches.filter(e => e !== switchId);
-        client.setInstance(interaction.guildId, instance);
-
-        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'modalValueChange', {
-            id: `${verifyId}`,
-            value: `${switchId}`
-        }));
-
-        await DiscordMessages.sendSmartSwitchGroupMessage(interaction.guildId, ids.serverId, ids.groupId);
-    }
     else if (interaction.customId.startsWith('SmartAlarmEdit')) {
         const ids = JSON.parse(interaction.customId.replace('SmartAlarmEdit', ''));
         const server = instance.serverList[ids.serverId];

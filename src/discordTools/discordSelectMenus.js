@@ -312,8 +312,8 @@ module.exports = {
 
     /*
         The select menus of a switch group: which switches belong to it, the day/night automation and the alarms
-        that turn it on. Discord allows 25 options per menu: with more switches the menu offers the members and as
-        many others as fit, the "add/remove by ID" buttons stay for the rest.
+        that turn it on. Discord allows 25 options per menu: with more switches the menu offers the members first and
+        as many others as fit.
     */
     getSmartSwitchGroupSelectMenus: function (guildId, serverId, groupId) {
         const instance = Client.client.getInstance(guildId);

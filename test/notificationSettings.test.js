@@ -87,6 +87,9 @@ Test.describe('createInstanceFile notification settings migration', () => {
                 cargoShipDetectedSetting: {
                     image: 'cargoship_logo.png', discord: false, inGame: false, voice: false
                 },
+                travelingVendorDetectedSetting: {
+                    image: 'traveling_vendor_logo.png', discord: false, inGame: false, voice: false
+                },
                 cargoShipDockedSetting: {
                     image: 'cargoship_logo.png', discord: true, inGame: false, voice: true
                 },
@@ -98,11 +101,12 @@ Test.describe('createInstanceFile notification settings migration', () => {
 
         Assert.ok(saved, 'the instance should be written');
         Assert.strictEqual('cargoShipDockedSetting' in saved.notificationSettings, false);
+        Assert.strictEqual('cargoShipDetectedSetting' in saved.notificationSettings, false, 'retired: no API data');
         Assert.deepStrictEqual(
             Object.keys(saved.notificationSettings).sort(),
             Object.keys(NotificationSettingsTemplate).sort());
 
         /* The values of the user are kept for the settings that still exist. */
-        Assert.strictEqual(saved.notificationSettings.cargoShipDetectedSetting.discord, false);
+        Assert.strictEqual(saved.notificationSettings.travelingVendorDetectedSetting.discord, false);
     });
 });

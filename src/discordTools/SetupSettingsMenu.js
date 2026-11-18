@@ -56,6 +56,7 @@ module.exports = async (client, guild, forced = false) => {
     }
 
     await ensureAlarmAndTimeSettings(client, guild, channel);
+    await removeRetiredNotificationSettings(client, guild, channel);
 
     await removeDisabledInformationMessages(client, guild);
 
@@ -627,6 +628,39 @@ async function ensureCameraWatchSettings(client, guild, channel) {
     catch (e) {
         client.log(client.intlGet(null, 'errorCap'),
             `Could not add the camera watch settings: ${e}. Use /reset settings instead.`, 'warn');
+    }
+}
+
+/*
+    Notification settings that were removed from the template (events the Rust+ API no longer reports: cargo ship,
+    patrol helicopter, chinook, oil rig crates, vending machines) still have their message in a settings channel that
+    was created before. Those messages go; /reset settings is not needed.
+*/
+async function removeRetiredNotificationSettings(client, guild, channel) {
+    const supported = client.readNotificationSettingsTemplate();
+
+    try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+
+        for (const message of messages.values()) {
+            const setting = message.components.flatMap((row) => row.components)
+                .map((component) => component.customId || '')
+                .filter((id) => id.startsWith('DiscordNotification'))
+                .map((id) => {
+                    try {
+                        return JSON.parse(id.replace('DiscordNotification', '')).setting;
+                    }
+                    catch (e) {
+                        return null;
+                    }
+                })[0];
+
+            if (setting && !supported.hasOwnProperty(setting)) await message.delete().catch(() => undefined);
+        }
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'warningCap'), `Could not remove the retired notification settings: ${e}`,
+            'warn');
     }
 }
 
