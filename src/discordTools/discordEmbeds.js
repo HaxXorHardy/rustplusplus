@@ -28,6 +28,7 @@ const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
 const ForcedWipe = require('../util/forcedWipe.js');
 const GuildSettings = require('../util/guildSettings.js');
+const StorageAlerts = require('../util/storageAlerts.js');
 const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const TeamStats = require('../util/teamStats.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
@@ -366,6 +367,12 @@ module.exports = {
             }
             description += `\n**${Client.client.intlGet(guildId, 'upkeep')}** ${upkeep}`;
             Client.client.setInstance(guildId, instance);
+        }
+
+        /* The alert rules, so a saved rule (or none) is visible without opening the edit form. */
+        if (Array.isArray(entity.alerts) && entity.alerts.length !== 0) {
+            description += `\n**${Client.client.intlGet(guildId, 'storageMonitorAlerts')}** ` +
+                `\`${StorageAlerts.format(Client.client.items, entity.alerts)}\``;
         }
 
         let itemName = '', itemQuantity = '', storageItems = new Object();

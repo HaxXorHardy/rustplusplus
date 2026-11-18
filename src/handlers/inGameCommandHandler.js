@@ -18,6 +18,7 @@
 
 */
 
+const MapEvents = require('../util/mapEvents.js');
 const SmartAlarmHandler = require('./smartAlarmHandler.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const SmartSwitchHandler = require('./smartSwitchHandler.js');

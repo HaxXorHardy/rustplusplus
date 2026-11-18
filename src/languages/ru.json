@@ -985,6 +985,7 @@
     "upkeepRunsOutTitle": "{device}: the upkeep runs out soon",
     "upkeepRunsOutAt": "The tool cupboard starts to decay {time}. Fill it up.",
     "storageMonitorAlertsLabel": "Alerts (e.g. Rifle Ammo < 100, Sulfur > 10k)",
+    "storageMonitorAlerts": "Alerts",
     "storageAlertFired": "{device}: {item} is at {quantity} ({rule})",
     "groupScheduleLabel": "Schedule (e.g. 22:00-06:00 off, 18:00-22:00 on)",
     "groupSchedule": "Schedule",
