@@ -973,5 +973,12 @@
     "statusPushOff": "läuft nicht",
     "statusPushReceived": "{count} Benachrichtigung(en) empfangen",
     "statusWarnings": "Warnungen",
-    "statusWarningsLastHour": "{count} in der letzten Stunde"
+    "statusWarningsLastHour": "{count} in der letzten Stunde",
+    "alarmSuppressedNote": "(+{count} weitere Auslösung(en) seit der letzten Nachricht)",
+    "raidDirectMessageTitle": "{alarm} auf {server}",
+    "raidDirectMessageText": "Niemand aus dem Team ist online. Raid-Modus aktiv: Schaltergruppen mit diesem Alarm werden eingeschaltet, ein Bericht folgt, wenn die Alarme ruhig sind.",
+    "raidReportTitle": "Raid-Bericht: {server}",
+    "raidReportTime": "Alarme von {start} bis {end}, seitdem 10 Minuten ruhig.",
+    "raidReportAlarms": "Alarme",
+    "raidReportCameOnline": "Kam online"
 }

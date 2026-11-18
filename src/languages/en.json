@@ -973,5 +973,12 @@
     "statusPushOff": "not running",
     "statusPushReceived": "{count} notification(s) received",
     "statusWarnings": "Warnings",
-    "statusWarningsLastHour": "{count} in the last hour"
+    "statusWarningsLastHour": "{count} in the last hour",
+    "alarmSuppressedNote": "(+{count} more trigger(s) since the last message)",
+    "raidDirectMessageTitle": "{alarm} on {server}",
+    "raidDirectMessageText": "Nobody of the team is online. Raid mode is on: switch groups with this alarm are turned on, a report follows when the alarms are quiet.",
+    "raidReportTitle": "Raid report: {server}",
+    "raidReportTime": "Alarms from {start} to {end}, quiet for 10 minutes since.",
+    "raidReportAlarms": "Alarms",
+    "raidReportCameOnline": "Came online"
 }

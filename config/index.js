@@ -82,6 +82,16 @@ module.exports = {
         pushEnabled: envBool('RPP_PUSH_ENABLED', true),
         /* Report a smart alarm of a server the bot is not connected to (the connected server reports its own). */
         pushAlarmsOtherServers: envBool('RPP_PUSH_ALARMS_OTHER_SERVERS', true),
+        /*
+            A smart alarm that fires again within this many seconds posts no new message (the next one after the
+            pause says how many were left out). 0 = every trigger is posted.
+        */
+        alarmCooldownSeconds: envInt('RPP_ALARM_COOLDOWN', 60),
+        /*
+            Raid mode: an alarm while nobody of the team is online sends a direct message to the registered users,
+            and when no alarm came for a while a raid report is posted.
+        */
+        raidModeEnabled: envBool('RPP_RAID_MODE', true),
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',
