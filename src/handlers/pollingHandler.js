@@ -22,6 +22,7 @@ const Info = require('../structures/Info');
 const CameraWatchHandler = require('../handlers/cameraWatchHandler.js');
 const MapMarkers = require('../structures/MapMarkers.js');
 const SmartAlarmHandler = require('../handlers/smartAlarmHandler.js');
+const RaidHandler = require('../handlers/raidHandler.js');
 const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js');
 const SmartSwitchHandler = require('../handlers/smartSwitchHandler.js');
 const Team = require('../structures/Team');
@@ -300,6 +301,7 @@ module.exports = {
             () => SmartSwitchHandler.handler(rustplus, client, time.time));
         await runHandler(rustplus, client, 'the switch groups',
             () => SmartSwitchGroupHandler.handler(rustplus, client, time.time));
+        await runHandler(rustplus, client, 'the raid report', () => RaidHandler.handler(rustplus, client));
         await runHandler(rustplus, client, 'the time', () => TimeHandler.handler(rustplus, client, time.time));
         await runHandler(rustplus, client, 'the vending machines',
             () => VendingMachines.handler(rustplus, client, mapMarkers.mapMarkers));

@@ -20,6 +20,7 @@
 
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const RaidHandler = require('./raidHandler.js');
 
 module.exports = {
     handler: async function (rustplus, client, teamInfo) {
@@ -112,6 +113,7 @@ module.exports = {
                     }
 
                     if (player.isGoneOnline(playerUpdated)) {
+                        RaidHandler.onTeamOnline(rustplus, player.name);
                         const str = client.intlGet(guildId, 'playerJustConnected', { name: player.name });
                         await DiscordMessages.sendActivityNotificationMessage(
                             guildId, serverId, Constants.COLOR_ACTIVE, str, player.steamId);

@@ -473,15 +473,22 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
     },
 
-    sendSmartAlarmTriggerMessage: async function (guildId, serverId, entityId) {
+    /* options.everyone: escalation (fired again shortly), options.suppressed: triggers left out by the cooldown. */
+    sendSmartAlarmTriggerMessage: async function (guildId, serverId, entityId, options = {}) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].alarms[entityId];
+
+        const parts = [];
+        if (entity.everyone || options.everyone) parts.push('@everyone');
+        if (options.suppressed) {
+            parts.push(Client.client.intlGet(guildId, 'alarmSuppressedNote', { count: `${options.suppressed}` }));
+        }
 
         const content = {
             embeds: [await DiscordEmbeds.getAlarmEmbed(guildId, serverId, entityId)],
             files: [new Discord.AttachmentBuilder(
                 Path.join(__dirname, '..', `resources/images/electrics/${entity.image}`))],
-            content: entity.everyone ? '@everyone' : ''
+            content: parts.join(' ')
         }
 
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
@@ -581,6 +588,44 @@ module.exports = {
         listener sent exactly this message; the history carries it while the bot was offline as well, so it replaces
         the push client (see util/rustplusHistory.js).
     */
+    /* Raid mode: an alarm while nobody of the team is online goes to the registered users directly. */
+    sendRaidDirectMessage: async function (guildId, serverId, alarmId) {
+        let userIds = [];
+        try {
+            userIds = InstanceUtils.getRegisteredDiscordUserIds(guildId);
+        }
+        catch (e) {
+            userIds = [];
+        }
+
+        if (userIds.length === 0) {
+            Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                'Raid mode: no Discord user is registered for the Rust+ account, no direct message was sent. Use ' +
+                '"/credentials login" to register one.', 'warn');
+            return 0;
+        }
+
+        const content = { embeds: [DiscordEmbeds.getRaidDirectMessageEmbed(guildId, serverId, alarmId)] };
+        let sent = 0;
+
+        for (const userId of userIds) {
+            const user = await DiscordTools.getUserById(guildId, userId);
+            if (!user) continue;
+
+            if (await Client.client.messageSend(user, content)) sent += 1;
+        }
+
+        return sent;
+    },
+
+    sendRaidReportMessage: async function (guildId, serverId, raid) {
+        const instance = Client.client.getInstance(guildId);
+        if (!instance.serverList[serverId]) return;
+
+        const content = { embeds: [DiscordEmbeds.getRaidReportEmbed(guildId, serverId, raid)] };
+        await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+    },
+
     sendDeathDirectMessage: async function (guildId, death) {
         const userIds = InstanceUtils.getRegisteredDiscordUserIds(guildId);
 

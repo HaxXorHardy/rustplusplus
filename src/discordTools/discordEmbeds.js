@@ -603,6 +603,46 @@ module.exports = {
         });
     },
 
+    getRaidDirectMessageEmbed: function (guildId, serverId, alarmId) {
+        const instance = Client.client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        const alarm = server.alarms[alarmId];
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+
+        return module.exports.getEmbed({
+            title: `🚨 ${intl('raidDirectMessageTitle', { alarm: alarm ? alarm.name : `${alarmId}`, server: server.title })}`,
+            color: Constants.COLOR_INACTIVE,
+            description: `${alarm && alarm.message ? `${alarm.message}\n\n` : ''}${intl('raidDirectMessageText')}`,
+            footer: { text: server.title },
+            timestamp: true
+        });
+    },
+
+    getRaidReportEmbed: function (guildId, serverId, raid) {
+        const instance = Client.client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const at = (ms) => `<t:${Math.floor(ms / 1000)}:t>`;
+
+        const alarmLines = Object.entries(raid.alarms).map(([id, count]) => {
+            const alarm = server.alarms[id];
+            return `• ${alarm ? alarm.name : id}: ${count}×`;
+        });
+        const onlineLines = raid.cameOnline.map((entry) => `• ${entry.name} ${at(entry.atMs)}`);
+
+        return module.exports.getEmbed({
+            title: `🛡️ ${intl('raidReportTitle', { server: server.title })}`,
+            color: Constants.COLOR_DEFAULT,
+            description: `${intl('raidReportTime', { start: at(raid.startedMs), end: at(raid.lastAlarmMs) })}`,
+            fields: [
+                { name: intl('raidReportAlarms'), value: alarmLines.join('\n') || '-', inline: true },
+                { name: intl('raidReportCameOnline'), value: onlineLines.join('\n') || intl('none'), inline: true }
+            ],
+            footer: { text: server.title },
+            timestamp: true
+        });
+    },
+
     /* Several switches of a group that stopped answering, in one embed. */
     getSmartSwitchesNotFoundEmbed: async function (guildId, serverId, entityIds) {
         const instance = Client.client.getInstance(guildId);
