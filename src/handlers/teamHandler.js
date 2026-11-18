@@ -35,6 +35,16 @@ module.exports = {
 
         if (rustplus.team.isLeaderSteamIdChanged(teamInfo)) return;
 
+        /*
+            The team is updated only after this handler (updateTeam), but the in-game chat drops messages while the
+            team is all offline. The first member coming online would announce himself into a chat the bot still
+            thinks is empty: whoever is online now counts already.
+        */
+        if (rustplus.team.allOffline && Array.isArray(teamInfo.members) &&
+            teamInfo.members.some((member) => member.isOnline === true)) {
+            rustplus.team.allOffline = false;
+        }
+
         const newPlayers = rustplus.team.getNewPlayers(teamInfo);
         const leftPlayers = rustplus.team.getLeftPlayers(teamInfo);
 
