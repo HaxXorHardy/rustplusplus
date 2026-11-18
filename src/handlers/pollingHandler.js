@@ -22,7 +22,9 @@ const Info = require('../structures/Info');
 const CameraWatchHandler = require('../handlers/cameraWatchHandler.js');
 const MapMarkers = require('../structures/MapMarkers.js');
 const SmartAlarmHandler = require('../handlers/smartAlarmHandler.js');
+const DiscordMessages = require('../discordTools/discordMessages.js');
 const RaidHandler = require('../handlers/raidHandler.js');
+const TeamStats = require('../util/teamStats.js');
 const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js');
 const SmartSwitchHandler = require('../handlers/smartSwitchHandler.js');
 const Team = require('../structures/Team');
@@ -296,6 +298,15 @@ module.exports = {
     handlers: async function (rustplus, client, info, mapMarkers, teamInfo, time) {
         await runHandler(rustplus, client, 'the team', () => TeamHandler.handler(rustplus, client, teamInfo.teamInfo));
         rustplus.team.updateTeam(teamInfo.teamInfo);
+
+        /* Online time of the week; when the week changed the finished one is reported. */
+        await runHandler(rustplus, client, 'the team stats', async () => {
+            const finished = TeamStats.tick(client, rustplus.guildId, rustplus.serverId, teamInfo.teamInfo.members);
+            if (finished !== null) {
+                DiscordMessages.sendTeamStatsMessage(rustplus.guildId, rustplus.serverId, finished)
+                    .catch(() => undefined);
+            }
+        });
 
         await runHandler(rustplus, client, 'the smart switches',
             () => SmartSwitchHandler.handler(rustplus, client, time.time));

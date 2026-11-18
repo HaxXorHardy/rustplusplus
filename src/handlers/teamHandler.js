@@ -20,7 +20,9 @@
 
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const DeathLog = require('../util/deathLog.js');
 const RaidHandler = require('./raidHandler.js');
+const TeamStats = require('../util/teamStats.js');
 
 module.exports = {
     handler: async function (rustplus, client, teamInfo) {
@@ -78,6 +80,15 @@ module.exports = {
                 if (player.steamId === playerUpdated.steamId.toString()) {
                     if (player.isGoneDead(playerUpdated)) {
                         const location = player.pos === null ? 'spawn' : player.pos.string;
+
+                        /* Weekly stats and the death map (only with a known position, not at spawn). */
+                        TeamStats.noteDeath(client, guildId, serverId, player.steamId, player.name);
+                        if (player.pos !== null) {
+                            DeathLog.add(client, guildId, serverId, {
+                                steamId: player.steamId, name: player.name, x: player.x, y: player.y,
+                                grid: player.pos.location || null
+                            });
+                        }
                         const str = client.intlGet(guildId, 'playerJustDied', {
                             name: player.name,
                             location: location
@@ -114,6 +125,7 @@ module.exports = {
 
                     if (player.isGoneOnline(playerUpdated)) {
                         RaidHandler.onTeamOnline(rustplus, player.name);
+                        TeamStats.noteSession(client, guildId, serverId, player.steamId, player.name);
                         const str = client.intlGet(guildId, 'playerJustConnected', { name: player.name });
                         await DiscordMessages.sendActivityNotificationMessage(
                             guildId, serverId, Constants.COLOR_ACTIVE, str, player.steamId);
