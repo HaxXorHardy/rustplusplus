@@ -49,9 +49,68 @@ function currentInstance(client, guildId, serverId) {
     return rustplus;
 }
 
-/* Remember when a timer ends and what it switches to, for the group message. */
-function setEnd(guildId, serverId, id, endsAtMs, value) {
-    ends.set(`${guildId}:${serverId}:${id}`, { handle: of(guildId, serverId)[id], endsAtMs: endsAtMs, value: value });
+/*
+    The timers are written to the instance file as well (server.pendingTimers, the instances folder is a volume):
+    after a restart or a redeploy handlers/switchTimerRestore.js starts them again.
+*/
+function persist(guildId, serverId, key, record) {
+    const Client = require('../structures/clientRegistry.js');
+    const client = Client.client;
+    if (!client || typeof client.getInstance !== 'function') return;
+
+    const instance = client.getInstance(guildId);
+    const server = instance && instance.serverList ? instance.serverList[serverId] : null;
+    if (!server) return;
+
+    if (record === null) {
+        if (!server.pendingTimers || !server.pendingTimers.hasOwnProperty(key)) return;
+        delete server.pendingTimers[key];
+    }
+    else {
+        if (!server.pendingTimers || typeof server.pendingTimers !== 'object') server.pendingTimers = {};
+        server.pendingTimers[key] = record;
+    }
+
+    client.setInstance(guildId, instance);
+}
+
+/*
+    Start a timer: record = { kind: 'switch' | 'group', id, value (the state it switches to), inGame }. fire runs when
+    it is due; a timer under the same key is replaced. Returns the time it ends.
+*/
+function schedule(guildId, serverId, key, delayMs, record, fire) {
+    cancel(guildId, serverId, key);
+
+    const timeouts = of(guildId, serverId);
+    const endsAtMs = Date.now() + Math.max(0, delayMs);
+
+    const handle = setTimeout(async () => {
+        if (timeouts[key] !== handle) return;
+
+        delete timeouts[key];
+        ends.delete(`${guildId}:${serverId}:${key}`);
+        persist(guildId, serverId, key, null);
+
+        await fire();
+    }, Math.max(0, delayMs));
+
+    timeouts[key] = handle;
+    ends.set(`${guildId}:${serverId}:${key}`, { handle: handle, endsAtMs: endsAtMs, value: record.value });
+    persist(guildId, serverId, key, Object.assign({}, record, { endsAtMs: endsAtMs }));
+
+    return endsAtMs;
+}
+
+/* Stop a timer (if one runs) and forget it, in memory and in the instance file. */
+function cancel(guildId, serverId, key) {
+    const timeouts = of(guildId, serverId);
+    if (timeouts.hasOwnProperty(key)) {
+        clearTimeout(timeouts[key]);
+        delete timeouts[key];
+    }
+
+    ends.delete(`${guildId}:${serverId}:${key}`);
+    persist(guildId, serverId, key, null);
 }
 
 /* { endsAtMs, value } of a timer that still runs, or null (also when it was cancelled by clearTimeout + delete). */
@@ -84,7 +143,8 @@ function reset() {
 module.exports = {
     of: of,
     currentInstance: currentInstance,
-    setEnd: setEnd,
+    schedule: schedule,
+    cancel: cancel,
     groupKey: groupKey,
     getEnd: getEnd,
     reset: reset,

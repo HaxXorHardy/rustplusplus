@@ -546,6 +546,22 @@ module.exports = {
         });
     },
 
+    getUpkeepWarningEmbed: function (guildId, serverId, entityId, expiry) {
+        const instance = Client.client.getInstance(guildId);
+        const entity = instance.serverList[serverId].storageMonitors[entityId];
+        const grid = entity.location !== null ? ` (${entity.location})` : '';
+
+        return module.exports.getEmbed({
+            title: `⏳ ${Client.client.intlGet(guildId, 'upkeepRunsOutTitle', { device: `${entity.name}${grid}` })}`,
+            color: '#F5C400',
+            description: `**ID** \`${entityId}\`\n` +
+                Client.client.intlGet(guildId, 'upkeepRunsOutAt', { time: `<t:${Math.floor(expiry)}:R>` }),
+            thumbnail: `attachment://${entity.image}`,
+            footer: { text: `${entity.server}` },
+            timestamp: true
+        });
+    },
+
     getStorageMonitorDisconnectNotificationEmbed: function (guildId, serverId, entityId) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].storageMonitors[entityId];

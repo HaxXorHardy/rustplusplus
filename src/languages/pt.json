@@ -980,5 +980,8 @@
     "raidReportTitle": "Raid report: {server}",
     "raidReportTime": "Alarms from {start} to {end}, quiet for 10 minutes since.",
     "raidReportAlarms": "Alarms",
-    "raidReportCameOnline": "Came online"
+    "raidReportCameOnline": "Came online",
+    "upkeepRunsOut": "{device}: the upkeep runs out in {time}!",
+    "upkeepRunsOutTitle": "{device}: the upkeep runs out soon",
+    "upkeepRunsOutAt": "The tool cupboard starts to decay {time}. Fill it up."
 }

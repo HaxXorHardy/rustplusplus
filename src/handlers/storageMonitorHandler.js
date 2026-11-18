@@ -20,7 +20,11 @@
 
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const Timer = require('../util/timer.js');
 const UnreachableDevices = require('../util/unreachableDevices.js');
+const UpkeepWarning = require('../util/upkeepWarning.js');
+
+const Config = require('../../config');
 
 module.exports = {
     handler: async function (rustplus, client) {
@@ -94,6 +98,28 @@ module.exports = {
                             }
                             else if (info.entityInfo.payload.protectionExpiry !== 0) {
                                 instance.serverList[serverId].storageMonitors[entityId].decaying = false;
+                            }
+
+                            /* Early warning: the upkeep runs out within RPP_UPKEEP_WARNING_HOURS. */
+                            const monitor = instance.serverList[serverId].storageMonitors[entityId];
+                            const upkeep = UpkeepWarning.check(monitor, info.entityInfo.payload.protectionExpiry,
+                                Math.floor(Date.now() / 1000), Config.general.upkeepWarningHours);
+                            if (upkeep === 'warn') {
+                                monitor.upkeepWarned = true;
+                                const expiry = info.entityInfo.payload.protectionExpiry;
+
+                                DiscordMessages.sendUpkeepWarningMessage(guildId, serverId, entityId, expiry)
+                                    .catch(() => undefined);
+
+                                if (monitor.inGame) {
+                                    rustplus.sendInGameMessage(client.intlGet(rustplus.guildId, 'upkeepRunsOut', {
+                                        device: monitor.name,
+                                        time: Timer.secondsToFullScale(Math.max(0, expiry - Date.now() / 1000), 's')
+                                    }));
+                                }
+                            }
+                            else if (upkeep === 'rearm') {
+                                monitor.upkeepWarned = false;
                             }
                         }
                         else if (info.entityInfo.payload.capacity ===

@@ -26,6 +26,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const InGameChatHandler = require('../handlers/inGameChatHandler.js');
 const RaidHandler = require('../handlers/raidHandler.js');
 const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js');
+const SwitchTimeouts = require('../util/switchTimeouts.js');
 const TeamChatHandler = require("../handlers/teamChatHandler.js");
 const TeamHandler = require('../handlers/teamHandler.js');
 const { CHANNELS } = require('../util/inGameChat.js');
@@ -198,10 +199,8 @@ async function messageBroadcastEntityChangedSmartSwitch(rustplus, client, messag
         return;
     }
 
-    if (rustplus.currentSwitchTimeouts.hasOwnProperty(entityId)) {
-        clearTimeout(rustplus.currentSwitchTimeouts[entityId]);
-        delete rustplus.currentSwitchTimeouts[entityId];
-    }
+    /* Switched in game: a running "on/off for X" of the switch is over. */
+    SwitchTimeouts.cancel(rustplus.guildId, serverId, `${entityId}`);
 
     const active = message.broadcast.entityChanged.payload.value;
     server.switches[entityId].active = active;

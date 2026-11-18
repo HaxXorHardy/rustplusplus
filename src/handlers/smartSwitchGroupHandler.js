@@ -74,12 +74,7 @@ module.exports = {
 
     /* Cancel a running "on/off for X" of the group. */
     cancelGroupTimer: function (rustplus, groupId) {
-        const timeouts = rustplus.currentSwitchTimeouts;
-        const key = SwitchTimeouts.groupKey(groupId);
-        if (!timeouts.hasOwnProperty(key)) return;
-
-        clearTimeout(timeouts[key]);
-        delete timeouts[key];
+        SwitchTimeouts.cancel(rustplus.guildId, rustplus.serverId, SwitchTimeouts.groupKey(groupId));
     },
 
     /*
@@ -132,11 +127,9 @@ module.exports = {
         }
 
         if (seconds !== null) {
-            const timeouts = rustplus.currentSwitchTimeouts;
-            const key = SwitchTimeouts.groupKey(groupId);
-            timeouts[key] = setTimeout(async function () {
-                delete timeouts[key];
-
+            const record = { kind: 'group', id: `${groupId}`, value: !active, inGame: Boolean(options.inGame) };
+            SwitchTimeouts.schedule(guildId, serverId, SwitchTimeouts.groupKey(groupId), seconds * 1000, record,
+                async function () {
                 const instance = client.getInstance(guildId);
                 if (!instance.serverList.hasOwnProperty(serverId) ||
                     !instance.serverList[serverId].switchGroups.hasOwnProperty(groupId)) {
@@ -162,9 +155,7 @@ module.exports = {
                         `The timer of switch group ${groupId} could not switch it back: ${e && e.message ? e.message : e}`,
                         'warn');
                 }
-            }, seconds * 1000);
-
-            SwitchTimeouts.setEnd(guildId, serverId, key, Date.now() + seconds * 1000, !active);
+            });
         }
 
         return await turnAndReport(rustplus, active);
@@ -252,8 +243,7 @@ module.exports = {
 
             /* A running "on/off for X minutes" of a single switch is overruled by the group. */
             if (rustplus.currentSwitchTimeouts.hasOwnProperty(entityId)) {
-                clearTimeout(rustplus.currentSwitchTimeouts[entityId]);
-                delete rustplus.currentSwitchTimeouts[entityId];
+                SwitchTimeouts.cancel(guildId, serverId, entityId);
             }
 
             if (Boolean(content.active) !== Boolean(value)) actionSwitches.push(entityId);

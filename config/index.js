@@ -92,6 +92,8 @@ module.exports = {
             and when no alarm came for a while a raid report is posted.
         */
         raidModeEnabled: envBool('RPP_RAID_MODE', true),
+        /* Warn this many hours before a tool cupboard (with a storage monitor) runs out of upkeep. 0 = off. */
+        upkeepWarningHours: envInt('RPP_UPKEEP_WARNING_HOURS', 6),
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',
