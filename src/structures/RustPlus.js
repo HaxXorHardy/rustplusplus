@@ -2070,7 +2070,7 @@ class RustPlus extends RustPlusLib {
 
         const hp = decayItemHp === null ? details.hp : decayItemHp;
         if (hp > details.hp) {
-            const str = client.intlGet(this.guildId, 'hpExceedMax', {
+            const str = Client.client.intlGet(this.guildId, 'hpExceedMax', {
                 hp: hp,
                 max: details.hp
             });
