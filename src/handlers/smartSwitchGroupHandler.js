@@ -19,6 +19,7 @@
 */
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const Timer = require('../util/timer');
@@ -28,6 +29,9 @@ const SWITCH_CONCURRENCY = 4;
 
 /* A switch that did not answer is tried once more after this pause. */
 const RETRY_DELAY_MS = 2000;
+
+/* `${guildId}:${serverId}:${groupId}:${schedule}` -> inside/outside of each window at the last check */
+const scheduleStates = new Map();
 
 /* group.autoDayNight */
 const { AUTO_OFF, AUTO_DAY, AUTO_NIGHT } = SwitchGroupState;
@@ -48,7 +52,11 @@ module.exports = {
         const serverId = rustplus.serverId;
         const instance = client.getInstance(guildId);
         const server = instance.serverList[serverId];
-        if (!server || !server.switchGroups || !rustplus.time) return;
+        if (!server || !server.switchGroups) return;
+
+        await module.exports.runSchedules(client, rustplus, server);
+
+        if (!rustplus.time) return;
 
         let turned = null;
         if (rustplus.time.isTurnedDay(time)) turned = 'day';
@@ -64,6 +72,26 @@ module.exports = {
                 `Switch group ${groupId} (${group.name}) is turned ${active ? 'on' : 'off'}, it became ${turned}.`);
 
             await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, active);
+        }
+    },
+
+    /* Real-time schedules (group.schedule, util/switchGroupSchedule.js): act on the begin and end of a window. */
+    runSchedules: async function (client, rustplus, server, date = new Date()) {
+        const guildId = rustplus.guildId;
+        const serverId = rustplus.serverId;
+
+        for (const [groupId, group] of Object.entries(server.switchGroups)) {
+            if (!group.schedule) continue;
+
+            const key = `${guildId}:${serverId}:${groupId}:${JSON.stringify(group.schedule)}`;
+            if (!scheduleStates.has(key)) scheduleStates.set(key, {});
+
+            for (const change of SwitchGroupSchedule.transitions(group.schedule, scheduleStates.get(key), date)) {
+                rustplus.log(client.intlGet(null, 'infoCap'),
+                    `Switch group ${groupId} (${group.name}) is turned ${change.value ? 'on' : 'off'} by its schedule.`);
+
+                await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, change.value);
+            }
         }
     },
 

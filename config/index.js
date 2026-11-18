@@ -94,6 +94,8 @@ module.exports = {
         raidModeEnabled: envBool('RPP_RAID_MODE', true),
         /* Warn this many hours before a tool cupboard (with a storage monitor) runs out of upkeep. 0 = off. */
         upkeepWarningHours: envInt('RPP_UPKEEP_WARNING_HOURS', 6),
+        /* The time zone of switch group schedules without their own (e.g. Europe/Berlin). */
+        scheduleTimeZone: process.env.RPP_TIMEZONE || 'UTC',
     },
     discord: {
         username: process.env.RPP_DISCORD_USERNAME || 'rustplusplus',

@@ -22,6 +22,8 @@ const Discord = require('discord.js');
 
 const Client = require('../structures/clientRegistry.js');
 const TextInput = require('./discordTextInputs.js');
+const StorageAlerts = require('../util/storageAlerts.js');
+const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const Timer = require('../util/timer.js');
 
 module.exports = {
@@ -241,6 +243,14 @@ module.exports = {
                 placeholder: '5m',
                 required: false,
                 style: Discord.TextInputStyle.Short
+            })),
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'GroupSchedule',
+                label: Client.client.intlGet(guildId, 'groupScheduleLabel'),
+                value: SwitchGroupSchedule.format(group.schedule),
+                placeholder: 'Europe/Berlin: 22:00-06:00 off, 18:00-22:00 on',
+                required: false,
+                style: Discord.TextInputStyle.Paragraph
             }))
         );
 
@@ -375,6 +385,14 @@ module.exports = {
                 label: Client.client.intlGet(guildId, 'name'),
                 value: entity.name,
                 style: Discord.TextInputStyle.Short
+            })),
+            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
+                customId: 'StorageMonitorAlerts',
+                label: Client.client.intlGet(guildId, 'storageMonitorAlertsLabel'),
+                value: StorageAlerts.format(Client.client.items, entity.alerts),
+                placeholder: 'Rifle Ammo < 100, Low Grade Fuel < 50, Sulfur > 10k',
+                required: false,
+                style: Discord.TextInputStyle.Paragraph
             }))
         );
 

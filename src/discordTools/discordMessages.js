@@ -398,6 +398,26 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
     },
 
+    sendStorageAlertMessage: async function (guildId, serverId, entityId, text) {
+        const instance = Client.client.getInstance(guildId);
+        const entity = instance.serverList[serverId].storageMonitors[entityId];
+
+        const content = {
+            embeds: [DiscordEmbeds.getEmbed({
+                title: `📦 ${text}`.slice(0, 256),
+                color: '#F5C400',
+                description: `**ID** \`${entityId}\``,
+                thumbnail: `attachment://${entity.image}`,
+                footer: { text: `${entity.server}` },
+                timestamp: true
+            })],
+            files: [new Discord.AttachmentBuilder(
+                Path.join(__dirname, '..', `resources/images/electrics/${entity.image}`))]
+        };
+
+        await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+    },
+
     sendUpkeepWarningMessage: async function (guildId, serverId, entityId, expiry) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].storageMonitors[entityId];

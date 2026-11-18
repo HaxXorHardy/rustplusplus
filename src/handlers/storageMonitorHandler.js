@@ -20,6 +20,7 @@
 
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const StorageAlerts = require('../util/storageAlerts.js');
 const Timer = require('../util/timer.js');
 const UnreachableDevices = require('../util/unreachableDevices.js');
 const UpkeepWarning = require('../util/upkeepWarning.js');
@@ -135,6 +136,7 @@ module.exports = {
                 }
 
                 await DiscordMessages.sendStorageMonitorMessage(guildId, serverId, entityId);
+                await StorageAlerts.check(client, rustplus, entityId);
             }
         }
     },
