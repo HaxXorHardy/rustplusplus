@@ -28,8 +28,10 @@ const RemoveServerDevices = require('../discordTools/RemoveServerDevices.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
+const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordModals = require('../discordTools/discordModals.js');
 const RustPlusSync = require('../util/rustplusSync.js');
+const WipeHelper = require('./wipeHelper.js');
 
 /* Notification buttons share one handler: the customId prefix selects which channel flag is toggled.
    Adding a channel means adding one entry here, not another copy of the toggle block. */
@@ -1083,6 +1085,51 @@ module.exports = async (client, interaction) => {
                 await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active);
             }
         }
+    }
+    else if (interaction.customId.startsWith('WipeRemoveDevicesConfirm')) {
+        const ids = JSON.parse(interaction.customId.replace('WipeRemoveDevicesConfirm', ''));
+
+        if (!await client.requireAdminPrivileges(interaction)) return;
+        if (!instance.serverList[ids.serverId]) {
+            interaction.deferUpdate();
+            return;
+        }
+
+        await interaction.deferUpdate();
+        const removed = await WipeHelper.removeOldDevices(client, guildId, ids.serverId, { all: Boolean(ids.all) });
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `removed ${JSON.stringify(removed)}`
+        }));
+
+        await client.interactionEditReply(interaction, {
+            embeds: DiscordEmbeds.getActionInfoEmbed(0, client.intlGet(guildId, 'wipeRemoveDevicesDone', {
+                switches: `${removed.switches}`, alarms: `${removed.alarms}`, monitors: `${removed.storageMonitors}`
+            })).embeds,
+            components: []
+        });
+    }
+    else if (interaction.customId.startsWith('WipeRemoveDevices')) {
+        const ids = JSON.parse(interaction.customId.replace('WipeRemoveDevices', ''));
+        const server = instance.serverList[ids.serverId];
+
+        if (!await client.requireAdminPrivileges(interaction)) return;
+        if (!server) {
+            interaction.deferUpdate();
+            return;
+        }
+
+        /* A second, private step: removing devices cannot be undone. */
+        const devices = WipeHelper.devicesToRemove(server, { all: Boolean(ids.all) });
+        await client.interactionReply(interaction, {
+            embeds: DiscordEmbeds.getActionInfoEmbed(1, client.intlGet(guildId, 'wipeRemoveDevicesAsk', {
+                switches: `${devices.switches.length}`, alarms: `${devices.alarms.length}`,
+                monitors: `${devices.storageMonitors.length}`
+            })).embeds,
+            components: [DiscordButtons.getWipeRemoveDevicesButton(guildId, ids.serverId, true, Boolean(ids.all))],
+            ephemeral: true
+        });
     }
     else if (interaction.customId.startsWith('GroupToggle')) {
         const ids = JSON.parse(interaction.customId.replace('GroupToggle', ''));
