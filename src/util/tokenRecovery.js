@@ -81,6 +81,7 @@ function stateOf(steamId) {
             backoffUntilMs: 0,      /* no renewal before this */
             lastProactiveFailMs: null, /* a proactive renewal that failed is retried after EXPIRY_CHECK_INTERVAL_MS */
             proactivePausedUntilMs: 0, /* no proactive renewal before this (the last one did not help) */
+            refusedToken: null,     /* the stored token the API refused while a socket with it still worked */
         };
 
         states.set(key, state);
@@ -135,7 +136,34 @@ function renewalCount(steamId) {
 */
 function markReadSuccessful(steamId) {
     const state = states.get(`${steamId}`);
-    if (state) state.strikes = 0;
+    if (!state) return;
+
+    state.strikes = 0;
+    state.refusedToken = null;
+}
+
+/*
+    The stored token was refused by the API while a socket with it kept working. Measured live: the open socket goes on,
+    but every new request with that token - including the handshake of the next socket - is refused with 403.
+*/
+function isTokenRefused(steamId) {
+    const state = states.get(`${steamId}`);
+    if (!state || state.refusedToken === null) return false;
+
+    const auth = RustPlusAuth.readAuth(steamId);
+
+    return auth !== null && auth.token === state.refusedToken;
+}
+
+/*
+    A socket of the account closed: a token that is known to be refused is replaced now, before the reconnect would
+    try it and fail on the handshake. The renewal rebuilds the waiting reconnect right away (rebuildAll).
+*/
+async function renewIfRefused(client, guildId, steamId) {
+    if (!isTokenRefused(steamId)) return 'skipped';
+
+    return await renew(client, steamId, 'the token was refused while the socket was open, it is replaced before ' +
+        'the reconnect', { guildId: guildId });
 }
 
 /*
@@ -406,9 +434,14 @@ async function reportRejected(client, guildId, steamId, reason) {
     if (live !== null) {
         state.strikes = 0;
 
-        client.log(client.intlGet(null, 'infoCap'),
-            `A Rust+ request of ${steamId} was refused (${reason}), but the connection of ${live.guildId} works with ` +
-            'the same token - not renewing.', 'debug');
+        /* Logged once per token, the refusals that follow say nothing new. */
+        if (!isTokenRefused(steamId)) {
+            state.refusedToken = live.authToken;
+
+            client.log(client.intlGet(null, 'infoCap'),
+                `A Rust+ request of ${steamId} was refused (${reason}), but the connection of ${live.guildId} works ` +
+                'with the same token - not renewing now, the next reconnect gets a new token first.', 'debug');
+        }
         return 'skipped';
     }
 
@@ -499,6 +532,8 @@ module.exports = {
     reportRejected: reportRejected,
     markHealthy: markHealthy,
     markReadSuccessful: markReadSuccessful,
+    isTokenRefused: isTokenRefused,
+    renewIfRefused: renewIfRefused,
     isBackedOff: isBackedOff,
     isRenewing: isRenewing,
     liveSocketOf: liveSocketOf,

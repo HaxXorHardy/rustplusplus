@@ -311,6 +311,7 @@ async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn
         if (!isAuthFailure(e)) throw e;
 
         /* One policy for every source of a rejected token: strikes, throttle, renewal, rebuild of the sockets. */
+        const alreadyRefused = TokenRecovery.isTokenRefused(steamId);
         const recovery = await TokenRecovery.reportRejected(client, guildId, steamId,
             `the history read was refused with ${e.status}`);
 
@@ -322,9 +323,13 @@ async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn
         if (recovery !== 'renewed' && TokenRecovery.liveSocketOf(client, steamId) !== null) {
             historyPausedUntil.set(`${steamId}`, Date.now() + HISTORY_REFUSED_PAUSE_MS);
 
-            client.log(client.intlGet(null, 'infoCap'),
-                `The Rust+ history of ${steamId} was refused with ${e.status} while the connection works with the ` +
-                `same token, it is read again in ${HISTORY_REFUSED_PAUSE_MS / 60000} minutes.`, 'debug');
+            /* Once per token: the next tries every few minutes are silent until the history works again. */
+            if (!alreadyRefused) {
+                client.log(client.intlGet(null, 'infoCap'),
+                    `The Rust+ history of ${steamId} was refused with ${e.status} while the connection works with the ` +
+                    `same token, it is read again in ${HISTORY_REFUSED_PAUSE_MS / 60000} minutes (and then every ` +
+                    `${HISTORY_REFUSED_PAUSE_MS / 60000} minutes, without a log line).`, 'debug');
+            }
             return null;
         }
 
@@ -339,6 +344,9 @@ async function readAccount(client, guildId, steamId, fetchHistoryFn, fetchSyncFn
     }
 
     /* The token works, a rejection that follows starts at one again. */
+    if (TokenRecovery.isTokenRefused(steamId)) {
+        client.log(client.intlGet(null, 'infoCap'), `The Rust+ history of ${steamId} can be read again.`, 'debug');
+    }
     TokenRecovery.markReadSuccessful(steamId);
     historyPausedUntil.delete(`${steamId}`);
 
@@ -577,6 +585,7 @@ const historyPausedUntil = new Map();   /* steamId -> ms */
 function resetAccountStateCache() {
     accountStateCache.clear();
     accountStateFailures.clear();
+    accountStateRefusedTokens.clear();
     accountRefreshAt.clear();
     historyPausedUntil.clear();
     TokenRecovery.reset();
@@ -589,6 +598,9 @@ function isAuthFailure(error) {
 
 /* steamId -> ms of the last account state read that failed. */
 const accountStateFailures = new Map();
+
+/* steamId -> the token whose account state was refused (logged once per token). */
+const accountStateRefusedTokens = new Map();
 
 function cachedAccountServers(steamId, now) {
     const cached = accountStateCache.get(`${steamId}`);
@@ -613,6 +625,11 @@ async function readAccountServers(client, steamId, auth, fetchSyncFn, now = Date
         accountStateCache.set(`${steamId}`, { servers: sync.servers, at: now });
         accountStateFailures.delete(`${steamId}`);
 
+        if (accountStateRefusedTokens.has(`${steamId}`)) {
+            accountStateRefusedTokens.delete(`${steamId}`);
+            client.log(client.intlGet(null, 'infoCap'), `The Rust+ account state of ${steamId} can be read again.`);
+        }
+
         return sync.servers;
     }
     catch (e) {
@@ -623,10 +640,18 @@ async function readAccountServers(client, steamId, auth, fetchSyncFn, now = Date
         */
         accountStateFailures.set(`${steamId}`, now);
 
-        client.log(client.intlGet(null, 'warningCap'),
-            `Could not read the Rust+ account state of ${steamId} (${e && e.message ? e.message : e}), the history ` +
-            `is read without it. Next attempt in ${Math.round(Config.general.rustplusSyncDataIntervalMs / 60000)} ` +
-            'minute(s).', isAuthFailure(e) ? 'warn' : 'debug');
+        /* A refusal is a warning once per token; the retries every few minutes stay silent until it works again. */
+        const auth403 = isAuthFailure(e);
+        const repeated = auth403 && accountStateRefusedTokens.get(`${steamId}`) === auth.token;
+        if (auth403) accountStateRefusedTokens.set(`${steamId}`, auth.token);
+
+        if (!repeated) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Could not read the Rust+ account state of ${steamId} (${e && e.message ? e.message : e}), the ` +
+                'history is read without it. Next attempt in ' +
+                `${Math.round(Config.general.rustplusSyncDataIntervalMs / 60000)} minute(s)` +
+                (auth403 ? ', further refusals of this token are not logged.' : '.'), auth403 ? 'warn' : 'debug');
+        }
 
         return null;
     }
