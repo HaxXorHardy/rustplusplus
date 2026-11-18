@@ -10,5 +10,5 @@ services:
       - ./instances:/app/instances
       - ./credentials:/app/credentials
       - ./maps:/app/maps
-      - ./data:/app/data
+      - ./runtime:/app/runtime
     restart: unless-stopped

@@ -33,10 +33,31 @@ catch (e) {
 const DATABASE_FILE_NAME = 'runtimeData.sqlite';
 const TABLE_NAME = 'runtime_server_state';
 
+/* Up to 1.51.5 the database was data/runtimeData.sqlite: carried over once (a local install keeps its timers). */
+function moveFromOldLocation(databasePath) {
+    const oldPath = Path.join(__dirname, '..', '..', '..', 'data', DATABASE_FILE_NAME);
+    try {
+        if (!Fs.existsSync(oldPath) || Fs.existsSync(databasePath)) return;
+        Fs.mkdirSync(Path.dirname(databasePath), { recursive: true });
+        Fs.copyFileSync(oldPath, databasePath);
+        Fs.rmSync(oldPath, { force: true });
+    }
+    catch (e) {
+        /* Not fatal: the bot starts with an empty runtime database. */
+    }
+}
+
 class RuntimeDataStorage {
     constructor(options = {}) {
-        this.dataPath = options.dataPath ?? Path.join(__dirname, '..', '..', '..', 'data');
+        /*
+            runtime/, not data/: data/ also holds the static game data of the image (staticData.sqlite,
+            static-json), so a volume on it hid them and the bot did not start. runtime/ can be a volume.
+        */
+        this.dataPath = options.dataPath ?? Path.join(__dirname, '..', '..', '..', 'runtime');
         this.databasePath = options.databasePath ?? Path.join(this.dataPath, DATABASE_FILE_NAME);
+        if (options.dataPath === undefined && options.databasePath === undefined) {
+            moveFromOldLocation(this.databasePath);
+        }
 
         this.db = null;
         this.statements = null;

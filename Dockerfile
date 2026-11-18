@@ -23,5 +23,6 @@ VOLUME [ "/app/credentials" ]
 VOLUME [ "/app/instances" ]
 VOLUME [ "/app/logs" ]
 VOLUME [ "/app/maps" ]
+VOLUME [ "/app/runtime" ]
 
 CMD ["npm", "start"]
