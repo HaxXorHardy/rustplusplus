@@ -33,8 +33,14 @@ const TeamChatHandler = require("../handlers/teamChatHandler.js");
 const TeamHandler = require('../handlers/teamHandler.js');
 const { CHANNELS } = require('../util/inGameChat.js');
 
+/* A chat text reduced to its letters and digits: how the bot recognizes its own messages coming back. */
+function botMessageKey(text) {
+    return `${text}`.toLowerCase().replace(/&(#\d+|[a-z]+);/g, '').replace(/[^\p{L}\p{N}]/gu, '');
+}
+
 module.exports = {
     name: 'message',
+    botMessageKey: botMessageKey,
     async execute(rustplus, client, message) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
@@ -127,10 +133,15 @@ async function handleInGameChatMessage(rustplus, client, chatMessage, chatChanne
         executeInGameCommand = false;
     }
 
-    if (executeInGameCommand && rustplus.messagesSentByBot.includes(chatMessage.message)) {
-        /* Remove message from messagesSendByBot */
+    /*
+        The bot's own message coming back: not a command and not mirrored to Discord. Compared without markup, the
+        game returns "<" and ">" (rich text tags) changed, so "High Quality Metal at 199 (< 200)" did not match.
+    */
+    const sentKey = botMessageKey(chatMessage.message);
+    if (executeInGameCommand && sentKey !== '' &&
+        rustplus.messagesSentByBot.some((sent) => botMessageKey(sent) === sentKey)) {
         for (let i = rustplus.messagesSentByBot.length - 1; i >= 0; i--) {
-            if (rustplus.messagesSentByBot[i] === chatMessage.message) {
+            if (botMessageKey(rustplus.messagesSentByBot[i]) === sentKey) {
                 rustplus.messagesSentByBot.splice(i, 1);
             }
         }
