@@ -336,6 +336,9 @@ module.exports = {
 
     /* exported for tests */
     groupComponents: (guildId, serverId, groupId) => groupComponents(guildId, serverId, groupId),
+    /* exported for tests */
+    sendInformationMessage: (guildId, messageType, content) => sendInformationMessage(guildId, messageType, content),
+    resetInformationSent: () => { for (const key of Object.keys(informationSent)) delete informationSent[key]; },
 
     sendSmartSwitchGroupMessage: async function (guildId, serverId, groupId, interaction = null) {
         if (interaction) {
@@ -941,14 +944,71 @@ module.exports = {
     Sends (or edits) one of the messages of the information channel and stores its id in the instance. A message
     that does not exist anymore is posted again by sendMessage, the id of the section is then replaced.
 */
+/*
+    What the information messages showed last: `${guildId}:${messageType}` -> { messageId, signature, files }.
+    The information step edits four messages every minute; most rounds nothing changed, and every edit uploaded the
+    logo of its embed again. An unchanged message is not edited at all now, and an edit of the same message leaves
+    its attachments alone (Discord keeps them when the edit names none).
+*/
+const informationSent = new Object();
+
+function embedJson(embed) {
+    const json = embed && typeof embed.toJSON === 'function' ? embed.toJSON() : Object.assign({}, embed);
+    /* The time of the edit is no change of the content. */
+    delete json.timestamp;
+    return json;
+}
+
+function fileNames(content) {
+    return (content.files || []).map((file) => {
+        const source = file && (file.name || file.attachment);
+        return Path.basename(`${source}`);
+    }).join('|');
+}
+
+/* Only messages with embeds can be compared, the map message changes with its image. */
+function informationSignature(content) {
+    if (!Array.isArray(content.embeds) || content.embeds.length === 0) return null;
+
+    return JSON.stringify({
+        content: content.content || null,
+        embeds: content.embeds.map(embedJson),
+        files: fileNames(content)
+    });
+}
+
 async function sendInformationMessage(guildId, messageType, content) {
     const instance = Client.client.getInstance(guildId);
     const previousId = instance.informationMessageId[messageType];
+    const key = `${guildId}:${messageType}`;
+    const last = informationSent[key];
+    const signature = informationSignature(content);
+    const files = fileNames(content);
 
-    const message = await module.exports.sendMessage(guildId, content, previousId,
-        instance.channelId.information);
+    let toSend = content;
+    if (previousId && last && last.messageId === previousId && signature !== null) {
+        if (last.signature === signature) return;
 
-    if (!message || message.id === previousId) return;
+        /* Same message, same logo: the attachment that is there stays. */
+        if (files !== '' && last.files === files) {
+            toSend = Object.assign({}, content);
+            delete toSend.files;
+        }
+    }
+
+    let message = await module.exports.sendMessage(guildId, toSend, previousId, instance.channelId.information);
+
+    /* The message was gone and posted again without its logo: one more edit attaches it. */
+    if (message && message.id !== previousId && toSend !== content) {
+        message = await module.exports.sendMessage(guildId, content, message.id, instance.channelId.information) ||
+            message;
+    }
+
+    if (!message) return;
+
+    informationSent[key] = { messageId: message.id, signature: signature, files: files };
+
+    if (message.id === previousId) return;
 
     instance.informationMessageId[messageType] = message.id;
     Client.client.setInstance(guildId, instance);
