@@ -66,6 +66,12 @@ module.exports = async (client, interaction) => {
         const ids = JSON.parse(interaction.customId.replace(notificationPrefix, ''));
         const setting = instance.notificationSettings[ids.setting];
 
+        /* A retired setting whose message was not removed yet. */
+        if (!setting) {
+            await interaction.message.delete().catch(() => undefined);
+            return;
+        }
+
         setting[field] = !setting[field];
         client.setInstance(guildId, instance);
 

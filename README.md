@@ -42,7 +42,7 @@ A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/r
 * Alot of [QoL Commands](docs/commands.md) that can be used In-Game or from Discord.
 * View the [Full list of features](docs/full_list_features.md).
 
-> **Event notifications:** Facepunch's Rust+ API no longer reports Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates and Vending Machines (verified against a live server on 2026-11-18: the map markers contain only players). Their notifications were removed; the commands for them (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!market`, ...) still answer, but have no data.
+> **Event notifications:** Facepunch's Rust+ API no longer reports any events - no Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates, Vending Machines, Deep Sea or Traveling Vendor (verified against a live server on 2026-11-18: the map markers contain only players). All event notifications were removed (1.50.1/1.50.3); the commands for them (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!vendor`, `!deepsea`, `!market`, ...) still answer, but have no data.
 
 
 ## **Documentation**
