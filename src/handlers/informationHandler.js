@@ -21,6 +21,15 @@
 const Client = require('../structures/clientRegistry.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const WithTimeout = require('../util/withTimeout.js');
+
+/* Warming the time played asks Battlemetrics once per team member; the team message must not wait longer for it. */
+const WARM_TIME_PLAYED_TIMEOUT_MS = 10 * 1000;
+
+/* The part of the information step that runs, named by the slow-step warning of handlers/backgroundHandler.js. */
+function phase(rustplus, name) {
+    rustplus.backgroundPhase = `the information (${name})`;
+}
 
 async function warmTeamTimePlayed(rustplus) {
     const instance = Client.client.getInstance(rustplus.guildId);
@@ -38,8 +47,10 @@ module.exports = {
         if (rustplus.informationIntervalCounter === 0) {
             const instance = Client.client.getInstance(rustplus.guildId);
 
+            phase(rustplus, 'server');
             await DiscordMessages.sendUpdateServerInformationMessage(rustplus);
 
+            phase(rustplus, 'monuments');
             if (instance.generalSettings.displayInformationMonumentInformation) {
                 await DiscordMessages.sendUpdateMonumentInformationMessage(rustplus);
             }
@@ -47,6 +58,7 @@ module.exports = {
                 await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'monument');
             }
 
+            phase(rustplus, 'events');
             if (instance.generalSettings.displayInformationEventInformation) {
                 await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
             }
@@ -54,8 +66,19 @@ module.exports = {
                 await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'event');
             }
 
-            await warmTeamTimePlayed(rustplus);
+            phase(rustplus, 'time played');
+            try {
+                await WithTimeout.withTimeout(warmTeamTimePlayed(rustplus), WARM_TIME_PLAYED_TIMEOUT_MS,
+                    'warming the time played');
+            }
+            catch (e) {
+                rustplus.log(Client.client.intlGet(null, 'infoCap'),
+                    `The team message goes on without it: ${e && e.message ? e.message : e}`, 'debug');
+            }
+
+            phase(rustplus, 'team');
             await DiscordMessages.sendUpdateTeamInformationMessage(rustplus);
+            phase(rustplus, 'order');
             await DiscordMessages.ensureInformationMessageOrder(rustplus);
         }
 

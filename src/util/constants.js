@@ -38,6 +38,8 @@ module.exports = {
     SCRAPE_USER_AGENT: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     SCRAPE_MAX_ATTEMPTS: 3,
     SCRAPE_RETRY_DELAY_MS: 1500,
+    /* A request without an answer must not hang its caller forever (the information queue waited on one for hours). */
+    SCRAPE_TIMEOUT_MS: 20000,
 
     /* Embeds */
     EMBED_MAX_TOTAL_CHARACTERS: 6000,

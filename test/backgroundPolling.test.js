@@ -105,6 +105,70 @@ Test.describe('BackgroundHandler', () => {
         Assert.ok(rustplus.logs.some((line) => line.level === 'warn' && line.text.includes('Discord is down')));
     });
 
+    Test.it('skips a step that is still pending, then gives it up after the hard limit', async (t) => {
+        const calls = [];
+        stubHandlers(t, calls);
+
+        /* The storage monitors started 1 minute ago: still within the limit, skipped. */
+        const rustplus = fakeRustplus({
+            backgroundPending: { 'the storage monitors': { startedMs: Date.now() - 60 * 1000 } },
+        });
+        await BackgroundHandler.run(rustplus, fakeClient());
+
+        Assert.deepStrictEqual(calls, ['information']);
+        Assert.ok(rustplus.logs.some((line) => line.text.includes('the storage monitors is still running')));
+
+        /* The same step hung for 7 hours (1.41.6): given up and run again. */
+        calls.length = 0;
+        rustplus.backgroundPending['the storage monitors'] = { startedMs: Date.now() - 7 * 60 * 60 * 1000 };
+        await BackgroundHandler.run(rustplus, fakeClient());
+
+        Assert.deepStrictEqual(calls, ['information', 'storage']);
+        Assert.ok(rustplus.logs.some((line) => line.level === 'warn' && line.text.includes('given up')));
+        Assert.strictEqual(rustplus.backgroundPending['the storage monitors'], undefined);
+    });
+
+    Test.it('a given-up run that settles late does not clear the flag of its replacement', async (t) => {
+        const originalAbandon = BackgroundHandler.STEP_ABANDON_MS;
+        const originalInfo = InformationHandler.handler;
+        const originalStorage = StorageMonitorHandler.handler;
+        t.after(() => {
+            BackgroundHandler.STEP_ABANDON_MS = originalAbandon;
+            InformationHandler.handler = originalInfo;
+            StorageMonitorHandler.handler = originalStorage;
+        });
+
+        BackgroundHandler.STEP_ABANDON_MS = 0;
+        InformationHandler.handler = async () => undefined;
+
+        /* First run hangs until released, the second one hangs for good. */
+        let releaseFirst;
+        const runs = [new Promise((resolve) => { releaseFirst = resolve; }), new Promise(() => undefined)];
+        let runIndex = 0;
+        StorageMonitorHandler.handler = () => runs[runIndex++];
+
+        const rustplus = fakeRustplus();
+        const step = () => { BackgroundHandler.run(rustplus, fakeClient()); };
+
+        /* Not awaited: both runs stay pending, the 15 s step deadline is not part of this test. */
+        step();
+        await new Promise((resolve) => setImmediate(resolve));
+        const firstToken = rustplus.backgroundPending['the storage monitors'];
+
+        rustplus.isBackgroundRunning = false;
+        step();
+        await new Promise((resolve) => setImmediate(resolve));
+        const secondToken = rustplus.backgroundPending['the storage monitors'];
+
+        Assert.ok(firstToken && secondToken && firstToken !== secondToken);
+
+        releaseFirst();
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.strictEqual(rustplus.backgroundPending['the storage monitors'], secondToken);
+    });
+
     Test.it('starts and stops the interval', () => {
         const rustplus = fakeRustplus();
 

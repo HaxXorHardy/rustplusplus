@@ -55,11 +55,23 @@ module.exports = {
             condition &= client.battlemetricsInstances.hasOwnProperty(bmId);
             condition &= rustplus && rustplus.isOperational;
 
-            if (condition) {
-                await DiscordMessages.sendUpdateBattlemetricsOnlinePlayersInformationMessage(rustplus, bmId);
+            /*
+                The information queue gives up an operation after 60 s and rejects (ESTEPTIMEOUT). Uncaught, that ended
+                as an Unhandled Rejection (1.41.8, 06:08 UTC) and skipped the trackers of this round. The next round
+                updates the message again.
+            */
+            try {
+                if (condition) {
+                    await DiscordMessages.sendUpdateBattlemetricsOnlinePlayersInformationMessage(rustplus, bmId);
+                }
+                else {
+                    await DiscordMessages.deleteInformationMessage(guildId, 'battlemetricsPlayers');
+                }
             }
-            else {
-                await DiscordMessages.deleteInformationMessage(guildId, 'battlemetricsPlayers');
+            catch (e) {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `The Battlemetrics players message of ${guildId} was not updated: ` +
+                    `${e && e.message ? e.message : e}`, 'warn');
             }
 
             for (const [trackerId, content] of Object.entries(instance.trackers)) {

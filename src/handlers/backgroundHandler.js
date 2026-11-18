@@ -34,6 +34,14 @@ const WithTimeout = require('../util/withTimeout.js');
 const BACKGROUND_INTERVAL_MS = 60 * 1000;
 const STEP_TIMEOUT_MS = 15 * 1000;
 
+/*
+    A step that is still pending after this long is given up: the next round starts it again. Without it one promise
+    that never settled skipped the storage monitors for seven hours (1.41.6, a Discord call without an answer), and the
+    reconnect did not help because the flag lives on the RustPlus object. Long enough for a slow information round
+    (measured up to ~70 s) and a few rate limited monitor posts.
+*/
+const STEP_ABANDON_MS = 5 * 60 * 1000;
+
 function stop(rustplus) {
     if (!rustplus.backgroundTaskId) return;
 
@@ -45,26 +53,47 @@ async function step(rustplus, client, label, handler) {
     rustplus.backgroundPending = rustplus.backgroundPending || new Object();
 
     /* A step that is still running is not started a second time: both copies would wait for the same rate limit. */
-    if (rustplus.backgroundPending[label]) {
-        rustplus.log(client.intlGet(null, 'infoCap'),
-            `background: ${label} is still running, it is skipped.`, 'debug');
-        return;
+    const pending = rustplus.backgroundPending[label];
+    if (pending) {
+        const pendingMs = Date.now() - pending.startedMs;
+
+        if (pendingMs < module.exports.STEP_ABANDON_MS) {
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `background: ${label} is still running, it is skipped.`, 'debug');
+            return;
+        }
+
+        rustplus.log(client.intlGet(null, 'warningCap'),
+            `The background step for ${label} did not finish after ${Math.round(pendingMs / 1000)} s, ` +
+            'it is given up and started again.', 'warn');
     }
 
-    rustplus.backgroundPending[label] = true;
+    const startedMs = Date.now();
+    /* Own token per run: a given-up run that settles later must not clear the flag of the run that replaced it. */
+    const token = { startedMs: startedMs };
+    rustplus.backgroundPending[label] = token;
+    /* No log line per step: a slow step is reported below with its name, the cycle line carries the duration. */
     rustplus.backgroundPhase = label;
-    rustplus.log(client.intlGet(null, 'infoCap'), `background: ${label}`, 'debug');
+
+    let reportedSlow = false;
 
     const work = (async () => {
         try {
             await handler();
+
+            /* A step that was reported as slow says when it is done, so the log shows how long it really took. */
+            if (reportedSlow) {
+                rustplus.log(client.intlGet(null, 'infoCap'),
+                    `The background step for ${label} finished after ${Math.round((Date.now() - startedMs) / 1000)} s.`,
+                    'debug');
+            }
         }
         catch (e) {
             rustplus.log(client.intlGet(null, 'warningCap'),
                 `The background step for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
         }
         finally {
-            delete rustplus.backgroundPending[label];
+            if (rustplus.backgroundPending[label] === token) delete rustplus.backgroundPending[label];
         }
     })();
 
@@ -76,8 +105,15 @@ async function step(rustplus, client, label, handler) {
         await WithTimeout.withTimeout(work, STEP_TIMEOUT_MS, label);
     }
     catch (e) {
+        reportedSlow = true;
+
+        /* The phase names the part that waits (the information step sets it, see handlers/informationHandler.js). */
+        const where = (rustplus.backgroundPhase && rustplus.backgroundPhase !== label) ?
+            `, waiting in ${rustplus.backgroundPhase}` : '';
+
         rustplus.log(client.intlGet(null, 'warningCap'),
-            `The background step for ${label} is slow (${e && e.message ? e.message : e}), it keeps running.`, 'warn');
+            `The background step for ${label} is slow (${e && e.message ? e.message : e}${where}), it keeps running.`,
+            'warn');
     }
 }
 
@@ -123,6 +159,7 @@ function start(rustplus, client) {
 module.exports = {
     BACKGROUND_INTERVAL_MS: BACKGROUND_INTERVAL_MS,
     STEP_TIMEOUT_MS: STEP_TIMEOUT_MS,
+    STEP_ABANDON_MS: STEP_ABANDON_MS,
     start: start,
     stop: stop,
     run: run,

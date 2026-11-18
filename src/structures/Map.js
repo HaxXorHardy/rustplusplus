@@ -27,6 +27,13 @@ const Constants = require('../util/constants.js');
 const Monuments = require('../util/monuments.js');
 const Client = require('./clientRegistry.js');
 
+/*
+    The full map is a 2900x2900 photo-like image: as PNG it is about 4.3 MB, as JPEG (quality 85) about 0.7 MB. The PNG
+    stays for the drawing (markers, tracers), Discord gets the JPEG - uploading the PNG took more than 60 s on a slow
+    uplink and the relay socket dropped meanwhile.
+*/
+const UPLOAD_JPEG_QUALITY = 85;
+
 class Map {
     constructor(map, rustplus) {
         this._width = map.width;
@@ -446,7 +453,35 @@ class Map {
         }
     }
 
+    /* The full map for Discord (JPEG), written next to the PNG by writeMap(). */
+    static uploadImagePath(guildId) {
+        return Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.jpg`);
+    }
+
+    static uploadImageName(guildId) {
+        return `${guildId}_map_full.jpg`;
+    }
+
     async writeMap(markers, monuments) {
+        await this.writeMapPng(markers, monuments);
+        await this.writeUploadImage();
+    }
+
+    /* Writes the JPEG that is uploaded to Discord. A failure keeps the previous JPEG, the PNG is written anyway. */
+    async writeUploadImage() {
+        const png = this.mapMarkerImageMeta.map.image.replace('clean.png', 'full.png');
+
+        try {
+            const image = await Jimp.read(png);
+            await image.quality(UPLOAD_JPEG_QUALITY).writeAsync(Map.uploadImagePath(this.rustplus.guildId));
+        }
+        catch (e) {
+            this.rustplus.log(Client.client.intlGet(null, 'warningCap'),
+                `Could not write the map for Discord: ${e && e.message ? e.message : e}`, 'warn');
+        }
+    }
+
+    async writeMapPng(markers, monuments) {
         await this.resetImageAndMeta();
 
         if (markers) {
