@@ -31,6 +31,7 @@ const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordModals = require('../discordTools/discordModals.js');
 const RustPlusSync = require('../util/rustplusSync.js');
+const GuildSettings = require('../util/guildSettings.js');
 const WipeHelper = require('./wipeHelper.js');
 
 /* Notification buttons share one handler: the customId prefix selects which channel flag is toggled.
@@ -390,6 +391,19 @@ module.exports = async (client, interaction) => {
 
         await client.interactionUpdate(interaction, {
             components: [DiscordButtons.getCameraWatchButton(guildId, instance.generalSettings.cameraWatchEnabled)]
+        });
+    }
+    else if (interaction.customId === 'RaidMode') {
+        instance.generalSettings.raidModeEnabled = !GuildSettings.raidModeEnabled(guildId);
+        client.setInstance(guildId, instance);
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.raidModeEnabled}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getRaidModeButton(guildId, instance.generalSettings.raidModeEnabled)]
         });
     }
     else if (interaction.customId === 'CameraWatchReportTeam') {

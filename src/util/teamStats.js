@@ -26,6 +26,7 @@
 */
 
 const Config = require('../../config');
+const GuildSettings = require('./guildSettings.js');
 
 const MAX_TICK_MS = 60 * 1000;
 const FLUSH_INTERVAL_MS = 5 * 60 * 1000;
@@ -88,7 +89,7 @@ function tick(client, guildId, serverId, members, now = Date.now(), date = new D
     if (!server || !Array.isArray(members)) return null;
 
     const key = `${guildId}:${serverId}`;
-    const week = weekKey(date);
+    const week = weekKey(date, GuildSettings.timeZone(guildId));
     let finished = null;
 
     const stats = statsOf(server, week);
@@ -119,13 +120,13 @@ function tick(client, guildId, serverId, members, now = Date.now(), date = new D
 function noteSession(client, guildId, serverId, steamId, name) {
     const server = client.getInstance(guildId).serverList[serverId];
     if (!server) return;
-    playerOf(statsOf(server, weekKey()), steamId, name).sessions += 1;
+    playerOf(statsOf(server, weekKey(new Date(), GuildSettings.timeZone(guildId))), steamId, name).sessions += 1;
 }
 
 function noteDeath(client, guildId, serverId, steamId, name) {
     const server = client.getInstance(guildId).serverList[serverId];
     if (!server) return;
-    playerOf(statsOf(server, weekKey()), steamId, name).deaths += 1;
+    playerOf(statsOf(server, weekKey(new Date(), GuildSettings.timeZone(guildId))), steamId, name).deaths += 1;
 }
 
 /* The players of a week, most online time first. */

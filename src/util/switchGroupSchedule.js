@@ -117,8 +117,10 @@ function inside(window, minute) {
         minute >= window.from || minute < window.to;
 }
 
-function timeZoneOf(schedule) {
+/* The zone of the schedule itself, else the guild's (fallback), else RPP_TIMEZONE, else UTC. */
+function timeZoneOf(schedule, fallback = null) {
     if (schedule && schedule.timeZone && isValidTimeZone(schedule.timeZone)) return schedule.timeZone;
+    if (fallback && isValidTimeZone(fallback)) return fallback;
 
     const configured = Config.general.scheduleTimeZone;
     return configured && isValidTimeZone(configured) ? configured : 'UTC';
@@ -128,10 +130,10 @@ function timeZoneOf(schedule) {
     The transitions since the last check: [{ index, value }] - the state the group switches to now. lastInside holds
     the state of each window between the checks (in memory); the first check of a window only records it.
 */
-function transitions(schedule, lastInside, date = new Date()) {
+function transitions(schedule, lastInside, date = new Date(), fallbackZone = null) {
     if (!schedule || !Array.isArray(schedule.windows)) return [];
 
-    const minute = minuteOfDay(timeZoneOf(schedule), date);
+    const minute = minuteOfDay(timeZoneOf(schedule, fallbackZone), date);
     const result = [];
 
     schedule.windows.forEach((window, index) => {

@@ -27,6 +27,7 @@ const DiscordEmbeds = require('./discordEmbeds.js');
 const DiscordMessages = require('./discordMessages.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
+const GuildSettings = require('../util/guildSettings.js');
 
 module.exports = async (client, guild, forced = false) => {
     const instance = client.getInstance(guild.id);
@@ -53,6 +54,8 @@ module.exports = async (client, guild, forced = false) => {
         await ensureServerLogLevelSetting(client, guild, channel);
         await ensureCameraWatchSettings(client, guild, channel);
     }
+
+    await ensureAlarmAndTimeSettings(client, guild, channel);
 
     await removeDisabledInformationMessages(client, guild);
 
@@ -624,6 +627,72 @@ async function ensureCameraWatchSettings(client, guild, channel) {
     catch (e) {
         client.log(client.intlGet(null, 'errorCap'),
             `Could not add the camera watch settings: ${e}. Use /reset settings instead.`, 'warn');
+    }
+}
+
+/*
+    The settings of the alarms, the upkeep warning and the time zone (util/guildSettings.js): added to the settings
+    channel when they are missing, like the camera watch. Until a value is chosen the environment applies.
+*/
+async function ensureAlarmAndTimeSettings(client, guild, channel) {
+    const settings = [
+        {
+            customId: 'AlarmCooldown', titleId: 'alarmCooldownSetting', noteId: 'alarmCooldownNote',
+            getComponent: () => DiscordSelectMenus.getAlarmCooldownSelectMenu(guild.id,
+                GuildSettings.alarmCooldownSeconds(guild.id))
+        },
+        {
+            customId: 'RaidMode', titleId: 'raidModeSetting', noteId: 'raidModeNote',
+            getComponent: () => DiscordButtons.getRaidModeButton(guild.id, GuildSettings.raidModeEnabled(guild.id))
+        },
+        {
+            customId: 'UpkeepWarning', titleId: 'upkeepWarningSetting', noteId: 'upkeepWarningNote',
+            getComponent: () => DiscordSelectMenus.getUpkeepWarningSelectMenu(guild.id,
+                GuildSettings.upkeepWarningHours(guild.id))
+        },
+        {
+            customId: 'TimeZone', titleId: 'timeZoneSetting', noteId: 'timeZoneNote',
+            getComponent: () => DiscordSelectMenus.getTimeZoneSelectMenu(guild.id, GuildSettings.timeZone(guild.id))
+        }
+    ];
+
+    try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+
+        for (const setting of settings) {
+            const message = messages.find((message) => message.components.some((row) =>
+                row.components.some((component) => component.customId === setting.customId)));
+
+            if (message) {
+                if (message.embeds.length !== 0 &&
+                    message.embeds[0].title === client.intlGet(guild.id, setting.titleId)) {
+                    continue;
+                }
+
+                await message.delete().catch(() => undefined);
+            }
+
+            await client.messageSend(channel, {
+                embeds: [DiscordEmbeds.getEmbed({
+                    color: Constants.COLOR_SETTINGS,
+                    title: client.intlGet(guild.id, setting.titleId),
+                    thumbnail: `attachment://settings_logo.png`,
+                    fields: [
+                        {
+                            name: client.intlGet(guild.id, 'noteCap'),
+                            value: client.intlGet(guild.id, setting.noteId),
+                            inline: true
+                        }]
+                })],
+                components: [setting.getComponent()],
+                files: [new Discord.AttachmentBuilder(
+                    Path.join(__dirname, '..', 'resources/images/settings_logo.png'))]
+            });
+        }
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'errorCap'),
+            `Could not add the alarm and time settings: ${e}. Use /reset settings instead.`, 'warn');
     }
 }
 

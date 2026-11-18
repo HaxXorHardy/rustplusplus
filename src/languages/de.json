@@ -1009,5 +1009,19 @@
     "wipeRemoveDevicesConfirm": "Ja, entfernen",
     "wipeRemoveDevicesAsk": "{switches} Schalter, {alarms} Alarm(e) und {monitors} Storage Monitor(e) samt Nachrichten entfernen? Schaltergruppen bleiben, die Schalter werden aus ihnen entfernt. Das lässt sich nicht rückgängig machen.",
     "wipeRemoveDevicesDone": "Entfernt: {switches} Schalter, {alarms} Alarm(e), {monitors} Storage Monitor(e).",
-    "commandsRemoveDevicesDesc": "Entfernt alle Smart-Geräte des aktiven Servers (z. B. nach einem Wipe)."
+    "commandsRemoveDevicesDesc": "Entfernt alle Smart-Geräte des aktiven Servers (z. B. nach einem Wipe).",
+    "settingCurrent": "Aktuell: {value}",
+    "alarmCooldownSetting": "Pause der Smart Alarme",
+    "alarmCooldownNote": "Löst ein Alarm innerhalb dieser Zeit erneut aus, kommt keine neue Nachricht; die nächste nennt, wie viele es dazwischen waren.",
+    "alarmCooldownOption": "Höchstens eine Nachricht pro Alarm alle {seconds} s.",
+    "alarmCooldownOptionOff": "Jede Auslösung schickt eine Nachricht.",
+    "raidModeSetting": "Raid-Modus",
+    "raidModeNote": "Ein Alarm, während niemand aus dem Team online ist, schickt den registrierten Nutzern eine Direktnachricht; ein Raid-Bericht folgt, wenn die Alarme ruhig sind.",
+    "upkeepWarningSetting": "Unterhalts-Vorwarnung",
+    "upkeepWarningNote": "Warnt, wenn der Unterhalt eines Werkzeugschranks mit Storage Monitor innerhalb dieser Zeit ausgeht.",
+    "upkeepWarningOption": "{hours} h vorher warnen.",
+    "upkeepWarningOptionOff": "Nur die Meldung, wenn er verfällt.",
+    "timeZoneSetting": "Zeitzone",
+    "timeZoneNote": "Für Zeitpläne der Schaltergruppen ohne eigene Zeitzone und für den Wochenbericht des Teams.",
+    "timeZoneOption": "Dort jetzt {time}."
 }

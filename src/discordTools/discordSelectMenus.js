@@ -23,6 +23,7 @@ const Fs = require('fs');
 const Path = require('path');
 
 const Client = require('../structures/clientRegistry.js');
+const GuildSettings = require('../util/guildSettings.js');
 const CameraWatch = require('../util/cameraWatch.js');
 const Constants = require('../util/constants.js');
 const Languages = require('../util/languages.js');
@@ -381,6 +382,54 @@ module.exports = {
         }
 
         return rows;
+    },
+
+    getAlarmCooldownSelectMenu: function (guildId, seconds) {
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const label = (s) => (s === 0 ? intl('offCap') : `${s} s`);
+
+        return new Discord.ActionRowBuilder().addComponents(module.exports.getSelectMenu({
+            customId: 'AlarmCooldown',
+            placeholder: intl('settingCurrent', { value: label(seconds) }),
+            options: GuildSettings.ALARM_COOLDOWN_OPTIONS.map((s) => ({
+                label: label(s),
+                description: s === 0 ? intl('alarmCooldownOptionOff') : intl('alarmCooldownOption', { seconds: `${s}` }),
+                value: `${s}`
+            }))
+        }));
+    },
+
+    getUpkeepWarningSelectMenu: function (guildId, hours) {
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const label = (h) => (h === 0 ? intl('offCap') : `${h} h`);
+
+        return new Discord.ActionRowBuilder().addComponents(module.exports.getSelectMenu({
+            customId: 'UpkeepWarning',
+            placeholder: intl('settingCurrent', { value: label(hours) }),
+            options: GuildSettings.UPKEEP_WARNING_OPTIONS.map((h) => ({
+                label: label(h),
+                description: h === 0 ? intl('upkeepWarningOptionOff') : intl('upkeepWarningOption', { hours: `${h}` }),
+                value: `${h}`
+            }))
+        }));
+    },
+
+    getTimeZoneSelectMenu: function (guildId, timeZone) {
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const now = new Date();
+        const clock = (zone) => new Intl.DateTimeFormat('en-GB', {
+            timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+        }).format(now);
+
+        return new Discord.ActionRowBuilder().addComponents(module.exports.getSelectMenu({
+            customId: 'TimeZone',
+            placeholder: intl('settingCurrent', { value: timeZone }),
+            options: GuildSettings.TIME_ZONE_OPTIONS.map((zone) => ({
+                label: zone,
+                description: intl('timeZoneOption', { time: clock(zone) }),
+                value: zone
+            }))
+        }));
     },
 
     getSmartSwitchSelectMenu: function (guildId, serverId, entityId) {

@@ -20,6 +20,7 @@
 
 const Constants = require('../util/constants.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const GuildSettings = require('../util/guildSettings.js');
 const StorageAlerts = require('../util/storageAlerts.js');
 const Timer = require('../util/timer.js');
 const UnreachableDevices = require('../util/unreachableDevices.js');
@@ -104,7 +105,7 @@ module.exports = {
                             /* Early warning: the upkeep runs out within RPP_UPKEEP_WARNING_HOURS. */
                             const monitor = instance.serverList[serverId].storageMonitors[entityId];
                             const upkeep = UpkeepWarning.check(monitor, info.entityInfo.payload.protectionExpiry,
-                                Math.floor(Date.now() / 1000), Config.general.upkeepWarningHours);
+                                Math.floor(Date.now() / 1000), GuildSettings.upkeepWarningHours(guildId));
                             if (upkeep === 'warn') {
                                 monitor.upkeepWarned = true;
                                 const expiry = info.entityInfo.payload.protectionExpiry;

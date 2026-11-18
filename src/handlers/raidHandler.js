@@ -31,7 +31,7 @@
     Everything is in memory per guild and server; a restart forgets a running raid.
 */
 
-const Config = require('../../config');
+const GuildSettings = require('../util/guildSettings.js');
 
 const ESCALATION_WINDOW_MS = 5 * 60 * 1000;
 const ESCALATE_AFTER = 2;
@@ -51,8 +51,8 @@ function stateOf(guildId, serverId) {
     return state;
 }
 
-function cooldownMs() {
-    const seconds = Number(Config.general.alarmCooldownSeconds);
+function cooldownMs(guildId) {
+    const seconds = GuildSettings.alarmCooldownSeconds(guildId);
     return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
 }
 
@@ -72,7 +72,7 @@ function onAlarm(rustplus, alarmId, now = Date.now()) {
 
     const decision = { post: true, suppressed: 0, everyone: false, directMessage: false, raidStarted: false };
 
-    if (alarm.lastPostedMs !== null && now - alarm.lastPostedMs < cooldownMs()) {
+    if (alarm.lastPostedMs !== null && now - alarm.lastPostedMs < cooldownMs(rustplus.guildId)) {
         alarm.suppressed += 1;
         decision.post = false;
     }
@@ -85,7 +85,7 @@ function onAlarm(rustplus, alarmId, now = Date.now()) {
     if (alarm.times.length >= ESCALATE_AFTER) decision.everyone = true;
 
     const teamOffline = Boolean(rustplus.team && rustplus.team.allOffline);
-    if (Config.general.raidModeEnabled && (teamOffline || state.raid !== null)) {
+    if (GuildSettings.raidModeEnabled(rustplus.guildId) && (teamOffline || state.raid !== null)) {
         if (state.raid === null) {
             state.raid = { startedMs: now, lastAlarmMs: now, alarms: {}, cameOnline: [], directMessageSent: false };
             decision.raidStarted = true;

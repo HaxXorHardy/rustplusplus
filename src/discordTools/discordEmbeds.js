@@ -27,6 +27,7 @@ const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
 const ForcedWipe = require('../util/forcedWipe.js');
+const GuildSettings = require('../util/guildSettings.js');
 const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const TeamStats = require('../util/teamStats.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
@@ -450,7 +451,7 @@ module.exports = {
 
         if (group.schedule) {
             lines.push(`**${intl('groupSchedule')}**: ${SwitchGroupSchedule.format(group.schedule, intl('onCap'), intl('offCap'))}` +
-                `${group.schedule.timeZone ? '' : ` (${SwitchGroupSchedule.timeZoneOf(group.schedule)})`}`);
+                `${group.schedule.timeZone ? '' : ` (${SwitchGroupSchedule.timeZoneOf(group.schedule, GuildSettings.timeZone(guildId))})`}`);
         }
 
         const alarms = SwitchGroupState.getTriggerAlarms(server, group);

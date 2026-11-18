@@ -25,6 +25,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordSelectMenus = require('../discordTools/discordSelectMenus.js');
 const DiscordTools = require('../discordTools/discordTools.js');
 const CameraWatch = require('../util/cameraWatch.js');
+const GuildSettings = require('../util/guildSettings.js');
 const LogLevels = require('../util/logLevels.js');
 const { CHANNELS, normalizeChannel } = require('../util/inGameChat.js');
 
@@ -114,6 +115,34 @@ module.exports = async (client, interaction) => {
         await client.interactionUpdate(interaction, {
             components: [DiscordSelectMenus.getCommandDelaySelectMenu(guildId, interaction.values[0])]
         });
+    }
+    else if (interaction.customId === 'AlarmCooldown' || interaction.customId === 'UpkeepWarning' ||
+        interaction.customId === 'TimeZone') {
+        const value = interaction.values[0];
+
+        if (interaction.customId === 'AlarmCooldown') {
+            instance.generalSettings.alarmCooldownSeconds = Number(value);
+        }
+        else if (interaction.customId === 'UpkeepWarning') {
+            instance.generalSettings.upkeepWarningHours = Number(value);
+        }
+        else if (GuildSettings.isValidTimeZone(value)) {
+            instance.generalSettings.timeZone = value;
+        }
+        client.setInstance(guildId, instance);
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'selectMenuValueChange', {
+            id: `${verifyId}`,
+            value: `${interaction.customId} ${value}`
+        }));
+
+        const component = interaction.customId === 'AlarmCooldown' ?
+            DiscordSelectMenus.getAlarmCooldownSelectMenu(guildId, GuildSettings.alarmCooldownSeconds(guildId)) :
+            interaction.customId === 'UpkeepWarning' ?
+                DiscordSelectMenus.getUpkeepWarningSelectMenu(guildId, GuildSettings.upkeepWarningHours(guildId)) :
+                DiscordSelectMenus.getTimeZoneSelectMenu(guildId, GuildSettings.timeZone(guildId));
+
+        await client.interactionUpdate(interaction, { components: [component] });
     }
     else if (interaction.customId === 'InGameChatChannel') {
         instance.generalSettings.inGameChatChannel = normalizeChannel(interaction.values[0]);
