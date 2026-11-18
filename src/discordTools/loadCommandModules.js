@@ -21,6 +21,8 @@
 const Fs = require('fs');
 const Path = require('path');
 
+const MapEvents = require('../util/mapEvents.js');
+
 /*
     Slash commands are discovered from src/commands at runtime instead of being listed explicitly.
     Keeping the discovery here means DiscordBot (dispatch) and RegisterSlashCommands (registration
@@ -29,7 +31,8 @@ const Path = require('path');
 module.exports = function loadCommandModules() {
     const commandDirectory = Path.join(__dirname, '..', 'commands');
 
-    return Fs.readdirSync(commandDirectory)
+    /* Commands that need the map events are left out while those are off (util/mapEvents.js). */
+    return MapEvents.filterSlashCommands(Fs.readdirSync(commandDirectory)
         .filter(file => file.endsWith('.js'))
-        .map(file => require(Path.join(commandDirectory, file)));
+        .map(file => require(Path.join(commandDirectory, file))));
 };

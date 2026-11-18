@@ -26,6 +26,7 @@ const Client = require('../structures/clientRegistry.js');
 const DiscordButtons = require('./discordButtons.js');
 const DiscordEmbeds = require('./discordEmbeds.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
+const MapEvents = require('../util/mapEvents.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const WithTimeout = require('../util/withTimeout.js');
@@ -906,7 +907,7 @@ module.exports = {
             await informationMessageOperationsUnlocked.sendUpdateMonumentInformationMessage(rustplus);
         }
 
-        if (instance.generalSettings.displayInformationEventInformation) {
+        if (instance.generalSettings.displayInformationEventInformation && MapEvents.enabled()) {
             await informationMessageOperationsUnlocked.sendUpdateEventInformationMessage(rustplus);
         }
 

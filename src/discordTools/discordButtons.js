@@ -23,6 +23,7 @@ const Discord = require('discord.js');
 const Constants = require('../util/constants.js');
 const CustomIds = require('../util/customIds.js');
 const Client = require('../structures/clientRegistry.js');
+const MapEvents = require('../util/mapEvents.js');
 
 const SUCCESS = Discord.ButtonStyle.Success;
 const DANGER = Discord.ButtonStyle.Danger;
@@ -140,7 +141,7 @@ module.exports = {
                     connectionButton, linkButton, battlemetricsButton, editButton, deleteButton
                 ),
                 new Discord.ActionRowBuilder().addComponents(
-                    customTimersButton, trackerButton, groupButton
+                    ...(MapEvents.enabled() ? [customTimersButton] : []), trackerButton, groupButton
                 ),
                 new Discord.ActionRowBuilder().addComponents(
                     deleteUnreachableDevicesButton
@@ -153,7 +154,7 @@ module.exports = {
                     connectionButton, linkButton, editButton, deleteButton
                 ),
                 new Discord.ActionRowBuilder().addComponents(
-                    customTimersButton, groupButton
+                    ...(MapEvents.enabled() ? [customTimersButton] : []), groupButton
                 ),
                 new Discord.ActionRowBuilder().addComponents(
                     deleteUnreachableDevicesButton

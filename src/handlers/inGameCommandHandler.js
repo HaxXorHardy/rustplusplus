@@ -43,6 +43,13 @@ module.exports = {
         else if (!rustplus.generalSettings.inGameCommandsEnabled) {
             return false;
         }
+        else if (!MapEvents.enabled() && MapEvents.isEventCommand(client, guildId, prefix, commandLowerCase)) {
+            /* The API sends no event markers anymore (util/mapEvents.js): the event commands do nothing. */
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `In-game command "${command}" ignored: the Rust+ API reports no map events (RPP_MAP_EVENTS_ENABLED).`,
+                'debug');
+            return true;
+        }
         else if (commandLowerCase === `${prefix}${client.intlGet('en', 'commandSyntaxAfk')}` ||
             commandLowerCase === `${prefix}${client.intlGet(guildId, 'commandSyntaxAfk')}`) {
             rustplus.sendInGameMessage(rustplus.getCommandAfk());

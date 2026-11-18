@@ -24,7 +24,7 @@ Slash Command | Description
 [**/item**](commands.md#item) | Get the details of an item.
 [**/leader**](commands.md#leader) | Give or take the leadership from/to a team member.
 [**/map**](commands.md#map) | Get the currently connected server map image.
-[**/market**](commands.md#market) | Operations for In-Game Vending Machines (no data at the moment: the Rust+ API no longer reports it).
+[**/market**](commands.md#market) | Operations for In-Game Vending Machines (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`).
 [**/players**](commands.md#players) | Get player/players information based on battlemetrics.
 [**/recycle**](commands.md#recycle) | Display the output of recycling an item.
 [**/removedevices**](commands.md#removedevices) | Remove all smart devices of the active server (e.g. after a wipe).
@@ -232,7 +232,7 @@ Subcommand | Options | Description | Required
 
 ## **/market**
 
-> **Operations for In-Game Vending Machines.** The Rust+ API no longer reports vending machines (verified 2026-11-18), so search and subscriptions find nothing at the moment.
+> **Operations for In-Game Vending Machines.** The Rust+ API no longer reports vending machines (verified 2026-11-18): `/market` is not registered while `RPP_MAP_EVENTS_ENABLED` is off (default).
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -432,20 +432,20 @@ In-Game Command | Description
 --------------- | -----------
 [**afk**](commands.md#afk) | Get the currently afk players in your team.
 [**alive**](commands.md#alive) | Get the player with the longest time alive.
-[**cargo**](commands.md#cargo) | Get information about CargoShip (Location, time till enters egress stage, time since last on map). (no data at the moment: the Rust+ API no longer reports it)
-[**chinook**](commands.md#chinook) | Get information about Chinook 47 (Location, time since last on map). (no data at the moment: the Rust+ API no longer reports it)
+[**cargo**](commands.md#cargo) | Get information about CargoShip (Location, time till enters egress stage, time since last on map). (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
+[**chinook**](commands.md#chinook) | Get information about Chinook 47 (Location, time since last on map). (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
 [**connection/connections**](commands.md#connectionconnections) | Get recent connection events.
 [**craft**](commands.md#craft-ingame) | Display the cost to craft an item.
 [**death/deaths**](commands.md#deathdeaths) | Get recent death events.
 [**decay**](commands.md#decay-ingame) | Display the decay time of an item.
-[**deepsea**](commands.md#deepsea) | Get information about the Deep Sea. (no data at the moment: the Rust+ API no longer reports it)
+[**deepsea**](commands.md#deepsea) | Get information about the Deep Sea. (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
 [**despawn**](commands.md#despawn-ingame) | Display the despawn time of an item.
 [**events**](commands.md#events) | Get recent events.
-[**heli**](commands.md#heli) | Get information about Patrol Helicopter (Location, time since last downed, time since last on map). (no data at the moment: the Rust+ API no longer reports it)
-[**large**](commands.md#large) | Get information about Large Oil Rig (Time till crate unlocks, time since last trigger). (no data at the moment: the Rust+ API no longer reports it)
+[**heli**](commands.md#heli) | Get information about Patrol Helicopter (Location, time since last downed, time since last on map). (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
+[**large**](commands.md#large) | Get information about Large Oil Rig (Time till crate unlocks, time since last trigger). (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
 [**leader**](commands.md#leader-1) | Give/Take the Team Leadership.
 [**marker**](commands.md#marker) | Set custom markers anywhere on the map.
-[**market**](commands.md#market-ingame) | Search for items in vending machines or subscribe/unsubscribe to items. (no data at the moment: the Rust+ API no longer reports it)
+[**market**](commands.md#market-ingame) | Search for items in vending machines or subscribe/unsubscribe to items. (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
 [**mute**](commands.md#mute) | Mute the bot from the In-Game Team Chat.
 [**note/notes**](commands.md#notenotes) | Create notes about meaningful things.
 [**offline**](commands.md#offline) | Get the currently offline players in your team.
@@ -456,7 +456,7 @@ In-Game Command | Description
 [**recycle**](commands.md#recycle-ingame) | Display the output of recycling an item.
 [**research**](commands.md#research-ingame) | Display the cost to research an item.
 [**send**](commands.md#send) | Send a message to a discord user.
-[**small**](commands.md#small) | Get information about Small Oil Rig (Time till crate unlocks, time since last trigger). (no data at the moment: the Rust+ API no longer reports it)
+[**small**](commands.md#small) | Get information about Small Oil Rig (Time till crate unlocks, time since last trigger). (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
 [**stack**](commands.md#stack-ingame) | Display the stack size of an item.
 [**steamid**](commands.md#steamid) | Get the steamid of a teammate.
 [**team**](commands.md#team) | Get the names of all members in the team.
@@ -468,7 +468,7 @@ In-Game Command | Description
 [**unmute**](commands.md#unmute) | Unmute the bot from the In-Game Team Chat.
 [**upkeep**](commands.md#upkeep) | Get the upkeep time of all connected tool cupboard monitors.
 [**uptime**](commands.md#uptime-ingame) | Display uptime of the bot and server.
-[**vendor**](commands.md#vendor) | Get information about the Traveling Vendor (Current Location, Time since last vendor) (no data at the moment: the Rust+ API no longer reports it)
+[**vendor**](commands.md#vendor) | Get information about the Traveling Vendor (Current Location, Time since last vendor) (the Rust+ API no longer reports it: switched off, see `RPP_MAP_EVENTS_ENABLED`)
 [**wipe**](commands.md#wipe) | Get the time since it was wiped.
 
 
@@ -547,7 +547,7 @@ In-Game Command | Description
 
 ## **deepsea**
 
-> **Get information about the Deep Sea.** The bot recognizes the Deep Sea by vending machines outside the map grid; the Rust+ API no longer reports vending machines, so there is no data at the moment.
+> **Get information about the Deep Sea.** The bot recognizes the Deep Sea by vending machines outside the map grid; the Rust+ API no longer reports vending machines, so the command does nothing while `RPP_MAP_EVENTS_ENABLED` is off (default).
 <br>Command: `!deepsea`
 
 
@@ -559,7 +559,7 @@ In-Game Command | Description
 
 ## **events**
 
-> **Get recent In-Game events.** Available events are cargo, heli, small, large, chinook. The Rust+ API no longer reports these events, so the list stays empty.
+> **Get recent In-Game events.** Available events are cargo, heli, small, large, chinook. The Rust+ API no longer reports these events, so the command does nothing while `RPP_MAP_EVENTS_ENABLED` is off (default).
 <br>Command: `!events` - Get last 5 events
 <br>Command: `!events 3` - Get last 3 events
 <br>Command: `!events cargo` - Get last 5 events from cargo
@@ -824,7 +824,7 @@ Subcommand | Description | Required
 
 ## **vendor**
 
-> **Get information about the Traveling Vendor (Current Location, Time since last Traveling Vendor).** The Rust+ API no longer reports the Traveling Vendor, so there is no data at the moment.
+> **Get information about the Traveling Vendor (Current Location, Time since last Traveling Vendor).** The Rust+ API no longer reports the Traveling Vendor, so the command does nothing while `RPP_MAP_EVENTS_ENABLED` is off (default).
 <br>Command: `!vendor`
 
 ![In-Game Command vendor Image](images/ingame_commands/vendor_ingame.png)

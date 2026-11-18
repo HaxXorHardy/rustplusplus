@@ -20,6 +20,7 @@
 
 const Constants = require('../util/constants.js');
 const Map = require('../util/map.js');
+const MapEvents = require('../util/mapEvents.js');
 const Timer = require('../util/timer');
 
 class MapMarkers {
@@ -267,6 +268,10 @@ class MapMarkers {
 
     updateMapMarkers(mapMarkers) {
         this.updatePlayers(mapMarkers);
+
+        /* The API sends no event markers anymore (util/mapEvents.js): their tracking only runs when enabled. */
+        if (!MapEvents.enabled()) return;
+
         this.updateCargoShips(mapMarkers);
         this.updatePatrolHelicopters(mapMarkers);
         this.updateCH47s(mapMarkers);

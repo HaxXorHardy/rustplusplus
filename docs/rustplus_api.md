@@ -84,6 +84,10 @@ Traveling Vendor (`MapMarkers.types` in `src/structures/MapMarkers.js`). Against
 outside the grid and has no data either. The Traveling Vendor (type 9) does not appear anymore either; its settings were
 removed in 1.50.3, so no event notification setting is left.
 
+The code stays, gated by `RPP_MAP_EVENTS_ENABLED` (default off, `src/util/mapEvents.js`): `MapMarkers.updateMapMarkers()`
+only tracks the players, the vending machine subscriptions do not run, the event commands and `/market` are off, the
+information channel has no event section. Setting it to `true` brings all of it back.
+
 ## Monument names
 
 The map sends a token per monument (`AppMap.monuments[].token`). The readable, localized names are in the table of

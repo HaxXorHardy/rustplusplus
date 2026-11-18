@@ -92,6 +92,12 @@ module.exports = {
             and when no alarm came for a while a raid report is posted.
         */
         raidModeEnabled: envBool('RPP_RAID_MODE', true),
+        /*
+            Map events (cargo ship, patrol helicopter, chinook, oil rigs, vending machines, deep sea, traveling vendor).
+            Facepunch's Rust+ API stopped sending these markers (2026-11-18), so the code that uses them does not run
+            unless this is true - for the day they come back.
+        */
+        mapEventsEnabled: envBool('RPP_MAP_EVENTS_ENABLED', false),
         /* Warn this many hours before a tool cupboard (with a storage monitor) runs out of upkeep. 0 = off. */
         upkeepWarningHours: envInt('RPP_UPKEEP_WARNING_HOURS', 6),
         /* The time zone of switch group schedules without their own (e.g. Europe/Berlin). */

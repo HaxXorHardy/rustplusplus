@@ -16,7 +16,7 @@
 - **/item** - Get the details of an item.
 - **/leader** - Transfer leadership.
 - **/map** - Display the In-Game Map.
-- **/market** - Search for or subscribe to items in vending machines (no data at the moment, see below).
+- **/market** - Search for or subscribe to items in vending machines (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **/players** - Get Battlemetrics data on all connected players.
 - **/recycle** - Display the output of recycling an item.
 - **/removedevices** - Remove all smart devices of the active server (e.g. after a wipe).
@@ -36,20 +36,20 @@
 ## In-Game Commands
 - **afk** - Display afk teammates.
 - **alive** - Display who has been alive longest.
-- **cargo** - Display information regarding Cargoship (no data at the moment).
-- **chinook** - Display information regarding Chinook 47 (no data at the moment).
+- **cargo** - Display information regarding Cargoship (switched off, see `RPP_MAP_EVENTS_ENABLED`).
+- **chinook** - Display information regarding Chinook 47 (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **connection/connections** - Display latest team connections.
 - **craft** - Display the cost to craft an item.
 - **death/deaths** - Display latest deaths.
 - **decay** - Display the decay time of an item.
-- **deepsea** - Get information regarding the Deep Sea (no data at the moment).
+- **deepsea** - Get information regarding the Deep Sea (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **despawn** - Display the despawn time of an item.
 - **events** - Get recent events.
-- **heli** - Get information regarding Patrol Helicopter (no data at the moment).
-- **large** - Get information regarding Large Oil Rig (no data at the moment).
+- **heli** - Get information regarding Patrol Helicopter (switched off, see `RPP_MAP_EVENTS_ENABLED`).
+- **large** - Get information regarding Large Oil Rig (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **leader** - Transfer leadership.
 - **marker/markers** - Set markers to navigate to.
-- **market** - Search for or subscribe to items in vending machines (no data at the moment).
+- **market** - Search for or subscribe to items in vending machines (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **mute** - Mute rustplusplus In-Game.
 - **note/notes** - Add notes.
 - **offline** - Display offline teammates.
@@ -60,7 +60,7 @@
 - **recycle** - Display the output of recycling an item.
 - **research** - Display the cost to research an item.
 - **send** - Send a message through rustplusplus to a person on Discord.
-- **small** - Get information regarding Small Oil Rig (no data at the moment).
+- **small** - Get information regarding Small Oil Rig (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **stack** - Display the stack size of an item.
 - **steamid** - Get teammate steamid.
 - **team** - Get team information (names of all teammates).
@@ -72,7 +72,7 @@
 - **unmute** - Unmute rustplusplus In-Game.
 - **upkeep** - Check upkeep of Storage Monitor Tool Cupboards.
 - **uptime** - Display the uptime of rustplusplus and currently connected server.
-- **vendor** - Get information regarding the Traveling Vendor (no data at the moment).
+- **vendor** - Get information regarding the Traveling Vendor (switched off, see `RPP_MAP_EVENTS_ENABLED`).
 - **wipe** - Display time since wipe.
 
 ## Smart Devices
