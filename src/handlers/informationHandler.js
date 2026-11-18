@@ -21,6 +21,7 @@
 const Client = require('../structures/clientRegistry.js');
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const MapEvents = require('../util/mapEvents.js');
 const WithTimeout = require('../util/withTimeout.js');
 
 /* Warming the time played asks Battlemetrics once per team member; the team message must not wait longer for it. */
@@ -59,7 +60,8 @@ module.exports = {
             }
 
             phase(rustplus, 'events');
-            if (instance.generalSettings.displayInformationEventInformation) {
+            /* No event section while the API sends no event markers (util/mapEvents.js). */
+            if (instance.generalSettings.displayInformationEventInformation && MapEvents.enabled()) {
                 await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
             }
             else {

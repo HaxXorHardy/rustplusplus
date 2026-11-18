@@ -21,6 +21,7 @@
 const Info = require('../structures/Info');
 const CameraWatchHandler = require('../handlers/cameraWatchHandler.js');
 const MapMarkers = require('../structures/MapMarkers.js');
+const MapEvents = require('../util/mapEvents.js');
 const SmartAlarmHandler = require('../handlers/smartAlarmHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const RaidHandler = require('../handlers/raidHandler.js');
@@ -314,8 +315,11 @@ module.exports = {
             () => SmartSwitchGroupHandler.handler(rustplus, client, time.time));
         await runHandler(rustplus, client, 'the raid report', () => RaidHandler.handler(rustplus, client));
         await runHandler(rustplus, client, 'the time', () => TimeHandler.handler(rustplus, client, time.time));
-        await runHandler(rustplus, client, 'the vending machines',
-            () => VendingMachines.handler(rustplus, client, mapMarkers.mapMarkers));
+        /* Vending machine subscriptions: the API sends no vending machines anymore (util/mapEvents.js). */
+        if (MapEvents.enabled()) {
+            await runHandler(rustplus, client, 'the vending machines',
+                () => VendingMachines.handler(rustplus, client, mapMarkers.mapMarkers));
+        }
 
         rustplus.time.updateTime(time.time);
         rustplus.info.updateInfo(info.info);

@@ -89,8 +89,10 @@ node scripts/clanChatProbe.js [--server=<ip-appPort>] [--send] [--send-team]
 Facepunch's Rust+ API stopped sending these map markers. A request against a live server on 2026-11-18 returned only
 player markers - no vending machines (a server normally has dozens), no cargo ship, patrol helicopter, chinook or crates,
 and the log of the day before contains none of these events. Their notification settings were removed in 1.50.1; the
-commands (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!events`, `!market`, `/market`) still answer, but have no
-data. Deep Sea is recognized by vending machines outside the map grid, so it is affected too, and the Traveling Vendor
+code stays for the day the markers come back, but it does not run while `RPP_MAP_EVENTS_ENABLED` is off (default): the
+commands (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!vendor`, `!deepsea`, `!events`, `!market`) do nothing,
+`/market` is not registered, the information channel has no event section and the servers channel no `CUSTOM TIMERS`
+button. Set it to `true` should Facepunch send these markers again. Deep Sea is recognized by vending machines outside the map grid, so it is affected too, and the Traveling Vendor
 is gone as well - its settings were removed in 1.50.3, so no event notification setting is left.
 
 

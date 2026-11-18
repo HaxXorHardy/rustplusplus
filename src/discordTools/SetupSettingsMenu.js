@@ -28,6 +28,7 @@ const DiscordMessages = require('./discordMessages.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
 const GuildSettings = require('../util/guildSettings.js');
+const MapEvents = require('../util/mapEvents.js');
 
 module.exports = async (client, guild, forced = false) => {
     const instance = client.getInstance(guild.id);
@@ -749,7 +750,7 @@ async function ensureAlarmAndTimeSettings(client, guild, channel) {
 async function removeDisabledInformationMessages(client, guild) {
     const instance = client.getInstance(guild.id);
 
-    if (!instance.generalSettings.displayInformationEventInformation) {
+    if (!instance.generalSettings.displayInformationEventInformation || !MapEvents.enabled()) {
         await DiscordMessages.deleteInformationMessage(guild.id, 'event');
     }
 
