@@ -243,6 +243,57 @@ Test.describe('DiscordMessages.sendStorageMonitorMessage coalescing', () => {
     });
 });
 
+/* Switching a group edited every switch message and the group message once per switch: the edits piled up. */
+for (const [name, send, now] of [
+    ['switch', 'sendSmartSwitchMessage', 'sendSmartSwitchMessageNow'],
+    ['switch group', 'sendSmartSwitchGroupMessage', 'sendSmartSwitchGroupMessageNow'],
+]) {
+    Test.describe(`DiscordMessages.${send} coalescing`, () => {
+        const originalNow = DiscordMessages[now];
+        const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+        Test.afterEach(() => { DiscordMessages[now] = originalNow; });
+
+        Test.it(`runs one ${name} edit at a time and one more for the changes meanwhile`, async () => {
+            const releases = [];
+            let edits = 0;
+            DiscordMessages[now] = () => {
+                edits++;
+                return new Promise((resolve) => releases.push(resolve));
+            };
+
+            const first = DiscordMessages[send]('g', 's', '1');
+            const rest = [];
+            for (let i = 0; i < 5; i++) rest.push(DiscordMessages[send]('g', 's', '1'));
+            await Promise.all(rest);
+            Assert.strictEqual(edits, 1, 'the burst waits for the running edit');
+
+            releases[0]();
+            await first;
+            await tick();
+            Assert.strictEqual(edits, 2, 'one follow-up with the newest state');
+
+            releases[1]();
+            await tick();
+            await tick();
+            Assert.strictEqual(edits, 2);
+        });
+
+        Test.it(`keeps different ${name} messages apart and answers an interaction directly`, async () => {
+            let edits = 0;
+            DiscordMessages[now] = async () => { edits++; };
+
+            await Promise.all([
+                DiscordMessages[send]('g', 's', 'a'),
+                DiscordMessages[send]('g', 's', 'b'),
+                DiscordMessages[send]('g', 's', 'a', { id: 'interaction' }),
+            ]);
+
+            Assert.strictEqual(edits, 3);
+        });
+    });
+}
+
 Test.describe('Instance message id helpers', () => {
     Test.it('clearInformationMessageIds drops only the information section ids', () => {
         const instance = fakeInstance();

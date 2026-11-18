@@ -74,6 +74,51 @@ function drainStorageMonitorUpdates(key, state, guildId, serverId, entityId) {
     })();
 }
 
+/*
+    Coalesced edits of one message (switches, switch groups): while an edit runs, further calls only mark that
+    another one is due, and one more edit with the newest state follows. Switching a group used to queue one edit per
+    switch and per group on top of each other; Discord throttled them until they hit the 90 s cap.
+*/
+const coalescedUpdates = new Object();
+
+async function coalescedUpdate(key, run) {
+    const running = coalescedUpdates[key];
+    if (running) {
+        running.again = true;
+        return;
+    }
+
+    const state = { again: false };
+    coalescedUpdates[key] = state;
+
+    try {
+        await run();
+    }
+    finally {
+        if (!state.again) {
+            delete coalescedUpdates[key];
+        }
+        else {
+            /* Detached: the caller does not wait for the edits that came in after its own. */
+            (async () => {
+                try {
+                    do {
+                        state.again = false;
+                        await run();
+                    } while (state.again);
+                }
+                catch (e) {
+                    Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                        `Updating ${key} failed: ${e && e.message ? e.message : e}`, 'warn');
+                }
+                finally {
+                    if (coalescedUpdates[key] === state) delete coalescedUpdates[key];
+                }
+            })();
+        }
+    }
+}
+
 /* The rows of a group message: the action buttons, the select menus (up to three), the management buttons (max 5). */
 function groupComponents(guildId, serverId, groupId) {
     const buttons = DiscordButtons.getSmartSwitchGroupButtons(guildId, serverId, groupId);
@@ -167,7 +212,16 @@ module.exports = {
     },
 
     sendSmartSwitchMessage: async function (guildId, serverId, entityId, interaction = null) {
+        if (interaction) return await module.exports.sendSmartSwitchMessageNow(guildId, serverId, entityId, interaction);
+
+        await coalescedUpdate(`switch ${guildId}:${serverId}:${entityId}`,
+            () => module.exports.sendSmartSwitchMessageNow(guildId, serverId, entityId));
+    },
+
+    sendSmartSwitchMessageNow: async function (guildId, serverId, entityId, interaction = null) {
         const instance = Client.client.getInstance(guildId);
+        /* The switch can be removed while an edit waits. */
+        if (!instance.serverList[serverId] || !instance.serverList[serverId].switches[entityId]) return;
         const entity = instance.serverList[serverId].switches[entityId];
 
         const content = {
@@ -284,7 +338,18 @@ module.exports = {
     groupComponents: (guildId, serverId, groupId) => groupComponents(guildId, serverId, groupId),
 
     sendSmartSwitchGroupMessage: async function (guildId, serverId, groupId, interaction = null) {
+        if (interaction) {
+            return await module.exports.sendSmartSwitchGroupMessageNow(guildId, serverId, groupId, interaction);
+        }
+
+        await coalescedUpdate(`switch group ${guildId}:${serverId}:${groupId}`,
+            () => module.exports.sendSmartSwitchGroupMessageNow(guildId, serverId, groupId));
+    },
+
+    sendSmartSwitchGroupMessageNow: async function (guildId, serverId, groupId, interaction = null) {
         const instance = Client.client.getInstance(guildId);
+        /* The group can be deleted while an edit waits. */
+        if (!instance.serverList[serverId] || !instance.serverList[serverId].switchGroups[groupId]) return;
         const group = instance.serverList[serverId].switchGroups[groupId];
 
         const content = {
