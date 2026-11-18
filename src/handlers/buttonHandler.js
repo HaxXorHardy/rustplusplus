@@ -1057,8 +1057,9 @@ module.exports = async (client, interaction) => {
         interaction.deferUpdate();
 
         if (rustplus) {
-            clearTimeout(rustplus.currentSwitchTimeouts[ids.group]);
-            delete rustplus.currentSwitchTimeouts[ids.group];
+            /* A running "on/off for X minutes" of the group must not switch it back after the button. */
+            clearTimeout(rustplus.currentSwitchTimeouts[ids.groupId]);
+            delete rustplus.currentSwitchTimeouts[ids.groupId];
 
             if (rustplus.serverId === ids.serverId) {
                 const active = (interaction.customId.startsWith('GroupTurnOn') ? true : false);

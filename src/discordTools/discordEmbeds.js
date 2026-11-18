@@ -565,6 +565,29 @@ module.exports = {
         });
     },
 
+    /* Several switches of a group that stopped answering, in one embed. */
+    getSmartSwitchesNotFoundEmbed: async function (guildId, serverId, entityIds) {
+        const instance = Client.client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        const user = await getPairedUser(guildId, server);
+        const names = entityIds.map((entityId) => {
+            const entity = server.switches[entityId];
+            return `${entity.name}${entity.location !== null ? ` (${entity.location})` : ''}`;
+        });
+
+        return module.exports.getEmbed({
+            title: Client.client.intlGet(guildId, 'smartDeviceNotFound', {
+                device: names.join(', '),
+                user: getUserName(user)
+            }),
+            color: Constants.COLOR_INACTIVE,
+            description: entityIds.map((entityId) => `**ID** \`${entityId}\``).join('\n'),
+            thumbnail: `attachment://${server.switches[entityIds[0]].image}`,
+            footer: { text: `${server.title}` },
+            timestamp: true
+        });
+    },
+
     getSmartAlarmNotFoundEmbed: async function (guildId, serverId, entityId) {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];

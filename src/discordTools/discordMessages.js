@@ -347,6 +347,26 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
     },
 
+    /* The switches of a group that stopped answering: one message, a single switch keeps its own message. */
+    sendSmartSwitchesNotFoundMessage: async function (guildId, serverId, entityIds) {
+        if (entityIds.length === 0) return;
+        if (entityIds.length === 1) {
+            await module.exports.sendSmartSwitchNotFoundMessage(guildId, serverId, entityIds[0]);
+            return;
+        }
+
+        const instance = Client.client.getInstance(guildId);
+        const entity = instance.serverList[serverId].switches[entityIds[0]];
+
+        const content = {
+            embeds: [await DiscordEmbeds.getSmartSwitchesNotFoundEmbed(guildId, serverId, entityIds)],
+            files: [new Discord.AttachmentBuilder(
+                Path.join(__dirname, '..', `resources/images/electrics/${entity.image}`))]
+        }
+
+        await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+    },
+
     sendSmartSwitchNotFoundMessage: async function (guildId, serverId, entityId) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].switches[entityId];

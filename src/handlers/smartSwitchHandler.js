@@ -22,6 +22,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const Map = require('../util/map.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
 const Timer = require('../util/timer');
+const SwitchTimeouts = require('../util/switchTimeouts.js');
 const UnreachableDevices = require('../util/unreachableDevices.js');
 
 module.exports = {
@@ -475,9 +476,18 @@ module.exports = {
             time: time
         });
 
-        rustplus.currentSwitchTimeouts[entityId] = setTimeout(async function () {
+        const timeouts = rustplus.currentSwitchTimeouts;
+        timeouts[entityId] = setTimeout(async function () {
+            delete timeouts[entityId];
+
             const instance = client.getInstance(guildId);
-            if (!instance.serverList[serverId].switches.hasOwnProperty(entityId)) return;
+            if (!instance.serverList[serverId] || !instance.serverList[serverId].switches.hasOwnProperty(entityId)) {
+                return;
+            }
+
+            /* The connection may have been rebuilt since the timer started: the current one switches. */
+            const rustplus = SwitchTimeouts.currentInstance(client, guildId, serverId);
+            if (rustplus === null) return;
 
             await module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, !active);
 

@@ -47,6 +47,7 @@ const TokenRecovery = require('../util/tokenRecovery.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
+const SwitchTimeouts = require('../util/switchTimeouts.js');
 const TeamHandler = require('../handlers/teamHandler.js');
 const Timer = require('../util/timer.js');
 
@@ -63,6 +64,9 @@ const TOKENS_WAIT_TIMEOUT_MS = 30 * 1000;
 const CONNECTION_REBUILD_MIN_MS = 60 * 1000;
 
 class RustPlus extends RustPlusLib {
+    /* The auto ON/OFF timers of switches and groups: per guild and server, they outlive a reconnect. */
+    get currentSwitchTimeouts() { return SwitchTimeouts.of(this.guildId, this.serverId); }
+
     constructor(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy = false) {
         super(serverIp, appPort, steamId, playerToken, useFacepunchProxy);
 
@@ -105,7 +109,6 @@ class RustPlus extends RustPlusLib {
         this.timers = new Object();                 /* Stores all custom timers that are created. */
         this.markers = new Object();                /* Stores all custom markers that are created. */
         this.storageMonitors = new Object();        /* Contain content information of paired storage monitors. */
-        this.currentSwitchTimeouts = new Object();  /* Stores timer ids for auto ON/OFF Smart Switch timeouts. */
         this.passedFirstSunriseOrSunset = false;    /* Becomes true when first sunrise/sunset. */
         this.startTimeObject = new Object();        /* Stores in-game time points before first sunrise/sunset. */
         this.informationIntervalCounter = 0;        /* Counter to decide when information should be updated. */
