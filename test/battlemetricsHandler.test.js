@@ -94,4 +94,26 @@ Test.describe('BattlemetricsHandler.handler', () => {
 
         await Assert.doesNotReject(runHandler(fakeInstance(SERVER_ID, serverList)));
     });
+
+    /* 1.41.8: the information queue gave up the players message after 60 s and the rejection was unhandled. */
+    Test.it('logs a players message that timed out in the information queue instead of rejecting', async (t) => {
+        const DiscordMessages = require('../src/discordTools/discordMessages.js');
+        const original = DiscordMessages.deleteInformationMessage;
+        t.after(() => { DiscordMessages.deleteInformationMessage = original; });
+
+        DiscordMessages.deleteInformationMessage = async () => {
+            const error = new Error('deleteInformationMessage did not finish within 60 s.');
+            error.code = 'ESTEPTIMEOUT';
+            throw error;
+        };
+
+        const logs = [];
+        const client = fakeClient(fakeInstance(null, {}));
+        client.log = (cap, text, level) => logs.push({ text: text, level: level });
+        client.intlGet = (guildId, key) => key;
+        Client.client = client;
+
+        await Assert.doesNotReject(BattlemetricsHandler.handler(client, false));
+        Assert.ok(logs.some((line) => line.level === 'warn' && line.text.includes('did not finish within 60 s')));
+    });
 });
