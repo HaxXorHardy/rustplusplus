@@ -112,6 +112,11 @@ function tokenHash(token) {
     return Crypto.createHash('sha256').update(`${token}`).digest('hex').slice(0, 16);
 }
 
+function isUuid(value) {
+    return typeof value === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function loadPushReceiver() {
     /* Loaded on first use: a bot without push (RPP_PUSH_ENABLED=false) does not need the package. */
     return require('@liamcottle/push-receiver');
@@ -152,7 +157,11 @@ async function fetchExpoPushToken(deviceId, fcmToken, http = Axios) {
     const token = response && response.data && response.data.data ? response.data.data.expoPushToken : null;
 
     if (response.status !== 200 || typeof token !== 'string' || token === '') {
-        const error = new Error(`The Expo push token request failed with status ${response.status}.`);
+        /* Expo names the problem ({ errors: [{ message }] }), the status alone did not tell a wrong id apart. */
+        const errors = response && response.data && Array.isArray(response.data.errors) ? response.data.errors : [];
+        const detail = errors.map((e) => e && e.message).filter(Boolean).join('; ');
+        const error = new Error(`The Expo push token request failed with status ${response.status}` +
+            `${detail ? ` (${detail})` : ''}.`);
         error.status = response.status;
         throw error;
     }
@@ -222,8 +231,14 @@ async function ensureRegistered(steamId, deps = {}) {
     let push = readPush(steamId) || {};
     let changed = false;
 
-    if (!push.deviceId) {
-        push.deviceId = `rustplusplus:${Crypto.randomUUID()}`;
+    /*
+        Expo accepts only a bare UUID as device id ("deviceId": Invalid UUID, status 400). 1.42.0 stored
+        "rustplusplus:<uuid>", such an id is replaced together with everything registered for it.
+    */
+    if (!isUuid(push.deviceId)) {
+        push.deviceId = Crypto.randomUUID();
+        push.expoPushToken = null;
+        push.registration = null;
         changed = true;
     }
 
@@ -233,7 +248,10 @@ async function ensureRegistered(steamId, deps = {}) {
         push.expoPushToken = null;
         push.registration = null;
         push.persistentIds = [];
-        changed = true;
+
+        /* Kept right away: a failing step 3 must not register yet another Google device on the next try. */
+        writePush(steamId, push);
+        changed = false;
     }
 
     if (!push.expoPushToken) {

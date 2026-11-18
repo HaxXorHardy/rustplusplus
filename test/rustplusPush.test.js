@@ -74,6 +74,13 @@ function fakeServices(options = {}) {
             post: async (url, body) => {
                 if (url.includes('exp.host')) {
                     calls.expo.push(body);
+
+                    /* Like the real Expo (verified live): only a bare UUID is a valid device id. */
+                    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.deviceId)) {
+                        return { status: 400, data: { errors: [{ code: 'VALIDATION_ERROR',
+                            message: '"deviceId": Invalid UUID.' }] } };
+                    }
+
                     return { status: 200, data: { data: { expoPushToken: 'ExponentPushToken[abc]' } } };
                 }
 
@@ -161,6 +168,41 @@ Test.describe('RustPlusPush.ensureRegistered', () => {
         Assert.strictEqual(stored.fcm.androidId, 'android-1');
         Assert.strictEqual(stored.expoPushToken, 'ExponentPushToken[abc]');
         Assert.strictEqual(stored.registration, null);
+    });
+
+    Test.it('replaces the prefixed device id of 1.42.0 and keeps the FCM device', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+
+        RustPlusPush.writePush(STEAM_ID, {
+            deviceId: 'rustplusplus:6f1c2a4e-1111-4222-8333-944455556666',
+            fcm: { androidId: 'android-old', securityToken: 'secret', fcmToken: 'fcm-old' },
+            expoPushToken: null,
+        });
+
+        const services = fakeServices();
+        const result = await RustPlusPush.ensureRegistered(STEAM_ID, services);
+
+        Assert.strictEqual(result.registered, true);
+        Assert.match(result.push.deviceId, /^[0-9a-f-]{36}$/);
+        Assert.strictEqual(services.calls.fcm, 0, 'the stored Google device is reused');
+        Assert.strictEqual(services.calls.expo[0].deviceToken, 'fcm-old');
+    });
+
+    Test.it('keeps the new FCM device and names the reason when Expo refuses', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+
+        const services = fakeServices();
+        const original = services.http.post;
+        services.http.post = async (url, body) => url.includes('exp.host') ?
+            { status: 400, data: { errors: [{ message: 'something is off' }] } } : original(url, body);
+
+        await Assert.rejects(RustPlusPush.ensureRegistered(STEAM_ID, services), /status 400 \(something is off\)/);
+        await Assert.rejects(RustPlusPush.ensureRegistered(STEAM_ID, services), /status 400/);
+
+        Assert.strictEqual(services.calls.fcm, 1, 'no second Google device for the retry');
+        Assert.strictEqual(RustPlusPush.readPush(STEAM_ID).fcm.androidId, 'android-1');
     });
 
     Test.it('remembers handled notification ids', (t) => {
