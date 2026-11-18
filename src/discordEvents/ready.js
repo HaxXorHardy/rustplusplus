@@ -47,7 +47,7 @@ async function refreshStorageMonitors(client, device) {
     if (!rustplus || !rustplus.isOperational || rustplus.serverId !== device.serverKey) return false;
 
     /* The next monitor cycle is due now, the handler resets the counter after it ran. */
-    rustplus.storageMonitorIntervalCounter = 29;
+    rustplus.storageMonitorIntervalCounter = null;
 
     await StorageMonitorHandler.handler(rustplus, client);
 

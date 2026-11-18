@@ -27,6 +27,7 @@ const InGameChatHandler = require('../handlers/inGameChatHandler.js');
 const RaidHandler = require('../handlers/raidHandler.js');
 const SmartSwitchGroupHandler = require('../handlers/smartSwitchGroupHandler.js');
 const StorageAlerts = require('../util/storageAlerts.js');
+const StorageMonitorHandler = require('../handlers/storageMonitorHandler.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const TeamChatHandler = require("../handlers/teamChatHandler.js");
 const TeamHandler = require('../handlers/teamHandler.js');
@@ -335,6 +336,10 @@ async function updateToolCupboard(rustplus, client, message) {
             server.storageMonitors[entityId].decaying = false;
         }
         client.setInstance(rustplus.guildId, instance);
+
+        /* The early upkeep warning also when the cupboard changed, not only in the monitor cycle. */
+        StorageMonitorHandler.warnUpkeep(rustplus, client, rustplus.serverId, entityId,
+            info.entityInfo.payload.protectionExpiry);
     }
 
     await DiscordMessages.sendStorageMonitorMessage(rustplus.guildId, rustplus.serverId, entityId);

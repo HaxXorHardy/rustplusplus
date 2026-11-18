@@ -318,7 +318,7 @@ Test.describe('ready.refreshStorageMonitors', () => {
             { guildId: 'guildId', serverKey: 'relay-a' });
 
         Assert.strictEqual(refreshed, true);
-        Assert.strictEqual(rustplus.storageMonitorIntervalCounter, 29);
+        Assert.strictEqual(rustplus.storageMonitorIntervalCounter, null);
         Assert.strictEqual(calls, 1);
     });
 
