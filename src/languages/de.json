@@ -980,5 +980,8 @@
     "raidReportTitle": "Raid-Bericht: {server}",
     "raidReportTime": "Alarme von {start} bis {end}, seitdem 10 Minuten ruhig.",
     "raidReportAlarms": "Alarme",
-    "raidReportCameOnline": "Kam online"
+    "raidReportCameOnline": "Kam online",
+    "upkeepRunsOut": "{device}: der Unterhalt reicht nur noch {time}!",
+    "upkeepRunsOutTitle": "{device}: der Unterhalt geht bald aus",
+    "upkeepRunsOutAt": "Der Werkzeugschrank beginnt {time} zu verfallen. Auffüllen!"
 }

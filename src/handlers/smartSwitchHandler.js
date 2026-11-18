@@ -445,10 +445,7 @@ module.exports = {
             return true;
         }
 
-        if (rustplus.currentSwitchTimeouts.hasOwnProperty(entityId)) {
-            clearTimeout(rustplus.currentSwitchTimeouts[entityId]);
-            delete rustplus.currentSwitchTimeouts[entityId];
-        }
+        SwitchTimeouts.cancel(guildId, serverId, entityId);
 
         const timeSeconds = Timer.getSecondsFromStringTime(rest);
 
@@ -476,10 +473,8 @@ module.exports = {
             time: time
         });
 
-        const timeouts = rustplus.currentSwitchTimeouts;
-        timeouts[entityId] = setTimeout(async function () {
-            delete timeouts[entityId];
-
+        const record = { kind: 'switch', id: `${entityId}`, value: !active, inGame: true };
+        SwitchTimeouts.schedule(guildId, serverId, entityId, timeSeconds * 1000, record, async function () {
             const instance = client.getInstance(guildId);
             if (!instance.serverList[serverId] || !instance.serverList[serverId].switches.hasOwnProperty(entityId)) {
                 return;
@@ -497,7 +492,7 @@ module.exports = {
             });
 
             rustplus.sendInGameMessage(str);
-        }, timeSeconds * 1000);
+        });
 
         rustplus.sendInGameMessage(str);
         return true;

@@ -26,6 +26,7 @@ const Map = require('../structures/Map');
 const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const PollingHandler = require('../handlers/pollingHandler.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
+const SwitchTimerRestore = require('../handlers/switchTimerRestore.js');
 const TokenRecovery = require('../util/tokenRecovery.js');
 const WithTimeout = require('../util/withTimeout.js');
 
@@ -212,6 +213,14 @@ module.exports = {
         BackgroundHandler.start(rustplus, client);
 
         rustplus.isOperational = true;
+
+        /* "On/off for X" timers that were running before a restart or a redeploy. */
+        try {
+            SwitchTimerRestore.restore(client, rustplus);
+        }
+        catch (e) {
+            rustplus.log(client.intlGet(null, 'warningCap'), `The switch timers could not be restored: ${e}`, 'warn');
+        }
 
         /* The server answers, the next disconnect starts with the shortest delay again. */
         client.rustplusReconnectAttempts = client.rustplusReconnectAttempts || new Object();

@@ -343,8 +343,7 @@ Test.describe('switch group message', () => {
         const instance = serverWith(2);
         withClient(t, instance);
 
-        SwitchTimeouts.of('guild', 'server')['group-1'] = setTimeout(() => undefined, 60000);
-        SwitchTimeouts.setEnd('guild', 'server', 'group-1', Date.now() + 60000, false);
+        SwitchTimeouts.schedule('guild', 'server', 'group-1', 60000, { kind: 'group', id: '1', value: false }, async () => undefined);
         t.after(() => SwitchTimeouts.reset());
 
         const description = DiscordEmbeds.getSmartSwitchGroupEmbed('guild', 'server', '1').toJSON().description;

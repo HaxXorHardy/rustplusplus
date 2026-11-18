@@ -26,6 +26,7 @@ const DiscordTools = require('../discordTools/discordTools.js');
 const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
 const RemoveServerDevices = require('../discordTools/RemoveServerDevices.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
+const SwitchTimeouts = require('../util/switchTimeouts.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordModals = require('../discordTools/discordModals.js');
 const RustPlusSync = require('../util/rustplusSync.js');
@@ -757,8 +758,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        clearTimeout(rustplus.currentSwitchTimeouts[ids.entityId]);
-        delete rustplus.currentSwitchTimeouts[ids.entityId];
+        SwitchTimeouts.cancel(guildId, ids.serverId, ids.entityId);
 
         const active = (interaction.customId.startsWith('SmartSwitchOn')) ? true : false;
         const prevActive = server.switches[ids.entityId].active;
@@ -838,8 +838,7 @@ module.exports = async (client, interaction) => {
         client.setInstance(guildId, instance);
 
         if (rustplus) {
-            clearTimeout(rustplus.currentSwitchTimeouts[ids.entityId]);
-            delete rustplus.currentSwitchTimeouts[ids.entityId];
+            SwitchTimeouts.cancel(guildId, ids.serverId, ids.entityId);
         }
 
         for (const [groupId, content] of Object.entries(server.switchGroups)) {
