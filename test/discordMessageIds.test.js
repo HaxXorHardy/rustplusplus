@@ -185,6 +185,64 @@ Test.describe('DiscordMessages.sendMessage', () => {
     });
 });
 
+Test.describe('DiscordMessages.sendStorageMonitorMessage coalescing', () => {
+    const originalNow = DiscordMessages.sendStorageMonitorMessageNow;
+    const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+    Test.afterEach(() => {
+        DiscordMessages.sendStorageMonitorMessageNow = originalNow;
+    });
+
+    Test.it('runs one edit at a time and one more for the changes that came in meanwhile', async () => {
+        const releases = [];
+        let edits = 0;
+        DiscordMessages.sendStorageMonitorMessageNow = () => {
+            edits++;
+            return new Promise((resolve) => releases.push(resolve));
+        };
+
+        /* A burst of ten pushes while the first edit waits on Discord. */
+        const first = DiscordMessages.sendStorageMonitorMessage('g', 's', 'e');
+        const rest = [];
+        for (let i = 0; i < 9; i++) rest.push(DiscordMessages.sendStorageMonitorMessage('g', 's', 'e'));
+
+        /* The later calls return at once, they do not wait behind the edit. */
+        await Promise.all(rest);
+        Assert.strictEqual(edits, 1);
+
+        releases[0]();
+        await first;
+        await tick();
+
+        /* Exactly one follow-up edit for the nine changes. */
+        Assert.strictEqual(edits, 2);
+
+        releases[1]();
+        await tick();
+        await tick();
+        Assert.strictEqual(edits, 2);
+
+        /* Done: the next push edits right away again. */
+        const next = DiscordMessages.sendStorageMonitorMessage('g', 's', 'e');
+        Assert.strictEqual(edits, 3);
+        releases[2]();
+        await next;
+    });
+
+    Test.it('keeps different monitors apart and does not coalesce button updates', async () => {
+        let edits = 0;
+        DiscordMessages.sendStorageMonitorMessageNow = async () => { edits++; };
+
+        await Promise.all([
+            DiscordMessages.sendStorageMonitorMessage('g', 's', 'a'),
+            DiscordMessages.sendStorageMonitorMessage('g', 's', 'b'),
+            DiscordMessages.sendStorageMonitorMessage('g', 's', 'a', { id: 'interaction' }),
+        ]);
+
+        Assert.strictEqual(edits, 3);
+    });
+});
+
 Test.describe('Instance message id helpers', () => {
     Test.it('clearInformationMessageIds drops only the information section ids', () => {
         const instance = fakeInstance();
