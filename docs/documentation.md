@@ -11,3 +11,5 @@
 * [**Smart Devices**](smart_devices.md)
 * [**Static Game Data**](static_data.md)
 * [**Rust+ API Coverage**](rustplus_api.md)
+* [**Full list of features**](full_list_features.md)
+* [**FAQ**](../FAQ.md)

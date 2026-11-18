@@ -75,6 +75,14 @@ const result = classifyResponse(await rustplus.getClanChatAsync());
 `isResponseFailure()` is unchanged: only a thrown error or an `AppError` counts as a failure. Use `classifyResponse()`
 when a feature has to know whether the server answered at all.
 
+## Map markers
+
+`getMapMarkers` used to list players, vending machines, Chinook 47, the cargo ship, crates, the patrol helicopter and the
+Traveling Vendor (`MapMarkers.types` in `src/structures/MapMarkers.js`). Against a live server on 2026-11-18 it returned
+**only player markers** (`{ "1": 3 }`): no vending machines, no events. The notifications built on them were removed in
+1.50.1 (`RustPlus.sendEvent()` only logs an event whose setting is gone); the Deep Sea is detected from vending machines
+outside the grid and has no data either. Only the Traveling Vendor (type 9) could not be checked - it was not on the map.
+
 ## Monument names
 
 The map sends a token per monument (`AppMap.monuments[].token`). The readable, localized names are in the table of
@@ -111,6 +119,11 @@ The relay socket is authenticated **once**, at the handshake, with the account t
 as the websocket subprotocol). Facepunch keeps the newest token of an account, so every new Rust+ login mints a new one
 and then answers the requests of the *old* socket with `not_found` - the same answer a stale `playerToken` gets, which
 makes it look like a lost pairing (the pairing itself is fine, the notification history keeps delivering).
+
+A token can also be refused **for new requests only** while the open socket keeps working: the history and the account
+state answer `403`, a new handshake `403` (observed 2026-11-18, a few minutes to ~40 minutes after a renewal). The bot
+renews such a token when the socket drops, before it reconnects (`TokenRecovery.renewIfRefused()`, see
+[credentials.md](credentials.md#what-happens-when-facepunch-rejects-the-token)).
 
 For that reason the token is renewed in one place only (`util/tokenRecovery.js`, see
 [credentials.md](credentials.md#what-happens-when-facepunch-rejects-the-token)): the renewal is single-flight per
@@ -157,5 +170,5 @@ therefore costs ~19 KB instead of ~195 KB; a team member is only reported when t
 ## Team map notes
 
 `AppTeamInfo.mapNotes` and `AppTeamInfo.leaderMapNotes` (the marks the team placed on the map) are parsed into
-`Team.mapNotes` and `Team.leaderMapNotes` and updated on every poll (`src/pollingHandlers/pollingHandler.js`). Drawing
+`Team.mapNotes` and `Team.leaderMapNotes` and updated on every poll (`src/handlers/pollingHandler.js`). Drawing
 them on the map is a separate feature.

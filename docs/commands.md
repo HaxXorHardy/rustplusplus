@@ -16,20 +16,26 @@ Slash Command | Description
 [**/cameras**](commands.md#cameras) | Cameras of the server: list, add, snapshot and the stranger watch.
 [**/craft**](commands.md#craft) | Display the cost to craft an item.
 [**/credentials**](commands.md#credentials) | Set/Clear the Credentials for the user account.
+[**/deathmap**](commands.md#deathmap) | Show the deaths of the team on the map.
 [**/decay**](commands.md#decay) | Display the decay time of an item.
+[**/despawn**](commands.md#despawn) | Display the despawn time of an item.
 [**/help**](commands.md#help) | Display help message.
 [**/ingameaccess**](commands.md#ingameaccess) | Set in-game command access mode.
 [**/item**](commands.md#item) | Get the details of an item.
 [**/leader**](commands.md#leader) | Give or take the leadership from/to a team member.
 [**/map**](commands.md#map) | Get the currently connected server map image.
-[**/market**](commands.md#market) | Operations for In-Game Vending Machines.
+[**/market**](commands.md#market) | Operations for In-Game Vending Machines (no data at the moment: the Rust+ API no longer reports it).
 [**/players**](commands.md#players) | Get player/players information based on battlemetrics.
 [**/recycle**](commands.md#recycle) | Display the output of recycling an item.
+[**/removedevices**](commands.md#removedevices) | Remove all smart devices of the active server (e.g. after a wipe).
 [**/research**](commands.md#research) | Display the cost to research an item.
 [**/reset**](commands.md#reset) | Reset Discord channels.
 [**/role**](commands.md#role) | Set/Clear a specific role that will be able to see the rustplusplus category content.
-[**/storagemonitor**](commands.md#storagemonitors) | Operations on Storage Monitors.
+[**/stack**](commands.md#stack) | Display the stack size of an item.
+[**/status**](commands.md#status) | Health of the bot: connection, token, push and recent warnings.
+[**/storagemonitor**](commands.md#storagemonitor) | Operations on Storage Monitors.
 [**/switch**](commands.md#switch) | Operations on Smart Switches.
+[**/teamstats**](commands.md#teamstats) | Online time, sessions and deaths of the team this week.
 [**/upkeep**](commands.md#upkeep) | Get the upkeep cost of an item.
 [**/uptime**](commands.md#uptime) | Display uptime of the bot and server.
 [**/whitelist**](commands.md#whitelist) | Whitelist a user for in-game bot commands.
@@ -147,6 +153,16 @@ Subcommand | Options | Description | Required
 &nbsp; | `steam_id` | Steam ID. | `False`
 
 
+## **/deathmap**
+
+> **Show the deaths of the team on the map.** Every death of a teammate with a known position is stored (the newest 300 per server, cleared by a map wipe). The deaths are drawn as red marks on the clean map, the grids with the most deaths are named.
+
+Subcommand | Options | Description | Required
+---------- | ------- | ----------- | --------
+&nbsp; | `player` | Only the deaths of this player (part of the name). | `False`
+&nbsp; | `hours` | Only the deaths of the last hours. | `False`
+
+
 ## **/decay**
 
 > **Display the decay time of an item.**
@@ -158,6 +174,16 @@ Subcommand | Options | Description | Required
 &nbsp; | `hp` | THe current HP of the item. | `False`
 
 ![Discord Slash Command decay Image](images/slash_commands/decay.png)
+
+
+## **/despawn**
+
+> **Display the despawn time of an item.**
+
+Subcommand | Options | Description | Required
+---------- | ------- | ----------- | --------
+&nbsp; | `name` | The name of the item. | `False`
+&nbsp; | `id` | The id of the item. | `False`
 
 
 ## **/help**
@@ -206,7 +232,7 @@ Subcommand | Options | Description | Required
 
 ## **/market**
 
-> **Operations for In-Game Vending Machines.**.
+> **Operations for In-Game Vending Machines.** The Rust+ API no longer reports vending machines (verified 2026-11-18), so search and subscriptions find nothing at the moment.
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -259,6 +285,11 @@ Subcommand | Options | Description | Required
 ![Discord Slash Command recycle Image](images/slash_commands/recycle.png)
 
 
+## **/removedevices**
+
+> **Remove all smart devices of the active server.** Meant for a wipe the bot did not notice; after a detected wipe the checklist in the activity channel offers the same for the devices of the old map only (see [After a wipe](smart_devices.md#after-a-wipe)). A private confirmation shows the counts first. Switch groups stay, the removed switches and alarm triggers are taken out of them. Needs admin rights with `RPP_NEED_ADMIN_PRIVILEGES` (default).
+
+
 ## **/research**
 
 > **Display the cost to research an item.**
@@ -281,7 +312,7 @@ Subcommand | Options | Description | Required
 `information` | &nbsp; | Reset information channel. | &nbsp;
 `servers` | &nbsp; | Reset servers channel. | &nbsp;
 `settings` | &nbsp; | Reset settings channel. | &nbsp;
-`switches` | &nbsp; | Reset switches channels. | &nbsp;
+`switches` | &nbsp; | Reset switches and switch groups channels. | &nbsp;
 `alarms` | &nbsp; | Reset alarms channel. | &nbsp;
 `storagemonitors` | &nbsp; | Reset storagemonitors channel. | &nbsp;
 `trackers` | &nbsp; | Reset trackers channel. | &nbsp;
@@ -302,7 +333,22 @@ Subcommand | Options | Description | Required
 ![Discord Slash Command role Image](images/slash_commands/role.png)
 
 
-## **/storagemonitors**
+## **/stack**
+
+> **Display the stack size of an item.**
+
+Subcommand | Options | Description | Required
+---------- | ------- | ----------- | --------
+&nbsp; | `name` | The name of the item. | `False`
+&nbsp; | `id` | The id of the item. | `False`
+
+
+## **/status**
+
+> **Health of the bot** (only visible to you): version, bot uptime and Discord ping; the Rust+ connection, how long the socket is open, the last poll and the disconnects since the start; when the account token expires and whether Facepunch currently refuses it; whether the push listener runs, how many notifications arrived and when the push registration expires; the warnings of the last hour and the last five warning lines.
+
+
+## **/storagemonitor**
 
 > **Operations on Storage Monitors.**
 
@@ -326,6 +372,11 @@ Subcommand | Options | Description | Required
 &nbsp; | `image` | Set the image that best represent the Smart Switch. | `True`
 
 ![Discord Slash Command switch Image](images/slash_commands/switch.png)
+
+
+## **/teamstats**
+
+> **Online time, sessions and deaths of the team this week** (ISO week in the time zone of the settings channel), most online time first. When the week changes, the finished week is posted to the activity channel as the weekly report. The numbers are kept in the instance file, a restart keeps the week.
 
 
 ## **/upkeep**
@@ -381,18 +432,20 @@ In-Game Command | Description
 --------------- | -----------
 [**afk**](commands.md#afk) | Get the currently afk players in your team.
 [**alive**](commands.md#alive) | Get the player with the longest time alive.
-[**cargo**](commands.md#cargo) | Get information about CargoShip (Location, time till enters egress stage, time since last on map).
-[**chinook**](commands.md#chinook) | Get information about Chinook 47 (Location, time since last on map).
+[**cargo**](commands.md#cargo) | Get information about CargoShip (Location, time till enters egress stage, time since last on map). (no data at the moment: the Rust+ API no longer reports it)
+[**chinook**](commands.md#chinook) | Get information about Chinook 47 (Location, time since last on map). (no data at the moment: the Rust+ API no longer reports it)
 [**connection/connections**](commands.md#connectionconnections) | Get recent connection events.
 [**craft**](commands.md#craft-ingame) | Display the cost to craft an item.
 [**death/deaths**](commands.md#deathdeaths) | Get recent death events.
 [**decay**](commands.md#decay-ingame) | Display the decay time of an item.
+[**deepsea**](commands.md#deepsea) | Get information about the Deep Sea. (no data at the moment: the Rust+ API no longer reports it)
+[**despawn**](commands.md#despawn-ingame) | Display the despawn time of an item.
 [**events**](commands.md#events) | Get recent events.
-[**heli**](commands.md#heli) | Get information about Patrol Helicopter (Location, time since last downed, time since last on map).
-[**large**](commands.md#large) | Get information about Large Oil Rig (Time till crate unlocks, time since last trigger).
+[**heli**](commands.md#heli) | Get information about Patrol Helicopter (Location, time since last downed, time since last on map). (no data at the moment: the Rust+ API no longer reports it)
+[**large**](commands.md#large) | Get information about Large Oil Rig (Time till crate unlocks, time since last trigger). (no data at the moment: the Rust+ API no longer reports it)
 [**leader**](commands.md#leader-1) | Give/Take the Team Leadership.
 [**marker**](commands.md#marker) | Set custom markers anywhere on the map.
-[**market**](commands.md#market-ingame) | Search for items in vending machines or subscribe/unsubscribe to items.
+[**market**](commands.md#market-ingame) | Search for items in vending machines or subscribe/unsubscribe to items. (no data at the moment: the Rust+ API no longer reports it)
 [**mute**](commands.md#mute) | Mute the bot from the In-Game Team Chat.
 [**note/notes**](commands.md#notenotes) | Create notes about meaningful things.
 [**offline**](commands.md#offline) | Get the currently offline players in your team.
@@ -403,7 +456,8 @@ In-Game Command | Description
 [**recycle**](commands.md#recycle-ingame) | Display the output of recycling an item.
 [**research**](commands.md#research-ingame) | Display the cost to research an item.
 [**send**](commands.md#send) | Send a message to a discord user.
-[**small**](commands.md#small) | Get information about Small Oil Rig (Time till crate unlocks, time since last trigger).
+[**small**](commands.md#small) | Get information about Small Oil Rig (Time till crate unlocks, time since last trigger). (no data at the moment: the Rust+ API no longer reports it)
+[**stack**](commands.md#stack-ingame) | Display the stack size of an item.
 [**steamid**](commands.md#steamid) | Get the steamid of a teammate.
 [**team**](commands.md#team) | Get the names of all members in the team.
 [**time**](commands.md#time) | Get the current time In-Game and time till day/night.
@@ -491,9 +545,21 @@ In-Game Command | Description
 ![In-Game Command decay Image](images/ingame_commands/decay_ingame.png)
 
 
+## **deepsea**
+
+> **Get information about the Deep Sea.** The bot recognizes the Deep Sea by vending machines outside the map grid; the Rust+ API no longer reports vending machines, so there is no data at the moment.
+<br>Command: `!deepsea`
+
+
+## **despawn ingame**
+
+> **Display the despawn time of an item.**
+<br>Command: `!despawn <item-name>`
+
+
 ## **events**
 
-> **Get recent In-Game events.** Available events are cargo, heli, small, large, chinook
+> **Get recent In-Game events.** Available events are cargo, heli, small, large, chinook. The Rust+ API no longer reports these events, so the list stays empty.
 <br>Command: `!events` - Get last 5 events
 <br>Command: `!events 3` - Get last 3 events
 <br>Command: `!events cargo` - Get last 5 events from cargo
@@ -655,6 +721,12 @@ Subcommand | Description | Required
 <br>Command: `!small`
 
 ![In-Game Command small Image](images/ingame_commands/small_ingame.png)
+
+
+## **stack ingame**
+
+> **Display the stack size of an item.**
+<br>Command: `!stack <item-name>`
 
 
 ## **steamid**

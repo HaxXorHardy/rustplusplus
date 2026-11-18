@@ -3,7 +3,7 @@
 > To use an instance of the bot you have to log in once with a Steam account that is signed in to the Rust+ app and has
 > paired your server. The login creates the Rust+ account token the bot needs for the authenticated websocket, the
 > server list, the pairing ids and the paired devices. No FCM credentials and no credential application are needed
-> anymore.
+> anymore - the bot registers its own push device with the same login (see [Push notifications](#push-notifications-fcm)).
 
 ## Logging in
 
@@ -72,8 +72,10 @@ of their token, `/credentials remove` and `/credentials set_hoster` manage them.
 ## Why no FCM credentials anymore?
 
 Facepunch removed the direct Rust+ connections, the bot speaks the same authenticated websocket as the Rust+ app and
-needs the account token for it. The push notifications of the app are not needed either: the notification history of the
-account (`POST /api/history/read`) carries the pairings, so devices are adopted without FCM.
+needs the account token for it. The FCM credentials of the old credential application are not needed either: the
+notification history of the account (`POST /api/history/read`) carries the pairings, and since 1.42 the bot registers a
+push device of its own from the Steam login (see [Push notifications](#push-notifications-fcm)) - nothing has to be
+copied out of another application.
 
 See also: [FAQ.md](../FAQ.md#do-i-still-need-fcm-credentials), [Commands](commands.md#credentials).
 
@@ -97,6 +99,14 @@ the old one with `not_found`. So the token is renewed in exactly one place, `uti
 - a socket whose token is older than the stored one (renewed by another guild, the login or the script) is rebuilt on
   the next failed poll without renewing anything,
 - a working connection resets all of it.
+
+**A token refused while the socket works.** Observed live (2026-11-18): a few minutes to about 40 minutes after a
+renewal Facepunch starts to refuse the token for **new** requests - the history and the account state answer `403`, a new
+handshake answers `403` - while the socket that is already open keeps working. The bot therefore does not renew then
+(that would only rebuild the working socket), it remembers the refused token instead: when the socket drops (every hour
+or two, code `1006`), a new token is fetched **before** the reconnect, so the reconnect does not fail on the handshake
+first. The refusals are logged once per token (`... can be read again` when they stop), not every five minutes. `/status`
+shows whether the stored token is refused right now.
 
 The pairing history (`POST /api/history/read`) and the account state (`/api/syncData`) are read once per account and
 run, whatever the number of guilds that use it. A connection that answers `not_found` right after the handshake reads
@@ -131,3 +141,9 @@ What the notifications are used for (`util/rustplusPushNotifications.js`):
 
 Everything is optional: a failed registration or connection is logged once an hour and the bot keeps running on the
 history. A device whose FCM connection fails three times in a row is registered anew.
+
+The connection to Google is watched: a drop is logged (`the FCM connection of <id> dropped, it reconnects` and
+`... is back after N s`), the TCP keepalive probes an idle connection after a minute, and a connection that stays down for
+5 minutes (or whose reconnect failed) is started again by the watchdog. A redeploy keeps the device: the push file is on
+the `credentials` volume, and a new registration with the same device id replaces the old one at Facepunch, so devices do
+not pile up in the account (an orphaned registration also expires after 14 days). `/status` shows the push state.

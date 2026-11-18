@@ -6,6 +6,9 @@
 - [Im getting 'ERROR: {"code": "TokenInvalid"}' when trying to start the bot](#token-invalid)
 - [Im getting 'ERROR: SyntaxError: Unexpected token '', ""... is not valid JSON' or 'ERROR: SyntaxError: Unexpected token in JSON at position 0' when trying to start the bot](#unexpected-token-invalid-json)
 - [In-Game chat messages are not shown In-Game (or not mirrored to Discord) on some servers](#ingame-chat-on-some-servers)
+- [The bot cannot connect to the server (reconnect loop, `ECONNRESET` / `socket hang up`)](#rustplus-connection-problems)
+- [Logging in with Steam](#logging-in-with-steam)
+- [Why are there no Cargo, Heli, Chinook, Oil Rig or Vending Machine notifications anymore?](#no-event-notifications)
 
 <a name="when-i-run-npm-install-i-get-an-error"></a>
 ## When I run 'npm install' I get an error
@@ -17,9 +20,10 @@ If you're getting the error below, try running `npm i -g npm`. This should allow
 <a name="credentials-added-but-no-pair-notification"></a>
 ## I've paired a device but no Discord message appears
 
-The bot does not use FCM anymore. It reads the **notification history of the Rust+ account** (`POST /api/history/read`)
-every `RPP_RUSTPLUS_HISTORY_INTERVAL` (default 5 minutes, lower it to a few seconds to see a pairing almost instantly)
-and adopts the paired server or device from it. The account state (`POST /api/syncData`) is only a slow snapshot and is
+With push notifications (`RPP_PUSH_ENABLED=true`, default) a pairing reaches the bot within seconds and it reads the
+history right away. Without them - or when the push device could not be registered, the log says so - the bot reads the
+**notification history of the Rust+ account** (`POST /api/history/read`) every `RPP_RUSTPLUS_HISTORY_INTERVAL` (default
+5 minutes, lower it to a few seconds to see a pairing almost instantly) and adopts the paired server or device from it. The account state (`POST /api/syncData`) is only a slow snapshot and is
 cached for `RPP_RUSTPLUS_SYNCDATA_INTERVAL` (default 5 minutes), so a short history interval stays cheap. The log shows:
 
 * `Rust+ pairing of <server> renewed, reconnecting with the new player token.` - the pairing was adopted.
@@ -78,6 +82,17 @@ You can check what a server supports without touching the running bot:
 ```
 node scripts/clanChatProbe.js [--server=<ip-appPort>] [--send] [--send-team]
 ```
+
+<a name="no-event-notifications"></a>
+## Why are there no Cargo, Heli, Chinook, Oil Rig or Vending Machine notifications anymore?
+
+Facepunch's Rust+ API stopped sending these map markers. A request against a live server on 2026-11-18 returned only
+player markers - no vending machines (a server normally has dozens), no cargo ship, patrol helicopter, chinook or crates,
+and the log of the day before contains none of these events. Their notification settings were removed in 1.50.1; the
+commands (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!events`, `!market`, `/market`) still answer, but have no
+data. Deep Sea is recognized by vending machines outside the map grid, so it is affected too. The Traveling Vendor has a
+marker type of its own and stays.
+
 
 <a name="rustplus-connection-problems"></a>
 ## The bot cannot connect to the server (reconnect loop, `ECONNRESET` / `socket hang up`)
@@ -239,8 +254,9 @@ Notes:
 
 #### Do I still need FCM credentials?
 
-No - the FCM client was removed from this fork. The bot connects through the authenticated relay socket of the
-account **and their paired devices**:
+No. The FCM client of the old credential application is gone; since 1.42 the bot registers a push device of its own
+from the Steam login (see [Push notifications](docs/credentials.md#push-notifications-fcm)). It connects through the
+authenticated relay socket, and the account state lists the servers of the account **and their paired devices**:
 
 ```json
 { "servers": [ { "id": "<uuid>", "name": "...", "playerToken": 123,
@@ -251,8 +267,9 @@ account **and their paired devices**:
 with the names from the Rust+ app (`type` 1 = switch, 2 = alarm, 3 = storage monitor). A server without `ip/port`
 in the account state is keyed `relay-<uuid>`, which is exactly what the authenticated socket needs.
 
-Alarms, deaths and team events are detected by polling the connected server (see the notification settings);
-they no longer depend on push notifications of the app. Everything else is read from the account itself:
+Alarms, deaths and team events of the **connected** server are detected over its socket and by polling it (see the
+notification settings). Push notifications add the alarms and team logins of the other servers and make pairings appear
+within seconds. Everything else is read from the account itself:
 
 #### The death notification as a direct message
 
@@ -291,7 +308,7 @@ credentials.**
    it asks Steam for fresh community cookies with that refresh token and repeats the Rust+ login.
    **No password, no Steam Guard prompt**. It runs while connecting and, while the bot is connected, once an hour
    in the background (the running socket keeps the token it was opened with). The log shows
-   `Rust+ account token renewed.` (background: `... renewed in the background, ...`)
+   `The Rust+ account token of <steamId> was renewed (<reason>).`
 3. For cron / a bot that is not running: `node scripts/rustplusLogin.js --renew` (all stored accounts) or
    `--renew=<steamId>`, also without a password.
 4. The refresh token dies when the Steam password is changed or all devices are deauthorized - after that the log
