@@ -81,7 +81,8 @@ when a feature has to know whether the server answered at all.
 Traveling Vendor (`MapMarkers.types` in `src/structures/MapMarkers.js`). Against a live server on 2026-11-18 it returned
 **only player markers** (`{ "1": 3 }`): no vending machines, no events. The notifications built on them were removed in
 1.50.1 (`RustPlus.sendEvent()` only logs an event whose setting is gone); the Deep Sea is detected from vending machines
-outside the grid and has no data either. Only the Traveling Vendor (type 9) could not be checked - it was not on the map.
+outside the grid and has no data either. The Traveling Vendor (type 9) does not appear anymore either; its settings were
+removed in 1.50.3, so no event notification setting is left.
 
 ## Monument names
 

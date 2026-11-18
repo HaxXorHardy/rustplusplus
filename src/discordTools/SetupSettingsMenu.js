@@ -377,6 +377,9 @@ async function setupGeneralSettings(client, guildId, channel) {
 async function setupNotificationSettings(client, guildId, channel) {
     const instance = client.getInstance(guildId);
 
+    /* No event the Rust+ API still reports: no section (not even its header picture). */
+    if (Object.keys(client.readNotificationSettingsTemplate()).length === 0) return;
+
     await client.messageSend(channel, {
         files: [new Discord.AttachmentBuilder(
             Path.join(__dirname, '..',
@@ -633,8 +636,9 @@ async function ensureCameraWatchSettings(client, guild, channel) {
 
 /*
     Notification settings that were removed from the template (events the Rust+ API no longer reports: cargo ship,
-    patrol helicopter, chinook, oil rig crates, vending machines) still have their message in a settings channel that
-    was created before. Those messages go; /reset settings is not needed.
+    patrol helicopter, chinook, oil rig crates, vending machines, deep sea, traveling vendor) still have their message in
+    a settings channel that was created before. Those messages go - and the header picture of the section once no
+    setting is left; /reset settings is not needed.
 */
 async function removeRetiredNotificationSettings(client, guild, channel) {
     const supported = client.readNotificationSettingsTemplate();
@@ -655,7 +659,15 @@ async function removeRetiredNotificationSettings(client, guild, channel) {
                     }
                 })[0];
 
-            if (setting && !supported.hasOwnProperty(setting)) await message.delete().catch(() => undefined);
+            if (setting && !supported.hasOwnProperty(setting)) {
+                await message.delete().catch(() => undefined);
+                continue;
+            }
+
+            /* The header picture of the section goes when no setting is left. */
+            const header = message.components.length === 0 && message.attachments.size !== 0 &&
+                [...message.attachments.values()].every((a) => `${a.name}`.startsWith('notification_settings_logo'));
+            if (header && Object.keys(supported).length === 0) await message.delete().catch(() => undefined);
         }
     }
     catch (e) {

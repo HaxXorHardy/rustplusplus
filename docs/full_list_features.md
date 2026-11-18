@@ -72,7 +72,7 @@
 - **unmute** - Unmute rustplusplus In-Game.
 - **upkeep** - Check upkeep of Storage Monitor Tool Cupboards.
 - **uptime** - Display the uptime of rustplusplus and currently connected server.
-- **vendor** - Get information regarding the Traveling Vendor.
+- **vendor** - Get information regarding the Traveling Vendor (no data at the moment).
 - **wipe** - Display time since wipe.
 
 ## Smart Devices
@@ -92,10 +92,7 @@
 - F1 console connect information.
 
 ## In-Game Event Notifications
-> Facepunch's Rust+ API no longer reports Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates and Vending Machines: on a live server (2026-11-18) the map markers contained only players. Their notification settings were removed in 1.50.1.
-
-- **Traveling Vendor** - When it appears, halts and leaves (it has its own map marker).
-- **Deep Sea** - The bot recognizes it by vending machines outside the map grid, so it has no data while vending machines are missing.
+> Facepunch's Rust+ API no longer reports any events: on a live server (2026-11-18) the map markers contained only players - no Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates, Vending Machines, Deep Sea (derived from vending machines) or Traveling Vendor. All event notification settings were removed (1.50.1 and 1.50.3); the `events` channel stays empty.
 
 ## Push Notifications
 > The bot registers itself as a device of the Rust+ account (see [Credentials](credentials.md#push-notifications-fcm)).

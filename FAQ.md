@@ -8,7 +8,7 @@
 - [In-Game chat messages are not shown In-Game (or not mirrored to Discord) on some servers](#ingame-chat-on-some-servers)
 - [The bot cannot connect to the server (reconnect loop, `ECONNRESET` / `socket hang up`)](#rustplus-connection-problems)
 - [Logging in with Steam](#logging-in-with-steam)
-- [Why are there no Cargo, Heli, Chinook, Oil Rig or Vending Machine notifications anymore?](#no-event-notifications)
+- [Why are there no event notifications (Cargo, Heli, Chinook, Oil Rig, Vending Machines, Traveling Vendor) anymore?](#no-event-notifications)
 
 <a name="when-i-run-npm-install-i-get-an-error"></a>
 ## When I run 'npm install' I get an error
@@ -84,14 +84,14 @@ node scripts/clanChatProbe.js [--server=<ip-appPort>] [--send] [--send-team]
 ```
 
 <a name="no-event-notifications"></a>
-## Why are there no Cargo, Heli, Chinook, Oil Rig or Vending Machine notifications anymore?
+## Why are there no event notifications (Cargo, Heli, Chinook, Oil Rig, Vending Machines, Traveling Vendor) anymore?
 
 Facepunch's Rust+ API stopped sending these map markers. A request against a live server on 2026-11-18 returned only
 player markers - no vending machines (a server normally has dozens), no cargo ship, patrol helicopter, chinook or crates,
 and the log of the day before contains none of these events. Their notification settings were removed in 1.50.1; the
 commands (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!events`, `!market`, `/market`) still answer, but have no
-data. Deep Sea is recognized by vending machines outside the map grid, so it is affected too. The Traveling Vendor has a
-marker type of its own and stays.
+data. Deep Sea is recognized by vending machines outside the map grid, so it is affected too, and the Traveling Vendor
+is gone as well - its settings were removed in 1.50.3, so no event notification setting is left.
 
 
 <a name="rustplus-connection-problems"></a>

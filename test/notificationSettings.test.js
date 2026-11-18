@@ -106,7 +106,7 @@ Test.describe('createInstanceFile notification settings migration', () => {
             Object.keys(saved.notificationSettings).sort(),
             Object.keys(NotificationSettingsTemplate).sort());
 
-        /* The values of the user are kept for the settings that still exist. */
-        Assert.strictEqual(saved.notificationSettings.travelingVendorDetectedSetting.discord, false);
+        /* The API reports no events anymore (2026-11-18): the traveling vendor goes as well. */
+        Assert.strictEqual('travelingVendorDetectedSetting' in saved.notificationSettings, false);
     });
 });

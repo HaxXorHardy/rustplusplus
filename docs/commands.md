@@ -468,7 +468,7 @@ In-Game Command | Description
 [**unmute**](commands.md#unmute) | Unmute the bot from the In-Game Team Chat.
 [**upkeep**](commands.md#upkeep) | Get the upkeep time of all connected tool cupboard monitors.
 [**uptime**](commands.md#uptime-ingame) | Display uptime of the bot and server.
-[**vendor**](commands.md#vendor) | Get information about the Traveling Vendor (Current Location, Time since last vendor)
+[**vendor**](commands.md#vendor) | Get information about the Traveling Vendor (Current Location, Time since last vendor) (no data at the moment: the Rust+ API no longer reports it)
 [**wipe**](commands.md#wipe) | Get the time since it was wiped.
 
 
@@ -824,7 +824,7 @@ Subcommand | Description | Required
 
 ## **vendor**
 
-> **Get information about the Traveling Vendor (Current Location, Time since last Traveling Vendor).**
+> **Get information about the Traveling Vendor (Current Location, Time since last Traveling Vendor).** The Rust+ API no longer reports the Traveling Vendor, so there is no data at the moment.
 <br>Command: `!vendor`
 
 ![In-Game Command vendor Image](images/ingame_commands/vendor_ingame.png)

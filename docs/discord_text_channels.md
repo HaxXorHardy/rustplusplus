@@ -38,7 +38,7 @@
 - Connect information for join through In-Game console
 <br>
 
-**Event Information** shows event activities In-Game: Cargoship, Patrol Helicopter, Small Oil Rig, Large Oil Rig, Chinook 47, Traveling Vendor and Deep Sea. Facepunch's Rust+ API no longer reports most of them (see [Events Channel](discord_text_channels.md#events-channel)), so these lines show no current data; the section can be switched off in the settings.
+**Event Information** shows event activities In-Game: Cargoship, Patrol Helicopter, Small Oil Rig, Large Oil Rig, Chinook 47, Traveling Vendor and Deep Sea. Facepunch's Rust+ API no longer reports any of them (see [Events Channel](discord_text_channels.md#events-channel)), so these lines show no current data; the section can be switched off in the settings.
 <br>
 
 The information messages are only edited when their content changed (at the latest every 10 minutes, which also brings back a message that was deleted by hand), so the channel causes far fewer Discord requests than an edit every minute.
@@ -70,7 +70,7 @@ There are a few buttons for each server. The `CONNECT` button lets you start a c
 
 ## Settings Channel
 
-> The Settings Channel contain a bunch of different settings for rustplusplus. There are settings for language, voice gender, command prefix, trademark visibility, allow in-game commands, mute in-game, in-game teammate notifications, command delay, Smart Alarm notifications, enable leader command, battlemetrics notifications, wipe detection, vending machine subscription (no vending machine data at the moment) and event notifications (Traveling Vendor and Deep Sea - the settings of the events the API no longer reports were removed in 1.50.1).
+> The Settings Channel contain a bunch of different settings for rustplusplus. There are settings for language, voice gender, command prefix, trademark visibility, allow in-game commands, mute in-game, in-game teammate notifications, command delay, Smart Alarm notifications, enable leader command, battlemetrics notifications, wipe detection, vending machine subscription (no vending machine data at the moment). The event notification settings are gone: the API reports no events anymore (removed in 1.50.1 and 1.50.3, their messages are removed from an existing settings channel on start).
 
 Four settings decide how alarms, the upkeep and the clock work (they are added to an existing settings channel on start, `/reset settings` is not needed):
 
@@ -101,12 +101,7 @@ If the chosen interval is shorter than one round through all cameras, the bot ra
 
 ## Events Channel
 
-> The Events Channel contains the event notifications:
-
-- `Traveling Vendor` appears, halts, leaves
-- `Deep Sea` appears, leaves
-
-Facepunch's Rust+ API no longer reports Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates and Vending Machines - on a live server (2026-11-18) the map markers contained only players. Their notifications (cargo spawn/despawn/egress/docking, heli spawn/despawn/destroyed, oil rig triggered/crate unlocked, chinook, new vending machine) were removed in 1.50.1. Deep Sea is recognized by vending machines outside the map grid, so it has no data while the vending machines are missing either.
+> The Events Channel used to contain the event notifications (cargo ship, patrol helicopter, oil rigs, chinook, vending machines, deep sea, traveling vendor). Facepunch's Rust+ API no longer reports any of these events - on a live server (2026-11-18) the map markers contained only players - so their notifications were removed (1.50.1 and 1.50.3) and the channel stays empty.
 
 ![Discord Text Channel Events](images/channels/events_channel.png)
 
