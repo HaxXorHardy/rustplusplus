@@ -74,3 +74,30 @@ Test.describe('storage alerts', () => {
         Assert.deepStrictEqual(result.fired.map((f) => f.quantity), [1500, 0]);
     });
 });
+
+/* The real item list of the game: names carry calibres and prefixes nobody types. */
+Test.describe('storage alerts with the real item names', () => {
+    const Items = require('../src/structures/Items');
+    const realItems = new Items();
+    const nameOf = (text) => {
+        const result = StorageAlerts.parse(realItems, `${text} < 1`);
+        return result.rules.length === 1 ? realItems.getName(result.rules[0].itemId) : null;
+    };
+
+    Test.it('finds the item players mean', () => {
+        const expected = {
+            'Rifle Ammo': '5.56 Rifle Ammo',
+            'HV Rifle Ammo': 'HV 5.56 Rifle Ammo',
+            'Pistol Ammo': 'Pistol Bullet',
+            'Stone': 'Stones',
+            'C4': 'Timed Explosive Charge',
+            'HQM': 'High Quality Metal',
+            'Shotgun Shells': '12 Gauge Buckshot',
+            'Low Grade Fuel': 'Low Grade Fuel',
+            'Sulfur Ore': 'Sulfur Ore',
+            'ammo.rifle': '5.56 Rifle Ammo',
+        };
+
+        for (const [typed, name] of Object.entries(expected)) Assert.strictEqual(nameOf(typed), name, typed);
+    });
+});

@@ -26,6 +26,20 @@
 
 const RULE = /^(.+?)\s*(<=|>=|<|>)\s*([\d.,]+\s*[kK]?)$/;
 
+/* Common player names of items -> short name of the game. */
+const ALIASES = {
+    'c4': 'explosive.timed',
+    'satchel': 'explosive.satchel',
+    'hqm': 'metal.refined',
+    'frags': 'metal.fragments',
+    'lgf': 'lowgradefuel',
+    'pistol ammo': 'ammo.pistol',
+    'shotgun shells': 'ammo.shotgun',
+    'buckshot': 'ammo.shotgun',
+    'rockets': 'ammo.rocket.basic',
+    'gunpowder': 'gunpowder',
+};
+
 /* "10k" -> 10000, "1.5k" -> 1500, "2,000" -> 2000 */
 function parseAmount(text) {
     const clean = `${text}`.replace(/\s/g, '').replace(/,/g, '');
@@ -36,14 +50,39 @@ function parseAmount(text) {
     return Math.round(thousand ? value * 1000 : value);
 }
 
-/* The item id for a name the user typed: the exact name or short name first, else the closest name. */
+/*
+    The item id for a name the user typed:
+    1. the exact name or short name ("Sulfur", "ammo.rifle"),
+    2. the shortest name that contains every typed word ("Rifle Ammo" -> "5.56 Rifle Ammo", not the HV/incendiary
+       variants; "HV Rifle Ammo" -> "HV 5.56 Rifle Ammo") - the game names carry calibres and prefixes nobody types,
+    3. else the closest name.
+*/
 function findItemId(items, name) {
     const wanted = `${name}`.trim().toLowerCase();
     if (wanted === '') return null;
 
-    for (const [id, item] of Object.entries(items.items || {})) {
+    const entries = Object.entries(items.items || {});
+
+    for (const [id, item] of entries) {
         if (`${item.name}`.toLowerCase() === wanted || `${item.shortname}`.toLowerCase() === wanted) return id;
     }
+
+    /* What players call it: resolved through the short name. */
+    const alias = ALIASES[wanted];
+    if (alias) {
+        const found = entries.find(([, item]) => `${item.shortname}`.toLowerCase() === alias);
+        if (found) return found[0];
+    }
+
+    /* Every typed word starts a word of the name ("stone" -> "Stones", "rifle ammo" -> "5.56 Rifle Ammo"). */
+    const words = wanted.split(/\s+/);
+    let best = null;
+    for (const [id, item] of entries) {
+        const itemWords = `${item.name}`.toLowerCase().split(/\s+/);
+        if (!words.every((word) => itemWords.some((itemWord) => itemWord.startsWith(word)))) continue;
+        if (best === null || `${item.name}`.length < `${best.item.name}`.length) best = { id: id, item: item };
+    }
+    if (best !== null) return best.id;
 
     return typeof items.getClosestItemIdByName === 'function' ? items.getClosestItemIdByName(name) : null;
 }
