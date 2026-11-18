@@ -37,6 +37,8 @@ const TIME_PLAYED_CACHE_TTL_MS = 60 * 60 * 1000; /* 1 hour */
 const TIME_PLAYED_DEFAULT_LIMIT = 100;
 const SESSION_START_DEFAULT_LIMIT = 10;
 const SESSION_START_RETRY_MS = 10 * 60 * 1000; /* 10 minutes */
+/* A request without an answer must not hang its caller forever (the information messages waited on one for hours). */
+const REQUEST_TIMEOUT_MS = 20 * 1000;
 
 /*
     The reason a request failed, as it should appear in the log: the HTTP status of an answered error (429 rate limit,
@@ -280,6 +282,7 @@ class Battlemetrics {
 
         try {
             return await Axios.get(api_call, {
+                timeout: REQUEST_TIMEOUT_MS,
                 headers: {
                     Authorization: `Bearer ${Config.battlemetrics.token.trim()}`,
                 },

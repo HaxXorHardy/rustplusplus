@@ -104,8 +104,14 @@ module.exports = {
 
         if (Config.battlemetrics.enabled) {
             await client.updateBattlemetricsInstances();
-            BattlemetricsHandler.handler(client, true);
-            client.battlemetricsIntervalId = setInterval(BattlemetricsHandler.handler, 60000, client, false);
+            /* A failed round is logged and the next one tries again, it must not end as an Unhandled Rejection. */
+            const runBattlemetrics = (firstTime) => BattlemetricsHandler.handler(client, firstTime).catch((e) => {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `The Battlemetrics round failed: ${e && e.message ? e.message : e}`, 'warn');
+            });
+
+            runBattlemetrics(true);
+            client.battlemetricsIntervalId = setInterval(runBattlemetrics, 60000, false);
         }
         else {
             /*

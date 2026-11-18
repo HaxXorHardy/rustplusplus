@@ -28,6 +28,8 @@ const DiscordEmbeds = require('./discordEmbeds.js');
 const DiscordSelectMenus = require('./discordSelectMenus.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
+const WithTimeout = require('../util/withTimeout.js');
+const RustPlusMap = require('../structures/Map.js');
 const Scrape = require('../util/scrape.js');
 
 /*
@@ -36,6 +38,54 @@ const Scrape = require('../util/scrape.js');
     be the most expensive Discord call of the bot, once per minute.
 */
 const INFORMATION_ORDER_INTERVAL_MS = 15 * 60 * 1000;
+
+/*
+    Every fetch, edit and post of sendMessage waits at most this long. One Discord call without an answer (right after
+    a burst of rate limits) held the storage monitor step for seven hours: it never finished, so every later round was
+    skipped and the storage monitor messages stood still. Rate limit waits are a few seconds and the map upload is
+    0.7 MB, 90 s leaves room for both. The call keeps running, the caller gets undefined like for any failed call.
+*/
+const SEND_MESSAGE_TIMEOUT_MS = 90 * 1000;
+const TIMED_OUT = Symbol('timed out');
+
+/* Storage monitor edits in flight, see sendStorageMonitorMessage. */
+const storageMonitorUpdates = new Object();
+
+function sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction = null) {
+    return module.exports.sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction);
+}
+
+/* Runs detached: edits until no newer change came in during the last one. */
+function drainStorageMonitorUpdates(key, state, guildId, serverId, entityId) {
+    (async () => {
+        try {
+            do {
+                state.again = false;
+                await sendStorageMonitorMessageNow(guildId, serverId, entityId);
+            } while (state.again);
+        }
+        catch (e) {
+            Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                `Updating storage monitor ${entityId} failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
+        finally {
+            if (storageMonitorUpdates[key] === state) delete storageMonitorUpdates[key];
+        }
+    })();
+}
+
+async function boundedDiscordCall(promise, label, onTimeout) {
+    try {
+        return await WithTimeout.withTimeout(promise, module.exports.SEND_MESSAGE_TIMEOUT_MS, label);
+    }
+    catch (e) {
+        if (!e || e.code !== 'ESTEPTIMEOUT') throw e;
+
+        Client.client.log(Client.client.intlGet(null, 'warningCap'),
+            `${e.message} The update is skipped, the next round tries again.`, 'warn');
+        return onTimeout;
+    }
+}
 
 module.exports = {
     sendMessage: async function (guildId, content, messageId, channelId, interaction = null) {
@@ -49,10 +99,15 @@ module.exports = {
             instead of throwing, the caller stores the returned id.
         */
         const message = (messageId && channelId) ?
-            await DiscordTools.getMessageById(guildId, channelId, messageId) : null;
+            await boundedDiscordCall(DiscordTools.getMessageById(guildId, channelId, messageId),
+                `Fetching message ${messageId}`, TIMED_OUT) : null;
+
+        /* A fetch without an answer is not a missing message: posting a new one would leave a duplicate behind. */
+        if (message === TIMED_OUT) return undefined;
 
         if (message) {
-            return await Client.client.messageEdit(message, content);
+            return await boundedDiscordCall(Client.client.messageEdit(message, content),
+                `Editing message ${messageId}`, undefined);
         }
 
         const channel = DiscordTools.getTextChannelById(guildId, channelId);
@@ -63,7 +118,8 @@ module.exports = {
             return;
         }
 
-        return await Client.client.messageSend(channel, content);
+        return await boundedDiscordCall(Client.client.messageSend(channel, content),
+            `Posting a message in channel ${channelId}`, undefined);
     },
 
     sendServerMessage: async function (guildId, serverId, state = null, interaction = null) {
@@ -150,8 +206,47 @@ module.exports = {
         }
     },
 
+    /*
+        A busy storage monitor (a box someone is sorting) pushes a change every second or two, and each push used to
+        start its own edit of the same message, image upload included. Discord lets far fewer through, so the edits
+        queued up without end and every later edit - also the one of the storage monitor round - waited behind them
+        (1.41.6: the round hung for seven hours; 1.41.7: edits timing out after 90 s right after the start).
+
+        Now at most one edit per monitor runs. A call that comes in meanwhile only marks the message as outdated and
+        returns; when the running edit is done, one more edit posts the latest state. Only the first caller waits, and
+        only for its own edit, so a stream of pushes cannot hold up the storage monitor round.
+    */
     sendStorageMonitorMessage: async function (guildId, serverId, entityId, interaction = null) {
+        if (interaction) return await sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction);
+
+        const key = `${guildId}:${serverId}:${entityId}`;
+        const running = storageMonitorUpdates[key];
+
+        if (running) {
+            running.again = true;
+            return;
+        }
+
+        const state = { again: false };
+        storageMonitorUpdates[key] = state;
+
+        try {
+            await sendStorageMonitorMessageNow(guildId, serverId, entityId);
+        }
+        finally {
+            if (state.again) {
+                drainStorageMonitorUpdates(key, state, guildId, serverId, entityId);
+            }
+            else {
+                delete storageMonitorUpdates[key];
+            }
+        }
+    },
+
+    sendStorageMonitorMessageNow: async function (guildId, serverId, entityId, interaction = null) {
         let instance = Client.client.getInstance(guildId);
+        /* The monitor can be removed while an edit waits: nothing left to show. */
+        if (!instance.serverList[serverId] || !instance.serverList[serverId].storageMonitors[entityId]) return;
         const entity = instance.serverList[serverId].storageMonitors[entityId];
 
         const content = {
@@ -308,8 +403,7 @@ module.exports = {
 
         const content = {
             embeds: [DiscordEmbeds.getServerWipeDetectedEmbed(guildId, serverId)],
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))],
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(guildId))],
             content: instance.generalSettings.mapWipeNotifyEveryone ? '@everyone' : ''
         }
 
@@ -329,8 +423,7 @@ module.exports = {
     /* Posted when the map is ready (rustplusEvents/connected.js) and as part of the information cycle. */
     sendInformationMapMessage: async function (guildId) {
         await sendInformationMessage(guildId, 'map', {
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${guildId}_map_full.png`))]
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(guildId))]
         });
     },
 
@@ -483,8 +576,7 @@ module.exports = {
 
     sendUpdateMapInformationMessage: async function (rustplus) {
         await sendInformationMessage(rustplus.guildId, 'map', {
-            files: [new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${rustplus.guildId}_map_full.png`))]
+            files: [new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(rustplus.guildId))]
         });
     },
 
@@ -775,14 +867,28 @@ async function sendInformationMessage(guildId, messageType, content) {
 const informationMessageQueues = new Object();
 const informationMessageOperationsUnlocked = new Object();
 
-function queueInformationMessageOperation(guildId, operation) {
+/*
+    The queue waits for each operation at most this long. One operation that never finished (a request without an
+    answer) used to hold the queue of its guild forever: every later information update waited behind it, and so did
+    the connect flow (rustplusEvents/connected.js posts the map) - measured: five hours without a single poll after a
+    reconnect. The operation keeps running, the queue moves on.
+*/
+const INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS = 60 * 1000;
+
+function queueInformationMessageOperation(guildId, operation, label = 'an information message operation') {
     const previous = informationMessageQueues[guildId] || Promise.resolve();
 
     const current = previous
         .catch(() => undefined)
-        .then(operation);
+        .then(() => WithTimeout.withTimeout(operation(), module.exports.INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS,
+            label));
 
-    informationMessageQueues[guildId] = current.catch(() => undefined);
+    informationMessageQueues[guildId] = current.catch((e) => {
+        if (e && e.code === 'ESTEPTIMEOUT') {
+            Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                `${e.message} The information messages of ${guildId} go on without it.`, 'warn');
+        }
+    });
 
     return current;
 }
@@ -811,6 +917,10 @@ for (const operation of informationMessageOperations) {
         if (guildId === null) return informationMessageOperationsUnlocked[operation].apply(module.exports, args);
 
         return queueInformationMessageOperation(guildId, () =>
-            informationMessageOperationsUnlocked[operation].apply(module.exports, args));
+            informationMessageOperationsUnlocked[operation].apply(module.exports, args), operation);
     };
 }
+
+/* Exported so a test can shorten it. */
+module.exports.INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS = INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS;
+module.exports.SEND_MESSAGE_TIMEOUT_MS = SEND_MESSAGE_TIMEOUT_MS;

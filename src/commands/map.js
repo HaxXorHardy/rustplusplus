@@ -24,6 +24,7 @@ const Path = require('path');
 
 const Constants = require('../util/constants.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
+const RustPlusMap = require('../structures/Map.js');
 
 module.exports = {
     name: 'map',
@@ -90,8 +91,7 @@ module.exports = {
                 Path.join(__dirname, '..', '..', `maps/${interaction.guildId}_map_clean.png`));
         }
         else {
-            file = new Discord.AttachmentBuilder(
-                Path.join(__dirname, '..', '..', `maps/${interaction.guildId}_map_full.png`));
+            file = new Discord.AttachmentBuilder(RustPlusMap.uploadImagePath(interaction.guildId));
         }
 
         client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'slashCommandValueChange', {
@@ -103,7 +103,7 @@ module.exports = {
         await client.interactionEditReply(interaction, {
             embeds: [DiscordEmbeds.getEmbed({
                 color: Constants.COLOR_DEFAULT,
-                image: `attachment://${interaction.guildId}_map_${fileName}.png`,
+                image: `attachment://${interaction.guildId}_map_${fileName}.${fileName === 'clean' ? 'png' : 'jpg'}`,
                 footer: { text: instance.serverList[rustplus.serverId].title }
             })],
             files: [file],
