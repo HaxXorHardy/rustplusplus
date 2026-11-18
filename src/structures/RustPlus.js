@@ -47,6 +47,7 @@ const TokenRecovery = require('../util/tokenRecovery.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
+const BotStatus = require('../util/botStatus.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const TeamHandler = require('../handlers/teamHandler.js');
 const Timer = require('../util/timer.js');
@@ -968,6 +969,8 @@ class RustPlus extends RustPlusLib {
 
     log(title, text, level = 'info') {
         this.logger.log(title, text, level);
+        /* The warnings of the connection belong into /status as well (DiscordBot.log records the rest). */
+        BotStatus.record(level, title, text);
     }
 
     logInGameCommand(type = 'Default', chatMessage) {

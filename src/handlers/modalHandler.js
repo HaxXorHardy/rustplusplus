@@ -35,6 +35,19 @@ const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const Timer = require('../util/timer.js');
 const TrackerInputParser = require('../util/trackerInputParser.js');
 
+/*
+    A field that was added to a form later: a form opened before the deploy is submitted without it. null then, and
+    the setting it belongs to stays as it is.
+*/
+function optionalField(interaction, customId) {
+    try {
+        return interaction.fields.getTextInputValue(customId);
+    }
+    catch (e) {
+        return null;
+    }
+}
+
 module.exports = async (client, interaction) => {
     const instance = client.getInstance(interaction.guildId);
     const guildId = interaction.guildId;
@@ -200,19 +213,22 @@ module.exports = async (client, interaction) => {
         server.switchGroups[ids.groupId].name = groupName;
 
         /* Empty: a group turned on by an alarm stays on. Something that is no time leaves the setting alone. */
-        const alarmOffAfter = interaction.fields.getTextInputValue('GroupAlarmOffAfter').trim();
+        const alarmOffAfterField = optionalField(interaction, 'GroupAlarmOffAfter');
+        const alarmOffAfter = alarmOffAfterField === null ? null : alarmOffAfterField.trim();
         if (alarmOffAfter === '') {
             server.switchGroups[ids.groupId].alarmOffAfterSeconds = 0;
         }
-        else {
+        else if (alarmOffAfter !== null) {
             const seconds = Timer.getSecondsFromStringTime(alarmOffAfter);
             if (seconds !== null && seconds > 0) server.switchGroups[ids.groupId].alarmOffAfterSeconds = seconds;
         }
 
         /* "22:00-06:00 off, 18:00-22:00 on", optionally with a time zone in front. Empty = no schedule. */
-        const schedule = SwitchGroupSchedule.parse(interaction.fields.getTextInputValue('GroupSchedule'),
-            ['on', 'an', 'ein', client.intlGet(guildId, 'onCap')], ['off', 'aus', client.intlGet(guildId, 'offCap')]);
-        if (schedule.rejected.length === 0 || schedule.schedule !== null) {
+        const scheduleField = optionalField(interaction, 'GroupSchedule');
+        const schedule = scheduleField === null ? { schedule: null, rejected: [] } :
+            SwitchGroupSchedule.parse(scheduleField, ['on', 'an', 'ein', client.intlGet(guildId, 'onCap')],
+                ['off', 'aus', client.intlGet(guildId, 'offCap')]);
+        if (scheduleField !== null && (schedule.rejected.length === 0 || schedule.schedule !== null)) {
             server.switchGroups[ids.groupId].schedule = schedule.schedule;
         }
         if (schedule.rejected.length !== 0) {
@@ -311,8 +327,9 @@ module.exports = async (client, interaction) => {
         server.storageMonitors[ids.entityId].name = storageMonitorName;
 
         /* Alert rules such as "Rifle Ammo < 100"; parts that name no item are left out (and logged). */
-        const alerts = StorageAlerts.parse(client.items, interaction.fields.getTextInputValue('StorageMonitorAlerts'));
-        server.storageMonitors[ids.entityId].alerts = alerts.rules;
+        const alertsField = optionalField(interaction, 'StorageMonitorAlerts');
+        const alerts = alertsField === null ? { rules: null, rejected: [] } : StorageAlerts.parse(client.items, alertsField);
+        if (alerts.rules !== null) server.storageMonitors[ids.entityId].alerts = alerts.rules;
         if (alerts.rejected.length !== 0) {
             client.log(client.intlGet(null, 'warningCap'),
                 `Storage monitor ${ids.entityId}: no alert rule in "${alerts.rejected.join('", "')}".`, 'warn');

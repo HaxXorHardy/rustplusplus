@@ -142,7 +142,8 @@ async function check(client, rustplus, entityId) {
     const server = instance.serverList[rustplus.serverId];
     const entity = server ? server.storageMonitors[entityId] : null;
     const storage = rustplus.storageMonitors ? rustplus.storageMonitors[entityId] : null;
-    if (!entity || !storage) return;
+    /* An unreachable monitor keeps its last contents: checking them would report a state that is gone. */
+    if (!entity || !storage || entity.reachable === false) return;
 
     const result = evaluate(entity, storage.items);
     if (result.changed) client.setInstance(rustplus.guildId, instance);
