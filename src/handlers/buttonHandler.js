@@ -1075,7 +1075,8 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        interaction.deferUpdate();
+        /* Awaited: the group message is edited through this interaction afterwards (setGroup options.interaction). */
+        await interaction.deferUpdate();
 
         if (rustplus) {
             /* A running "on/off for X minutes" of the group must not switch it back after the button. */
@@ -1102,7 +1103,8 @@ module.exports = async (client, interaction) => {
                     value: `${active}`
                 }));
 
-                await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active);
+                await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active,
+                    { interaction: interaction });
             }
         }
     }
@@ -1160,7 +1162,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        interaction.deferUpdate();
+        await interaction.deferUpdate();
 
         if (rustplus && rustplus.serverId === ids.serverId) {
             const state = SmartSwitchGroupHandler.getGroupState(server, server.switchGroups[ids.groupId]);
@@ -1179,7 +1181,8 @@ module.exports = async (client, interaction) => {
                 value: `${active}`
             }));
 
-            await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active);
+            await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active,
+                { interaction: interaction });
         }
     }
     else if (interaction.customId.startsWith('GroupTimer')) {

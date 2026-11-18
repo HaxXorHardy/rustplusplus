@@ -113,7 +113,9 @@ module.exports = {
 
         options.seconds: switch back after this long (a timer, shown in the group message),
         options.inGame: announce it in the team chat and name switches that did not answer,
-        options.deps: passed to TurnOnOffGroup (tests).
+        options.deps: passed to TurnOnOffGroup (tests),
+        options.interaction: the (deferred) button click: the group message is edited through it, which answers in
+        a moment, while an edit of the channel message took up to minutes (the timer's switch-back does not use it).
     */
     setGroup: async function (client, rustplus, guildId, serverId, groupId, active, options = {}) {
         const onCap = client.intlGet(guildId, 'onCap');
@@ -122,13 +124,14 @@ module.exports = {
 
         module.exports.cancelGroupTimer(rustplus, groupId);
 
-        const turnAndReport = async (rustplus, value) => {
+        const turnAndReport = async (rustplus, value, interaction = null) => {
+            const deps = interaction ? Object.assign({}, options.deps, { interaction: interaction }) : options.deps;
             const result = await module.exports.TurnOnOffGroup(client, rustplus, guildId, serverId, groupId, value,
-                options.deps);
+                deps);
 
             /* The timer line of the group message changes even when no switch had to change. */
             if (result.switched.length === 0 && result.failed.length === 0) {
-                await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId);
+                await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId, interaction);
             }
 
             if (!options.inGame || result.failed.length === 0) return result;
@@ -188,7 +191,7 @@ module.exports = {
             });
         }
 
-        return await turnAndReport(rustplus, active);
+        return await turnAndReport(rustplus, active, options.interaction || null);
     },
 
     /* Turn everything off when anything is on, otherwise turn it on. */
@@ -345,7 +348,7 @@ module.exports = {
         }
 
         if (actionSwitches.length !== 0) {
-            await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId);
+            await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId, deps.interaction || null);
         }
 
         return { switched: switched, failed: failed };

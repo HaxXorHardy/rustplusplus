@@ -40,6 +40,7 @@ const LogChannelRelay = require('../util/logChannelRelay.js');
 const Logger = require('./Logger.js');
 const PermissionHandler = require('../handlers/permissionHandler.js');
 const RustLabs = require('../structures/RustLabs');
+const RestTiming = require('../util/restTiming.js');
 const RustPlus = require('../structures/RustPlus');
 const RustPlusTransport = require('../util/rustplusTransport.js');
 const Version = require('../../package.json').version;
@@ -106,6 +107,8 @@ class DiscordBot extends Discord.Client {
 
             if (event.name === 'rateLimited') {
                 this.rest.on(event.name, (...args) => event.execute(this, ...args));
+                RestTiming.instrument(this.rest,
+                    (text) => this.log(this.intlGet(null, 'warningCap'), text, 'warn'));
             }
             else if (event.once) {
                 this.once(event.name, (...args) => event.execute(this, ...args));
@@ -529,6 +532,8 @@ class DiscordBot extends Discord.Client {
 
     async interactionUpdate(interaction, content) {
         try {
+            /* A deferred click (the work took longer than 3 s) is answered by editing the reply. */
+            if (interaction.deferred || interaction.replied) return await interaction.editReply(content);
             return await interaction.update(content);
         }
         catch (e) {
