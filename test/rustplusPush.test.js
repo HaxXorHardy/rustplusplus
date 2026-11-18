@@ -416,6 +416,91 @@ Test.describe('RustPlusPushListener', () => {
         Assert.strictEqual(services.calls.fcm, 2);
     });
 
+    Test.it('logs a drop and the return, and tunes the keepalive', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        const services = fakeServices();
+        const module_ = fakeReceiverModule();
+        services.pushReceiver.Client = module_.Client;
+        const client = fakeClient(serverInstance());
+
+        await RustPlusPushListener.startAccount(client, STEAM_ID, services);
+        const receiver = module_.receivers[0];
+
+        const keepAlive = [];
+        receiver._socket = { setKeepAlive: (on, delay) => keepAlive.push([on, delay]) };
+        receiver.handlers.connect();
+        Assert.deepStrictEqual(keepAlive, [[true, RustPlusPushListener.KEEPALIVE_IDLE_MS]]);
+        Assert.ok(!client.logs.some((text) => text.includes('is back')), 'the first connect is no return');
+
+        receiver.handlers.disconnect();
+        receiver.handlers.disconnect();
+        receiver.handlers.connect();
+
+        Assert.strictEqual(client.logs.filter((text) => text.includes('dropped, it reconnects')).length, 1);
+        Assert.ok(client.logs.some((text) => text.includes('is back after')));
+    });
+
+    Test.it('catches a failed reconnect instead of rejecting unhandled', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        const services = fakeServices();
+        const options = {};
+        const module_ = fakeReceiverModule(options);
+        services.pushReceiver.Client = module_.Client;
+        const client = fakeClient(serverInstance());
+
+        await RustPlusPushListener.startAccount(client, STEAM_ID, services);
+
+        /* What the receiver's retry timer does after a drop, with the check-in failing. */
+        options.connectError = 'checkin failed';
+        await Assert.doesNotReject(module_.receivers[0].connect());
+        Assert.ok(client.logs.some((text) => text.includes('reconnecting') && text.includes('checkin failed')));
+    });
+
+    Test.it('the watchdog starts a connection again that is down too long, and retries a failed restart', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        const services = fakeServices();
+        const options = {};
+        const module_ = fakeReceiverModule(options);
+        services.pushReceiver.Client = module_.Client;
+        const client = fakeClient(serverInstance());
+
+        await RustPlusPushListener.startAccount(client, STEAM_ID, services);
+        module_.receivers[0].handlers.disconnect();
+
+        const start = Date.now();
+        const limit = RustPlusPushListener.RESTART_AFTER_DOWN_MS;
+
+        /* Down for a minute: the receiver's own retries get their chance. */
+        await RustPlusPushListener.checkConnections(client, Object.assign({ now: () => start + 60 * 1000 }, services));
+        Assert.strictEqual(module_.receivers.length, 1);
+
+        /* Down past the limit, and Google does not answer: torn down, the restart fails. */
+        options.connectError = 'offline';
+        await RustPlusPushListener.checkConnections(client, Object.assign({ now: () => start + limit + 1 }, services));
+        Assert.strictEqual(module_.receivers[0].destroyed, true);
+        Assert.strictEqual(module_.receivers.length, 2);
+        Assert.strictEqual(RustPlusPushListener.isListening(STEAM_ID), false);
+
+        /* Not again before the next slot. */
+        await RustPlusPushListener.checkConnections(client, Object.assign({ now: () => start + limit + 60 * 1000 }, services));
+        Assert.strictEqual(module_.receivers.length, 2);
+
+        /* Back online: the next slot connects. */
+        options.connectError = null;
+        await RustPlusPushListener.checkConnections(client, Object.assign({ now: () => start + 2 * limit + 2 }, services));
+        Assert.strictEqual(module_.receivers.length, 3);
+        Assert.strictEqual(RustPlusPushListener.isListening(STEAM_ID), true);
+    });
+
     Test.it('a new account token reaches the subscribers', () => {
         const seen = [];
         const unsubscribe = TokenRecovery.onTokenChanged((steamId) => seen.push(steamId));
