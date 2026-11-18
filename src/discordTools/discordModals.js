@@ -25,6 +25,7 @@ const TextInput = require('./discordTextInputs.js');
 const StorageAlerts = require('../util/storageAlerts.js');
 const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const Timer = require('../util/timer.js');
+const SwitchGroupState = require('../util/switchGroupState.js');
 
 module.exports = {
     getModal: function (options = {}) {
@@ -269,19 +270,22 @@ module.exports = {
             })
         });
 
-        modal.addComponents(
-            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
-                customId: 'GroupTimerDuration',
-                label: Client.client.intlGet(guildId, 'groupTimerDuration'),
-                value: '10m',
-                style: Discord.TextInputStyle.Short
-            })),
-            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
-                customId: 'GroupTimerState',
-                label: Client.client.intlGet(guildId, 'groupTimerState'),
-                value: Client.client.intlGet(guildId, 'onCap'),
-                style: Discord.TextInputStyle.Short
-            }))
+        /* On or off is a choice (it was a text field the user had to type "an"/"aus" into). */
+        const turnOn = SwitchGroupState.getGroupState(instance.serverList[serverId], group).on === 0;
+        modal.addLabelComponents(
+            new Discord.LabelBuilder()
+                .setLabel(Client.client.intlGet(guildId, 'groupTimerStateChoice'))
+                .setStringSelectMenuComponent(new Discord.StringSelectMenuBuilder()
+                    .setCustomId('GroupTimerState')
+                    .addOptions(
+                        { label: Client.client.intlGet(guildId, 'turnOnCap'), value: 'on', default: turnOn },
+                        { label: Client.client.intlGet(guildId, 'turnOffCap'), value: 'off', default: !turnOn })),
+            new Discord.LabelBuilder()
+                .setLabel(Client.client.intlGet(guildId, 'groupTimerDuration'))
+                .setTextInputComponent(new Discord.TextInputBuilder()
+                    .setCustomId('GroupTimerDuration')
+                    .setStyle(Discord.TextInputStyle.Short)
+                    .setValue('10m'))
         );
 
         return modal;

@@ -953,6 +953,7 @@
     "groupTimerTitle": "Timer für {group}",
     "groupTimerDuration": "Dauer (z. B. 30s, 10m, 1h)",
     "groupTimerState": "Für diese Zeit an oder aus (an/aus)",
+    "groupTimerStateChoice": "Für diese Zeit",
     "groupAlarmOffAfterLabel": "Alarm: wieder aus nach (leer = bleibt an)",
     "groupTurnedOnByAlarm": "{group} wurde vom Alarm {alarm} eingeschaltet.",
     "commandsStatusDesc": "Zeigt den Zustand des Bots: Verbindung, Token, Push und letzte Warnungen.",

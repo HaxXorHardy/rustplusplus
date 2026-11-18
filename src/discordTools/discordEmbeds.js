@@ -28,6 +28,7 @@ const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
 const ForcedWipe = require('../util/forcedWipe.js');
 const GuildSettings = require('../util/guildSettings.js');
+const DeviceImages = require('../util/deviceImages.js');
 const StorageAlerts = require('../util/storageAlerts.js');
 const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const TeamStats = require('../util/teamStats.js');
@@ -87,7 +88,7 @@ module.exports = {
             title: `${entity.name}${grid}`,
             color: entity.active ? Constants.COLOR_ACTIVE : Constants.COLOR_INACTIVE,
             description: `**ID**: \`${entityId}\``,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             fields: [{
                 name: Client.client.intlGet(guildId, 'customCommand'),
@@ -283,7 +284,7 @@ module.exports = {
             title: `${entity.name}${grid}`,
             color: entity.active ? Constants.COLOR_ACTIVE : Constants.COLOR_DEFAULT,
             description: description,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             fields: [{
                 name: Client.client.intlGet(guildId, 'message'),
@@ -319,7 +320,7 @@ module.exports = {
                 title: `${entity.name}${grid}`,
                 color: Constants.COLOR_DEFAULT,
                 description: `${description}\n${Client.client.intlGet(guildId, 'statusNotConnectedToServer')}`,
-                thumbnail: `attachment://${entity.image}`,
+                thumbnail: DeviceImages.url(entity.image),
                 footer: { text: `${entity.server}` },
                 timestamp: true
             });
@@ -331,7 +332,7 @@ module.exports = {
                 color: Constants.COLOR_DEFAULT,
                 description:
                     `${description}\n${Client.client.intlGet(guildId, 'statusNotElectronicallyConnected')}`,
-                thumbnail: `attachment://${entity.image}`,
+                thumbnail: DeviceImages.url(entity.image),
                 footer: { text: `${entity.server}` },
                 timestamp: true
             });
@@ -397,7 +398,7 @@ module.exports = {
             title: `${entity.name}${grid}`,
             color: Constants.COLOR_DEFAULT,
             description: description,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             fields: [
                 { name: Client.client.intlGet(guildId, 'item'), value: itemName, inline: true },
@@ -481,7 +482,7 @@ module.exports = {
             title: group.name,
             color: Constants.COLOR_DEFAULT,
             description: lines.join('\n'),
-            thumbnail: `attachment://${group.image}`,
+            thumbnail: DeviceImages.url(group.image),
             footer: { text: `${instance.serverList[serverId].title}` },
             fields: [
                 {
@@ -509,7 +510,7 @@ module.exports = {
             description: `**ID**: \`${entityId}\`\n` +
                 `${Client.client.intlGet(guildId, 'statusNotFound')} ${Constants.NOT_FOUND_EMOJI}\n\n` +
                 Client.client.intlGet(guildId, 'smartDeviceNotFoundHint'),
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` }
         });
     },
@@ -528,7 +529,7 @@ module.exports = {
         const embed = module.exports.getEmbed({
             title: `${Client.client.intlGet(guildId, 'resultRecycling')}:`,
             color: Constants.COLOR_DEFAULT,
-            thumbnail: 'attachment://recycler.png',
+            thumbnail: DeviceImages.url('recycler.png'),
             footer: { text: `${entity.server} | ${Client.client.intlGet(guildId, 'messageDeletedIn30')}` },
             description: `**${Client.client.intlGet(guildId, 'name')}** ` +
                 `\`${entity.name}${grid}\`\n**ID** \`${entityId}\``
@@ -556,7 +557,7 @@ module.exports = {
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             timestamp: true
         });
@@ -572,7 +573,7 @@ module.exports = {
             color: '#F5C400',
             description: `**ID** \`${entityId}\`\n` +
                 Client.client.intlGet(guildId, 'upkeepRunsOutAt', { time: `<t:${Math.floor(expiry)}:R>` }),
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             timestamp: true
         });
@@ -589,7 +590,7 @@ module.exports = {
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             timestamp: true
         });
@@ -609,7 +610,7 @@ module.exports = {
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             timestamp: true
         });
@@ -629,7 +630,7 @@ module.exports = {
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             timestamp: true
         });
@@ -738,7 +739,7 @@ module.exports = {
             }),
             color: Constants.COLOR_INACTIVE,
             description: entityIds.map((entityId) => `**ID** \`${entityId}\``).join('\n'),
-            thumbnail: `attachment://${server.switches[entityIds[0]].image}`,
+            thumbnail: DeviceImages.url(server.switches[entityIds[0]].image),
             footer: { text: `${server.title}` },
             timestamp: true
         });
@@ -758,7 +759,7 @@ module.exports = {
             }),
             color: Constants.COLOR_INACTIVE,
             description: `**ID** \`${entityId}\``,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             footer: { text: `${entity.server}` },
             timestamp: true
         });
@@ -816,7 +817,7 @@ module.exports = {
 
         return module.exports.getEmbed({
             color: Constants.COLOR_DEFAULT,
-            thumbnail: `attachment://${entity.image}`,
+            thumbnail: DeviceImages.url(entity.image),
             title: `${entity.name}${grid}`,
             footer: { text: entity.server },
             timestamp: true,
@@ -942,7 +943,7 @@ module.exports = {
         const embed = module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'serverInfo'),
             color: Constants.COLOR_DEFAULT,
-            thumbnail: 'attachment://server_info_logo.png',
+            thumbnail: DeviceImages.resource('server_info_logo.png'),
             footer: { text: instance.serverList[rustplus.serverId].title },
             fields: [
                 { name: nameFieldName, value: `\`${instance.serverList[rustplus.serverId].title}\``, inline: false },
@@ -1007,7 +1008,7 @@ module.exports = {
         return module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'eventInfo'),
             color: Constants.COLOR_DEFAULT,
-            thumbnail: 'attachment://event_info_logo.png',
+            thumbnail: DeviceImages.resource('event_info_logo.png'),
             description: Client.client.intlGet(guildId, 'inGameEventInfo'),
             footer: { text: instance.serverList[rustplus.serverId].title },
             fields: [
@@ -1064,7 +1065,7 @@ module.exports = {
         return module.exports.getEmbed({
             title: Client.client.intlGet(guildId, 'monumentInformation'),
             color: Constants.COLOR_DEFAULT,
-            thumbnail: 'attachment://monument_info_logo.png',
+            thumbnail: DeviceImages.resource('monument_info_logo.png'),
             description: `${codeBlock}\n${table !== '' ? table.trimEnd() :
                 Client.client.intlGet(guildId, 'empty')}\n${codeBlock}`,
             footer: { text: instance.serverList[rustplus.serverId].title }
@@ -1184,7 +1185,7 @@ module.exports = {
         return module.exports.getEmbed({
             title: title,
             color: Constants.COLOR_DEFAULT,
-            thumbnail: 'attachment://team_info_logo.png',
+            thumbnail: DeviceImages.resource('team_info_logo.png'),
             footer: { text: footer },
             fields: fields,
             timestamp: true

@@ -98,6 +98,8 @@ module.exports = {
             unless this is true - for the day they come back.
         */
         mapEventsEnabled: envBool('RPP_MAP_EVENTS_ENABLED', false),
+        /* Where the device images are linked from (util/deviceImages.js); empty = this repository on GitHub. */
+        imageBaseUrl: process.env.RPP_IMAGE_BASE_URL || '',
         /* Warn this many hours before a tool cupboard (with a storage monitor) runs out of upkeep. 0 = off. */
         upkeepWarningHours: envInt('RPP_UPKEEP_WARNING_HOURS', 6),
         /* The time zone of switch group schedules without their own (e.g. Europe/Berlin). */

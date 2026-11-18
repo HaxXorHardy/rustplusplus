@@ -953,6 +953,7 @@
     "groupTimerTitle": "Timer for {group}",
     "groupTimerDuration": "Duration (e.g. 30s, 10m, 1h)",
     "groupTimerState": "Turn on or off for this time (on/off)",
+    "groupTimerStateChoice": "For this time",
     "groupAlarmOffAfterLabel": "Alarm: off again after (empty = stays on)",
     "groupTurnedOnByAlarm": "{group} was turned on by the alarm {alarm}.",
     "commandsStatusDesc": "Show the health of the bot: connection, token, push and recent warnings.",
