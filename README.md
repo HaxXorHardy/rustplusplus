@@ -87,7 +87,7 @@ or
 
 ## **Running via docker**
 
-    $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -v ${pwd}/maps:/app/maps -v ${pwd}/data:/app/data -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/haxxorhardy/rustplusplus
+    $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -v ${pwd}/maps:/app/maps -v ${pwd}/runtime:/app/runtime -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/haxxorhardy/rustplusplus
 
 or
 
@@ -101,7 +101,9 @@ Make sure you use the correct values for `RPP_DISCORD_CLIENT_ID` as well as `RPP
 | `/app/instances` | settings, servers, devices, switch timers, team stats | everything is set up again |
 | `/app/logs` | log files | logs are lost on every update |
 | `/app/maps` | map images | they are rebuilt on the next connect |
-| `/app/data` | runtime data (custom in-game timers, offline times of teammates) | lost on every update |
+| `/app/runtime` | runtime data (custom in-game timers, offline times of teammates) | lost on every update |
+
+Do not put a volume on `/app/data`: it holds the game data of the image (`staticData.sqlite`), an empty volume hides it and the bot does not start.
 
 ## **Thanks to**
 
