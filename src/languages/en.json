@@ -1004,5 +1004,10 @@
     "wipeChecklistGroups": "Check the {groups} switch group(s): add the new switches, remove the old ones.",
     "wipeChecklistAlerts": "Set the storage alerts and the alarm triggers of the new devices.",
     "wipeChecklistCleared": "Done by the bot: death map, switch timers and raid state of the old map were cleared.",
-    "forcedWipe": "Forced wipe"
+    "forcedWipe": "Forced wipe",
+    "wipeRemoveDevices": "Remove the devices of the old map",
+    "wipeRemoveDevicesConfirm": "Yes, remove them",
+    "wipeRemoveDevicesAsk": "Remove {switches} switch(es), {alarms} alarm(s) and {monitors} storage monitor(s) with their messages? Switch groups stay, the switches are taken out of them. This cannot be undone.",
+    "wipeRemoveDevicesDone": "Removed: {switches} switch(es), {alarms} alarm(s), {monitors} storage monitor(s).",
+    "commandsRemoveDevicesDesc": "Remove all smart devices of the active server (e.g. after a wipe)."
 }

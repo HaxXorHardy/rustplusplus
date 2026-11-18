@@ -1004,5 +1004,10 @@
     "wipeChecklistGroups": "Die {groups} Schaltergruppe(n) prüfen: neue Schalter hinzufügen, alte entfernen.",
     "wipeChecklistAlerts": "Lager-Alarme und Alarm-Auslöser der neuen Geräte einstellen.",
     "wipeChecklistCleared": "Vom Bot erledigt: Todeskarte, Schalter-Timer und Raid-Zustand der alten Karte wurden gelöscht.",
-    "forcedWipe": "Forced Wipe"
+    "forcedWipe": "Forced Wipe",
+    "wipeRemoveDevices": "Geräte der alten Karte entfernen",
+    "wipeRemoveDevicesConfirm": "Ja, entfernen",
+    "wipeRemoveDevicesAsk": "{switches} Schalter, {alarms} Alarm(e) und {monitors} Storage Monitor(e) samt Nachrichten entfernen? Schaltergruppen bleiben, die Schalter werden aus ihnen entfernt. Das lässt sich nicht rückgängig machen.",
+    "wipeRemoveDevicesDone": "Entfernt: {switches} Schalter, {alarms} Alarm(e), {monitors} Storage Monitor(e).",
+    "commandsRemoveDevicesDesc": "Entfernt alle Smart-Geräte des aktiven Servers (z. B. nach einem Wipe)."
 }

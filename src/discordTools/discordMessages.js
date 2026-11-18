@@ -411,7 +411,10 @@ module.exports = {
         const instance = Client.client.getInstance(guildId);
         if (!instance.serverList[serverId]) return;
 
-        const content = { embeds: [DiscordEmbeds.getWipeChecklistEmbed(guildId, serverId, counts)] };
+        const content = {
+            embeds: [DiscordEmbeds.getWipeChecklistEmbed(guildId, serverId, counts)],
+            components: [DiscordButtons.getWipeRemoveDevicesButton(guildId, serverId, false)]
+        };
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
     },
 

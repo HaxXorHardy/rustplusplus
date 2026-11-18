@@ -309,6 +309,18 @@ module.exports = {
             }));
     },
 
+    /* The checklist of a wipe: remove the devices of the old map (confirm: the second step). */
+    getWipeRemoveDevicesButton: function (guildId, serverId, confirm, all = false) {
+        const identifier = JSON.stringify(all ? { serverId: serverId, all: 1 } : { serverId: serverId });
+
+        return new Discord.ActionRowBuilder().addComponents(module.exports.getButton({
+            customId: `${confirm ? 'WipeRemoveDevicesConfirm' : 'WipeRemoveDevices'}${identifier}`,
+            label: Client.client.intlGet(guildId, confirm ? 'wipeRemoveDevicesConfirm' : 'wipeRemoveDevices'),
+            style: DANGER,
+            emoji: '🗑️'
+        }));
+    },
+
     getRecycleDeleteButton: function () {
         return new Discord.ActionRowBuilder().addComponents(
             module.exports.getButton({
