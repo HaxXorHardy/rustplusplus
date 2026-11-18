@@ -48,6 +48,25 @@ function optionalField(interaction, customId) {
     }
 }
 
+/* On (true) or off (false) of the group timer form: the choice, or the text of a form opened before 1.51.8. */
+function groupTimerState(client, guildId, interaction) {
+    try {
+        const values = interaction.fields.getStringSelectValues('GroupTimerState');
+        if (values.includes('on')) return true;
+        if (values.includes('off')) return false;
+    }
+    catch (e) {
+        /* An older form: a text field. */
+    }
+
+    const text = optionalField(interaction, 'GroupTimerState');
+    if (text === null) return null;
+    const state = text.trim().toLowerCase();
+    if (['on', 'an', 'ein', client.intlGet(guildId, 'onCap').toLowerCase()].includes(state)) return true;
+    if (['off', 'aus', client.intlGet(guildId, 'offCap').toLowerCase()].includes(state)) return false;
+    return null;
+}
+
 module.exports = async (client, interaction) => {
     const instance = client.getInstance(interaction.guildId);
     const guildId = interaction.guildId;
@@ -255,14 +274,13 @@ module.exports = async (client, interaction) => {
         const rustplus = client.rustplusInstances[guildId];
 
         const seconds = Timer.getSecondsFromStringTime(interaction.fields.getTextInputValue('GroupTimerDuration'));
-        const state = interaction.fields.getTextInputValue('GroupTimerState').trim().toLowerCase();
-        const onWords = ['on', 'an', 'ein', client.intlGet(guildId, 'onCap').toLowerCase()];
-        const offWords = ['off', 'aus', client.intlGet(guildId, 'offCap').toLowerCase()];
-        const active = onWords.includes(state) ? true : (offWords.includes(state) ? false : null);
+        const active = groupTimerState(client, guildId, interaction);
+
+        /* Answered first: the group message is edited through this interaction (setGroup options.interaction). */
+        await interaction.deferUpdate();
 
         if (!server || !server.switchGroups.hasOwnProperty(ids.groupId) || seconds === null || seconds <= 0 ||
             active === null || !rustplus || rustplus.serverId !== ids.serverId) {
-            interaction.deferUpdate();
             return;
         }
 
@@ -279,12 +297,19 @@ module.exports = async (client, interaction) => {
             value: `${active}, ${seconds}`
         }));
 
-        /* Not awaited: switching a big group can take longer than Discord waits for the answer to the modal. */
-        SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active,
-            { seconds: seconds }).catch((e) => {
+        try {
+            await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active,
+                { seconds: seconds, interaction: interaction });
+        }
+        catch (e) {
             client.log(client.intlGet(null, 'warningCap'),
                 `The timer of switch group ${ids.groupId} failed: ${e && e.message ? e.message : e}`, 'warn');
-        });
+        }
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userModalInteractionSuccess', {
+            id: `${verifyId}`
+        }));
+        return;
     }
     else if (interaction.customId.startsWith('SmartAlarmEdit')) {
         const ids = JSON.parse(interaction.customId.replace('SmartAlarmEdit', ''));
