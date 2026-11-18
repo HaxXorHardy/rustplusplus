@@ -220,16 +220,6 @@ module.exports = {
                 })),
             new Discord.ActionRowBuilder().addComponents(
                 module.exports.getButton({
-                    customId: `GroupAddSwitch${identifier}`,
-                    label: Client.client.intlGet(guildId, 'addSwitchCap'),
-                    style: SECONDARY
-                }),
-                module.exports.getButton({
-                    customId: `GroupRemoveSwitch${identifier}`,
-                    label: Client.client.intlGet(guildId, 'removeSwitchCap'),
-                    style: SECONDARY
-                }),
-                module.exports.getButton({
                     customId: `GroupDelete${identifier}`,
                     style: SECONDARY,
                     emoji: '🗑️'

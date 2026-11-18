@@ -985,9 +985,15 @@ class RustPlus extends RustPlusLib {
     }
 
     async sendEvent(setting, text, event, embed_color, firstPoll = false, image = null) {
-        const img = (image !== null) ? image : setting.image;
-
         this.updateEvents(event, text);
+
+        /* An event whose notification setting was removed (the API no longer reports it) is only logged. */
+        if (!setting) {
+            this.log(Client.client.intlGet(null, 'eventCap'), text, 'debug');
+            return;
+        }
+
+        const img = (image !== null) ? image : setting.image;
 
         if (!firstPoll && setting.discord) {
             await DiscordMessages.sendDiscordEventMessage(this.guildId, this.serverId, text, img, embed_color);

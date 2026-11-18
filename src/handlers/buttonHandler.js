@@ -1226,30 +1226,6 @@ module.exports = async (client, interaction) => {
             client.setInstance(guildId, instance);
         }
     }
-    else if (interaction.customId.startsWith('GroupAddSwitch')) {
-        const ids = JSON.parse(interaction.customId.replace('GroupAddSwitch', ''));
-        const server = instance.serverList[ids.serverId];
-
-        if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
-            await interaction.message.delete();
-            return;
-        }
-
-        const modal = DiscordModals.getGroupAddSwitchModal(guildId, ids.serverId, ids.groupId);
-        await interaction.showModal(modal);
-    }
-    else if (interaction.customId.startsWith('GroupRemoveSwitch')) {
-        const ids = JSON.parse(interaction.customId.replace('GroupRemoveSwitch', ''));
-        const server = instance.serverList[ids.serverId];
-
-        if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
-            await interaction.message.delete();
-            return;
-        }
-
-        const modal = DiscordModals.getGroupRemoveSwitchModal(guildId, ids.serverId, ids.groupId);
-        await interaction.showModal(modal);
-    }
     else if (interaction.customId.startsWith('TrackerEveryone')) {
         const ids = JSON.parse(interaction.customId.replace('TrackerEveryone', ''));
         const tracker = instance.trackers[ids.trackerId];

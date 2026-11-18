@@ -287,50 +287,6 @@ module.exports = {
         return modal;
     },
 
-    getGroupAddSwitchModal(guildId, serverId, groupId) {
-        const instance = Client.client.getInstance(guildId);
-        const group = instance.serverList[serverId].switchGroups[groupId];
-        const identifier = JSON.stringify({ "serverId": serverId, "groupId": groupId });
-
-        const modal = module.exports.getModal({
-            customId: `GroupAddSwitch${identifier}`,
-            title: Client.client.intlGet(guildId, 'groupAddSwitchDesc', { group: group.name })
-        });
-
-        modal.addComponents(
-            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
-                customId: 'GroupAddSwitchId',
-                label: Client.client.intlGet(guildId, 'entityId'),
-                value: '',
-                style: Discord.TextInputStyle.Short
-            }))
-        );
-
-        return modal;
-    },
-
-    getGroupRemoveSwitchModal(guildId, serverId, groupId) {
-        const instance = Client.client.getInstance(guildId);
-        const group = instance.serverList[serverId].switchGroups[groupId];
-        const identifier = JSON.stringify({ "serverId": serverId, "groupId": groupId });
-
-        const modal = module.exports.getModal({
-            customId: `GroupRemoveSwitch${identifier}`,
-            title: Client.client.intlGet(guildId, 'groupRemoveSwitchDesc', { group: group.name })
-        });
-
-        modal.addComponents(
-            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
-                customId: 'GroupRemoveSwitchId',
-                label: Client.client.intlGet(guildId, 'entityId'),
-                value: '',
-                style: Discord.TextInputStyle.Short
-            }))
-        );
-
-        return modal;
-    },
-
     getSmartAlarmEditModal(guildId, serverId, entityId) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].alarms[entityId];
