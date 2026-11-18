@@ -56,7 +56,7 @@ module.exports = {
                         instance.serverList[serverId].switches[entityId].reachable = false;
                         client.setInstance(guildId, instance);
 
-                        await DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
+                        DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId).catch(() => undefined);
                         changedSwitches.push(entityId);
                     }
                 }
@@ -67,7 +67,7 @@ module.exports = {
                         instance.serverList[serverId].switches[entityId].reachable = true;
                         client.setInstance(guildId, instance);
 
-                        await DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
+                        DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId).catch(() => undefined);
                         changedSwitches.push(entityId);
                     }
                 }
@@ -357,7 +357,7 @@ module.exports = {
             client, guildId, serverId, changedSwitches);
 
         for (let groupId of groupsId) {
-            await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId);
+            DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId).catch(() => undefined);
         }
     },
 
