@@ -121,6 +121,57 @@ Test.describe('DiscordMessages.sendMessage', () => {
         Assert.strictEqual(message.id, 'new-message-id');
     });
 
+    Test.it('gives up an edit that never answers', async (t) => {
+        const original = DiscordMessages.SEND_MESSAGE_TIMEOUT_MS;
+        t.after(() => { DiscordMessages.SEND_MESSAGE_TIMEOUT_MS = original; });
+        DiscordMessages.SEND_MESSAGE_TIMEOUT_MS = 20;
+
+        const logs = [];
+        Client.client = fakeClient({
+            messageEdit: () => new Promise(() => undefined),
+            log: (cap, text, level) => logs.push({ text: text, level: level }),
+        });
+        DiscordTools.getMessageById = async () => ({ id: 'stored-message-id' });
+        DiscordTools.getTextChannelById = () => fakeChannel('channelId');
+
+        const message = await DiscordMessages.sendMessage(
+            'guildId', { content: 'text' }, 'stored-message-id', 'channelId');
+
+        Assert.strictEqual(message, undefined);
+        Assert.ok(logs.some((line) => line.level === 'warn' && line.text.includes('Editing message stored-message-id')));
+    });
+
+    Test.it('does not post a duplicate when the fetch never answers', async (t) => {
+        const original = DiscordMessages.SEND_MESSAGE_TIMEOUT_MS;
+        t.after(() => { DiscordMessages.SEND_MESSAGE_TIMEOUT_MS = original; });
+        DiscordMessages.SEND_MESSAGE_TIMEOUT_MS = 20;
+
+        let posted = 0;
+        Client.client = fakeClient({ messageSend: async () => { posted++; return { id: 'duplicate' }; } });
+        DiscordTools.getMessageById = () => new Promise(() => undefined);
+        DiscordTools.getTextChannelById = () => fakeChannel('channelId');
+
+        const message = await DiscordMessages.sendMessage(
+            'guildId', { content: 'text' }, 'stored-message-id', 'channelId');
+
+        Assert.strictEqual(message, undefined);
+        Assert.strictEqual(posted, 0);
+    });
+
+    Test.it('gives up a post that never answers', async (t) => {
+        const original = DiscordMessages.SEND_MESSAGE_TIMEOUT_MS;
+        t.after(() => { DiscordMessages.SEND_MESSAGE_TIMEOUT_MS = original; });
+        DiscordMessages.SEND_MESSAGE_TIMEOUT_MS = 20;
+
+        Client.client = fakeClient({ messageSend: () => new Promise(() => undefined) });
+        DiscordTools.getMessageById = async () => null;
+        DiscordTools.getTextChannelById = () => fakeChannel('channelId');
+
+        const message = await DiscordMessages.sendMessage('guildId', { content: 'text' }, null, 'channelId');
+
+        Assert.strictEqual(message, undefined);
+    });
+
     Test.it('returns undefined when the channel is gone', async () => {
         let logged = 0;
         Client.client = fakeClient({ log: () => logged++ });

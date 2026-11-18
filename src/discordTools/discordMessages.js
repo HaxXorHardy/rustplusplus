@@ -39,6 +39,28 @@ const Scrape = require('../util/scrape.js');
 */
 const INFORMATION_ORDER_INTERVAL_MS = 15 * 60 * 1000;
 
+/*
+    Every fetch, edit and post of sendMessage waits at most this long. One Discord call without an answer (right after
+    a burst of rate limits) held the storage monitor step for seven hours: it never finished, so every later round was
+    skipped and the storage monitor messages stood still. Rate limit waits are a few seconds and the map upload is
+    0.7 MB, 90 s leaves room for both. The call keeps running, the caller gets undefined like for any failed call.
+*/
+const SEND_MESSAGE_TIMEOUT_MS = 90 * 1000;
+const TIMED_OUT = Symbol('timed out');
+
+async function boundedDiscordCall(promise, label, onTimeout) {
+    try {
+        return await WithTimeout.withTimeout(promise, module.exports.SEND_MESSAGE_TIMEOUT_MS, label);
+    }
+    catch (e) {
+        if (!e || e.code !== 'ESTEPTIMEOUT') throw e;
+
+        Client.client.log(Client.client.intlGet(null, 'warningCap'),
+            `${e.message} The update is skipped, the next round tries again.`, 'warn');
+        return onTimeout;
+    }
+}
+
 module.exports = {
     sendMessage: async function (guildId, content, messageId, channelId, interaction = null) {
         if (interaction) {
@@ -51,10 +73,15 @@ module.exports = {
             instead of throwing, the caller stores the returned id.
         */
         const message = (messageId && channelId) ?
-            await DiscordTools.getMessageById(guildId, channelId, messageId) : null;
+            await boundedDiscordCall(DiscordTools.getMessageById(guildId, channelId, messageId),
+                `Fetching message ${messageId}`, TIMED_OUT) : null;
+
+        /* A fetch without an answer is not a missing message: posting a new one would leave a duplicate behind. */
+        if (message === TIMED_OUT) return undefined;
 
         if (message) {
-            return await Client.client.messageEdit(message, content);
+            return await boundedDiscordCall(Client.client.messageEdit(message, content),
+                `Editing message ${messageId}`, undefined);
         }
 
         const channel = DiscordTools.getTextChannelById(guildId, channelId);
@@ -65,7 +92,8 @@ module.exports = {
             return;
         }
 
-        return await Client.client.messageSend(channel, content);
+        return await boundedDiscordCall(Client.client.messageSend(channel, content),
+            `Posting a message in channel ${channelId}`, undefined);
     },
 
     sendServerMessage: async function (guildId, serverId, state = null, interaction = null) {
@@ -830,3 +858,4 @@ for (const operation of informationMessageOperations) {
 
 /* Exported so a test can shorten it. */
 module.exports.INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS = INFORMATION_MESSAGE_OPERATION_TIMEOUT_MS;
+module.exports.SEND_MESSAGE_TIMEOUT_MS = SEND_MESSAGE_TIMEOUT_MS;
