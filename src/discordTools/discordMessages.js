@@ -398,6 +398,23 @@ module.exports = {
         await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
     },
 
+    /* The finished week of the team stats, to the activity channel. */
+    sendTeamStatsMessage: async function (guildId, serverId, stats) {
+        const instance = Client.client.getInstance(guildId);
+        if (!instance.serverList[serverId]) return;
+
+        const content = { embeds: [DiscordEmbeds.getTeamStatsEmbed(guildId, serverId, stats, true)] };
+        await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+    },
+
+    sendWipeChecklistMessage: async function (guildId, serverId, counts) {
+        const instance = Client.client.getInstance(guildId);
+        if (!instance.serverList[serverId]) return;
+
+        const content = { embeds: [DiscordEmbeds.getWipeChecklistEmbed(guildId, serverId, counts)] };
+        await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+    },
+
     sendStorageAlertMessage: async function (guildId, serverId, entityId, text) {
         const instance = Client.client.getInstance(guildId);
         const entity = instance.serverList[serverId].storageMonitors[entityId];

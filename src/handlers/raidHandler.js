@@ -137,6 +137,11 @@ async function handler(rustplus, client) {
     await DiscordMessages.sendRaidReportMessage(rustplus.guildId, rustplus.serverId, raid);
 }
 
+/* A map wipe: the raid and the alarm history of the server are over. */
+function clearServer(guildId, serverId) {
+    states.delete(`${guildId}:${serverId}`);
+}
+
 /* For tests. */
 function reset() {
     states.clear();
@@ -151,5 +156,6 @@ module.exports = {
     takeFinishedRaid: takeFinishedRaid,
     currentRaid: currentRaid,
     handler: handler,
+    clearServer: clearServer,
     reset: reset,
 };

@@ -26,7 +26,9 @@ const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const Timer = require('../util/timer');
+const ForcedWipe = require('../util/forcedWipe.js');
 const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
+const TeamStats = require('../util/teamStats.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const RustPlusSync = require('../util/rustplusSync.js');
@@ -625,6 +627,52 @@ module.exports = {
         });
     },
 
+    /* finished: the weekly report of a past week, else the running week (/teamstats). */
+    getTeamStatsEmbed: function (guildId, serverId, stats, finished) {
+        const instance = Client.client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+        const players = TeamStats.ranking(stats);
+
+        const lines = players.map((p, index) => {
+            const hours = (p.onlineMs / 3600000).toFixed(1);
+            return `${index + 1}. **${p.name}**: ${intl('teamStatsLine', {
+                hours: hours, sessions: `${p.sessions}`, deaths: `${p.deaths}`
+            })}`;
+        });
+
+        return module.exports.getEmbed({
+            title: `📊 ${intl(finished ? 'teamStatsWeeklyTitle' : 'teamStatsTitle', { week: stats ? stats.week : '-' })}`,
+            color: Constants.COLOR_DEFAULT,
+            description: lines.length !== 0 ? lines.join('\n').slice(0, 4000) : intl('teamStatsEmpty'),
+            footer: { text: server.title },
+            timestamp: true
+        });
+    },
+
+    getWipeChecklistEmbed: function (guildId, serverId, counts) {
+        const instance = Client.client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        const intl = (key, variables) => Client.client.intlGet(guildId, key, variables);
+
+        const steps = [
+            intl('wipeChecklistPair', {
+                switches: `${counts.switches}`, alarms: `${counts.alarms}`, monitors: `${counts.storageMonitors}`
+            }),
+            intl('wipeChecklistGroups', { groups: `${counts.groups}` }),
+            intl('wipeChecklistAlerts'),
+            intl('wipeChecklistCleared')
+        ];
+
+        return module.exports.getEmbed({
+            title: `🧹 ${intl('wipeChecklistTitle', { server: server.title })}`,
+            color: Constants.COLOR_DEFAULT,
+            description: steps.map((step) => `☐ ${step}`).join('\n'),
+            footer: { text: server.title },
+            timestamp: true
+        });
+    },
+
     getRaidDirectMessageEmbed: function (guildId, serverId, alarmId) {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];
@@ -892,7 +940,12 @@ module.exports = {
                 { name: nameFieldName, value: `\`${instance.serverList[rustplus.serverId].title}\``, inline: false },
                 { name: playersFieldName, value: `\`${rustplus.getCommandPop(true)}\``, inline: true },
                 { name: timeFieldName, value: `\`${time[0]}\``, inline: true },
-                { name: wipeFieldName, value: `\`${rustplus.getCommandWipe(true)}\``, inline: true }],
+                { name: wipeFieldName, value: `\`${rustplus.getCommandWipe(true)}\``, inline: true },
+                {
+                    name: Client.client.intlGet(guildId, 'forcedWipe'),
+                    value: `<t:${Math.floor(ForcedWipe.next().getTime() / 1000)}:R>`,
+                    inline: true
+                }],
             timestamp: true
         });
 

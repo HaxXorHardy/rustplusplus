@@ -987,5 +987,22 @@
     "storageMonitorAlertsLabel": "Alerts (e.g. Rifle Ammo < 100, Sulfur > 10k)",
     "storageAlertFired": "{device}: {item} is at {quantity} ({rule})",
     "groupScheduleLabel": "Schedule (e.g. 22:00-06:00 off, 18:00-22:00 on)",
-    "groupSchedule": "Schedule"
+    "groupSchedule": "Schedule",
+    "commandsTeamStatsDesc": "Online time, sessions and deaths of the team this week.",
+    "teamStatsTitle": "Team stats {week} (so far)",
+    "teamStatsWeeklyTitle": "Weekly team report {week}",
+    "teamStatsLine": "{hours} h online, {sessions} session(s), {deaths} death(s)",
+    "teamStatsEmpty": "No data for this week yet.",
+    "commandsDeathMapDesc": "Show the deaths of the team on the map.",
+    "commandsDeathMapPlayerDesc": "Only the deaths of this player (part of the name).",
+    "commandsDeathMapHoursDesc": "Only the deaths of the last hours.",
+    "deathMapNoDeaths": "No deaths with a position are recorded for this map yet.",
+    "deathMapTitle": "Death map: {count} death(s)",
+    "deathMapMost": "Most deaths",
+    "wipeChecklistTitle": "Map wipe on {server}: checklist",
+    "wipeChecklistPair": "Pair the smart devices again in game ({switches} switch(es), {alarms} alarm(s), {monitors} storage monitor(s) of the old map).",
+    "wipeChecklistGroups": "Check the {groups} switch group(s): add the new switches, remove the old ones.",
+    "wipeChecklistAlerts": "Set the storage alerts and the alarm triggers of the new devices.",
+    "wipeChecklistCleared": "Done by the bot: death map, switch timers and raid state of the old map were cleared.",
+    "forcedWipe": "Forced wipe"
 }

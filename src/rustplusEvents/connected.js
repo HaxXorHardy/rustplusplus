@@ -27,6 +27,7 @@ const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const PollingHandler = require('../handlers/pollingHandler.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const SwitchTimerRestore = require('../handlers/switchTimerRestore.js');
+const WipeHelper = require('../handlers/wipeHelper.js');
 const TokenRecovery = require('../util/tokenRecovery.js');
 const WithTimeout = require('../util/withTimeout.js');
 
@@ -146,6 +147,7 @@ module.exports = {
         if (wiped) {
             await discordStep(client, rustplus, 'The wipe message',
                 () => DiscordMessages.sendServerWipeDetectedMessage(guildId, serverId));
+            await discordStep(client, rustplus, 'The wipe checklist', () => WipeHelper.onWipe(client, rustplus));
         }
 
         await discordStep(client, rustplus, 'The map message',

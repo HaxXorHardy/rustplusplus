@@ -987,5 +987,22 @@
     "storageMonitorAlertsLabel": "Alarme (z. B. Rifle Ammo < 100, Sulfur > 10k)",
     "storageAlertFired": "{device}: {item} steht bei {quantity} ({rule})",
     "groupScheduleLabel": "Zeitplan (z. B. 22:00-06:00 aus, 18:00-22:00 an)",
-    "groupSchedule": "Zeitplan"
+    "groupSchedule": "Zeitplan",
+    "commandsTeamStatsDesc": "Online-Zeit, Sitzungen und Tode des Teams in dieser Woche.",
+    "teamStatsTitle": "Team-Statistik {week} (bisher)",
+    "teamStatsWeeklyTitle": "Wochenbericht des Teams {week}",
+    "teamStatsLine": "{hours} h online, {sessions} Sitzung(en), {deaths} Tod/Tode",
+    "teamStatsEmpty": "Für diese Woche gibt es noch keine Daten.",
+    "commandsDeathMapDesc": "Zeigt die Tode des Teams auf der Karte.",
+    "commandsDeathMapPlayerDesc": "Nur die Tode dieses Spielers (Teil des Namens).",
+    "commandsDeathMapHoursDesc": "Nur die Tode der letzten Stunden.",
+    "deathMapNoDeaths": "Für diese Karte sind noch keine Tode mit Position gespeichert.",
+    "deathMapTitle": "Todeskarte: {count} Tod/Tode",
+    "deathMapMost": "Die meisten Tode",
+    "wipeChecklistTitle": "Map-Wipe auf {server}: Checkliste",
+    "wipeChecklistPair": "Smart-Geräte im Spiel neu paaren ({switches} Schalter, {alarms} Alarm(e), {monitors} Storage Monitor(e) der alten Karte).",
+    "wipeChecklistGroups": "Die {groups} Schaltergruppe(n) prüfen: neue Schalter hinzufügen, alte entfernen.",
+    "wipeChecklistAlerts": "Lager-Alarme und Alarm-Auslöser der neuen Geräte einstellen.",
+    "wipeChecklistCleared": "Vom Bot erledigt: Todeskarte, Schalter-Timer und Raid-Zustand der alten Karte wurden gelöscht.",
+    "forcedWipe": "Forced Wipe"
 }
