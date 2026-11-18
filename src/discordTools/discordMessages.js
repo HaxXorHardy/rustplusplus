@@ -48,6 +48,32 @@ const INFORMATION_ORDER_INTERVAL_MS = 15 * 60 * 1000;
 const SEND_MESSAGE_TIMEOUT_MS = 90 * 1000;
 const TIMED_OUT = Symbol('timed out');
 
+/* Storage monitor edits in flight, see sendStorageMonitorMessage. */
+const storageMonitorUpdates = new Object();
+
+function sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction = null) {
+    return module.exports.sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction);
+}
+
+/* Runs detached: edits until no newer change came in during the last one. */
+function drainStorageMonitorUpdates(key, state, guildId, serverId, entityId) {
+    (async () => {
+        try {
+            do {
+                state.again = false;
+                await sendStorageMonitorMessageNow(guildId, serverId, entityId);
+            } while (state.again);
+        }
+        catch (e) {
+            Client.client.log(Client.client.intlGet(null, 'warningCap'),
+                `Updating storage monitor ${entityId} failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
+        finally {
+            if (storageMonitorUpdates[key] === state) delete storageMonitorUpdates[key];
+        }
+    })();
+}
+
 async function boundedDiscordCall(promise, label, onTimeout) {
     try {
         return await WithTimeout.withTimeout(promise, module.exports.SEND_MESSAGE_TIMEOUT_MS, label);
@@ -180,8 +206,47 @@ module.exports = {
         }
     },
 
+    /*
+        A busy storage monitor (a box someone is sorting) pushes a change every second or two, and each push used to
+        start its own edit of the same message, image upload included. Discord lets far fewer through, so the edits
+        queued up without end and every later edit - also the one of the storage monitor round - waited behind them
+        (1.41.6: the round hung for seven hours; 1.41.7: edits timing out after 90 s right after the start).
+
+        Now at most one edit per monitor runs. A call that comes in meanwhile only marks the message as outdated and
+        returns; when the running edit is done, one more edit posts the latest state. Only the first caller waits, and
+        only for its own edit, so a stream of pushes cannot hold up the storage monitor round.
+    */
     sendStorageMonitorMessage: async function (guildId, serverId, entityId, interaction = null) {
+        if (interaction) return await sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction);
+
+        const key = `${guildId}:${serverId}:${entityId}`;
+        const running = storageMonitorUpdates[key];
+
+        if (running) {
+            running.again = true;
+            return;
+        }
+
+        const state = { again: false };
+        storageMonitorUpdates[key] = state;
+
+        try {
+            await sendStorageMonitorMessageNow(guildId, serverId, entityId);
+        }
+        finally {
+            if (state.again) {
+                drainStorageMonitorUpdates(key, state, guildId, serverId, entityId);
+            }
+            else {
+                delete storageMonitorUpdates[key];
+            }
+        }
+    },
+
+    sendStorageMonitorMessageNow: async function (guildId, serverId, entityId, interaction = null) {
         let instance = Client.client.getInstance(guildId);
+        /* The monitor can be removed while an edit waits: nothing left to show. */
+        if (!instance.serverList[serverId] || !instance.serverList[serverId].storageMonitors[entityId]) return;
         const entity = instance.serverList[serverId].storageMonitors[entityId];
 
         const content = {
