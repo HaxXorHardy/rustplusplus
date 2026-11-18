@@ -19,6 +19,7 @@
 */
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const GuildSettings = require('../util/guildSettings.js');
 const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
@@ -86,7 +87,8 @@ module.exports = {
             const key = `${guildId}:${serverId}:${groupId}:${JSON.stringify(group.schedule)}`;
             if (!scheduleStates.has(key)) scheduleStates.set(key, {});
 
-            for (const change of SwitchGroupSchedule.transitions(group.schedule, scheduleStates.get(key), date)) {
+            const zone = GuildSettings.timeZone(guildId);
+            for (const change of SwitchGroupSchedule.transitions(group.schedule, scheduleStates.get(key), date, zone)) {
                 rustplus.log(client.intlGet(null, 'infoCap'),
                     `Switch group ${groupId} (${group.name}) is turned ${change.value ? 'on' : 'off'} by its schedule.`);
 
