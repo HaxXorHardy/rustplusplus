@@ -273,6 +273,9 @@ async function finish(client, interaction, { steamId, token, servers, refreshTok
         /* A fresh login ends the backoff of a token that kept being rejected. */
         TokenRecovery.markHealthy(steamId);
 
+        /* The push registration follows the new token (and a new account starts its push listener). */
+        TokenRecovery.notifyTokenChanged(steamId);
+
         /* The login registers the Discord user as the owner of the steam account, /credentials show lists it. */
         registerCredentials(guildId, steamId, interaction.member.user.id);
 
