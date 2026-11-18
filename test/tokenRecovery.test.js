@@ -500,3 +500,82 @@ Test.describe('error event', () => {
         Assert.strictEqual(calls.length, 0);
     });
 });
+
+/*
+    The API refuses a token while the open socket with it keeps working (measured live: about 30 minutes after a
+    renewal). The next handshake with that token fails with 403, so the reconnect gets a new token first.
+*/
+Test.describe('TokenRecovery.renewIfRefused', () => {
+    const RustPlusAuth = require('../src/util/rustplusAuth.js');
+
+    function setup(t) {
+        const auth = { token: 'old', steamRefreshToken: 'refresh' };
+        const original = RustPlusAuth.readAuth;
+        RustPlusAuth.readAuth = () => auth;
+        t.after(() => { RustPlusAuth.readAuth = original; });
+
+        const calls = { renewals: 0 };
+        stubRenew(t, async () => { calls.renewals += 1; auth.token = `new${calls.renewals}`; return auth; });
+        TokenRecovery.reset();
+
+        const client = fakeClient();
+        const live = {
+            guildId: 'guild', playerId: '1', authToken: 'old', isOperational: true,
+            lastSuccessfulPollMs: Date.now(), rebuildConnection: () => undefined,
+        };
+        client.rustplusInstances.guild = live;
+
+        return { auth, calls, client, live };
+    }
+
+    Test.it('remembers the refused token once and renews it when the socket closed', async (t) => {
+        const { calls, client } = setup(t);
+
+        Assert.strictEqual(await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403'), 'skipped');
+        Assert.strictEqual(await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403'), 'skipped');
+        Assert.strictEqual(client.logs.filter((l) => `${l.text}`.includes('not renewing')).length, 1);
+        Assert.strictEqual(TokenRecovery.isTokenRefused('1'), true);
+        Assert.strictEqual(calls.renewals, 0, 'nothing is renewed while the socket works');
+
+        /* The socket closed (disconnected.js): the instance is gone, the reconnect waits on its timer. */
+        delete client.rustplusInstances.guild;
+        client.rustplusReconnectTimers.guild = setTimeout(() => undefined, 60000);
+        client.getInstance = () => ({
+            activeServer: 'server', serverList: { server: { steamId: '1', serverIp: 'ip', appPort: 1 } },
+        });
+
+        Assert.strictEqual(await TokenRecovery.renewIfRefused(client, 'guild', '1'), 'renewed');
+        Assert.strictEqual(calls.renewals, 1);
+        Assert.strictEqual(client.created, 1, 'the waiting reconnect starts right away with the new token');
+        Assert.strictEqual(client.rustplusReconnectTimers.guild, null);
+        Assert.strictEqual(TokenRecovery.isTokenRefused('1'), false, 'the new token is not the refused one');
+    });
+
+    Test.it('does nothing for a token that was not refused', async (t) => {
+        const { calls, client } = setup(t);
+
+        Assert.strictEqual(await TokenRecovery.renewIfRefused(client, 'guild', '1'), 'skipped');
+        Assert.strictEqual(calls.renewals, 0);
+    });
+
+    Test.it('forgets the refusal when a read works again', async (t) => {
+        const { calls, client } = setup(t);
+
+        await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403');
+        TokenRecovery.markReadSuccessful('1');
+
+        Assert.strictEqual(TokenRecovery.isTokenRefused('1'), false);
+        Assert.strictEqual(await TokenRecovery.renewIfRefused(client, 'guild', '1'), 'skipped');
+        Assert.strictEqual(calls.renewals, 0);
+    });
+
+    Test.it('does nothing when the token was already replaced', async (t) => {
+        const { auth, calls, client } = setup(t);
+
+        await TokenRecovery.reportRejected(client, 'guild', '1', 'history 403');
+        auth.token = 'replaced';
+
+        Assert.strictEqual(await TokenRecovery.renewIfRefused(client, 'guild', '1'), 'skipped');
+        Assert.strictEqual(calls.renewals, 0);
+    });
+});

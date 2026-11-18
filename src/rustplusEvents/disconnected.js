@@ -22,6 +22,7 @@ const BackgroundHandler = require('../handlers/backgroundHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
+const TokenRecovery = require('../util/tokenRecovery.js');
 
 const Config = require('../../config');
 
@@ -105,6 +106,14 @@ module.exports = {
                 rustplus.playerId,
                 rustplus.playerToken
             );
+
+            /*
+                The API refused the token while this socket still worked: the reconnect would fail on the handshake
+                with 403. Replaced now, the renewal starts the waiting reconnect right away with the new token.
+            */
+            if (rustplus.playerId) {
+                TokenRecovery.renewIfRefused(client, guildId, rustplus.playerId).catch(() => undefined);
+            }
         }
     },
 };

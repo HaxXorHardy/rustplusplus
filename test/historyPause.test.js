@@ -104,3 +104,55 @@ Test.describe('the history refused while the connection works', () => {
         Assert.ok(!client.logs.some((l) => l.text.includes('is read again in')));
     });
 });
+
+Test.describe('refusals of one token are logged once', () => {
+    Test.beforeEach((t) => {
+        RustPlusHistory.resetAccountStateCache();
+
+        const readAuth = RustPlusAuth.readAuth;
+        const writeAuth = RustPlusAuth.writeAuth;
+        const renewAuth = RustPlusLogin.renewAuth;
+
+        RustPlusAuth.readAuth = () => ({ token: 'token', steamRefreshToken: 'refresh' });
+        RustPlusAuth.writeAuth = () => undefined;
+        RustPlusLogin.renewAuth = async () => { throw new Error('must not renew'); };
+
+        t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+
+        t.after(() => {
+            RustPlusAuth.readAuth = readAuth;
+            RustPlusAuth.writeAuth = writeAuth;
+            RustPlusLogin.renewAuth = renewAuth;
+            RustPlusHistory.resetAccountStateCache();
+        });
+    });
+
+    Test.it('logs the history and the account state once while the token stays refused, and the recovery', async (t) => {
+        const client = fakeClient(true);
+        let historyWorks = false;
+        let reads = 0;
+        let syncs = 0;
+        const fetchHistory = async () => { reads += 1; if (!historyWorks) throw refused(); return []; };
+        const fetchSync = async () => { syncs += 1; if (!historyWorks) throw refused(); return { servers: [] }; };
+
+        for (let i = 0; i < 4; i++) {
+            /* The live socket keeps answering its polls. */
+            client.rustplusInstances.guild.lastSuccessfulPollMs = Date.now();
+            await RustPlusHistory.refresh(client, fetchHistory, fetchSync);
+            t.mock.timers.tick(6 * 60 * 1000);
+        }
+
+        Assert.ok(reads >= 3 && syncs >= 3, 'the history and the account state were asked again');
+        Assert.strictEqual(client.logs.filter((l) => l.text.includes('is read again in')).length, 1);
+        Assert.strictEqual(client.logs.filter((l) => l.text.includes('Could not read the Rust+ account state')).length,
+            1);
+        Assert.strictEqual(client.logs.filter((l) => l.text.includes('not renewing')).length, 1);
+
+        historyWorks = true;
+        client.rustplusInstances.guild.lastSuccessfulPollMs = Date.now();
+        await RustPlusHistory.refresh(client, fetchHistory, fetchSync);
+
+        Assert.ok(client.logs.some((l) => l.text.includes('history of 1 can be read again')));
+        Assert.ok(client.logs.some((l) => l.text.includes('account state of 1 can be read again')));
+    });
+});
