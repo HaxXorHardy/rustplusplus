@@ -79,7 +79,8 @@ function persist(guildId, serverId, key, record) {
     it is due; a timer under the same key is replaced. Returns the time it ends.
 */
 function schedule(guildId, serverId, key, delayMs, record, fire) {
-    cancel(guildId, serverId, key);
+    /* The replaced timer only stops here: the record below overwrites its entry (one write instead of two). */
+    stop(guildId, serverId, key);
 
     const timeouts = of(guildId, serverId);
     const endsAtMs = Date.now() + Math.max(0, delayMs);
@@ -101,8 +102,8 @@ function schedule(guildId, serverId, key, delayMs, record, fire) {
     return endsAtMs;
 }
 
-/* Stop a timer (if one runs) and forget it, in memory and in the instance file. */
-function cancel(guildId, serverId, key) {
+/* Stop a running timer in memory only. */
+function stop(guildId, serverId, key) {
     const timeouts = of(guildId, serverId);
     if (timeouts.hasOwnProperty(key)) {
         clearTimeout(timeouts[key]);
@@ -110,6 +111,11 @@ function cancel(guildId, serverId, key) {
     }
 
     ends.delete(`${guildId}:${serverId}:${key}`);
+}
+
+/* Stop a timer (if one runs) and forget it, in memory and in the instance file. */
+function cancel(guildId, serverId, key) {
+    stop(guildId, serverId, key);
     persist(guildId, serverId, key, null);
 }
 

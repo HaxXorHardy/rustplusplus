@@ -1050,6 +1050,7 @@ module.exports = {
     its attachments alone (Discord keeps them when the edit names none).
 */
 const informationSent = new Object();
+const INFORMATION_RECHECK_MS = 10 * 60 * 1000;
 
 function embedJson(embed) {
     const json = embed && typeof embed.toJSON === 'function' ? embed.toJSON() : Object.assign({}, embed);
@@ -1086,7 +1087,11 @@ async function sendInformationMessage(guildId, messageType, content) {
 
     let toSend = content;
     if (previousId && last && last.messageId === previousId && signature !== null) {
-        if (last.signature === signature) return;
+        /*
+            Unchanged: no edit - but at least every INFORMATION_RECHECK_MS one, which also brings back a message that
+            was deleted by hand (sendMessage posts it again when the stored one is gone).
+        */
+        if (last.signature === signature && Date.now() - last.sentMs < INFORMATION_RECHECK_MS) return;
 
         /* Same message, same logo: the attachment that is there stays. */
         if (files !== '' && last.files === files) {
@@ -1105,7 +1110,7 @@ async function sendInformationMessage(guildId, messageType, content) {
 
     if (!message) return;
 
-    informationSent[key] = { messageId: message.id, signature: signature, files: files };
+    informationSent[key] = { messageId: message.id, signature: signature, files: files, sentMs: Date.now() };
 
     if (message.id === previousId) return;
 
