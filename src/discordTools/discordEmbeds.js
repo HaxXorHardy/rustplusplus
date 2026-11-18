@@ -413,11 +413,18 @@ module.exports = {
         const group = instance.serverList[serverId].switchGroups[groupId];
 
         let switchName = '', switchId = '', switchActive = '';
+        let ownAutomation = false;
         for (const groupSwitchId of group.switches) {
             if (instance.serverList[serverId].switches.hasOwnProperty(groupSwitchId)) {
                 const sw = instance.serverList[serverId].switches[groupSwitchId];
                 const active = sw.active;
-                switchName += `${sw.name}${sw.location !== null ? ` ${sw.location}` : ''}\n`;
+                /*
+                    A switch with its own auto setting (AUTO-ON, day/night, ...) is switched back by it right after the
+                    group switched it: marked, so "1/3 on" after "off" is explained.
+                */
+                const automated = Number(sw.autoDayNightOnOff) > 0;
+                if (automated) ownAutomation = true;
+                switchName += `${sw.name}${sw.location !== null ? ` ${sw.location}` : ''}${automated ? ' ⚙️' : ''}\n`;
                 switchId += `${groupSwitchId}\n`;
                 if (sw.reachable) {
                     switchActive += `${(active) ? Constants.ONLINE_EMOJI : Constants.OFFLINE_EMOJI}\n`;
@@ -469,6 +476,8 @@ module.exports = {
                 (seconds !== 0 ? intl('groupAlarmOffAfter', { time: Timer.secondsToFullScale(seconds) }) :
                     intl('groupAlarmStaysOn')));
         }
+
+        if (ownAutomation) lines.push(`⚙️ ${intl('groupSwitchOwnAutomation')}`);
 
         const end = SwitchTimeouts.getEnd(guildId, serverId, SwitchTimeouts.groupKey(groupId));
         if (end !== null) {

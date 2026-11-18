@@ -204,11 +204,6 @@ module.exports = {
                     style: DANGER
                 }),
                 module.exports.getButton({
-                    customId: `GroupToggle${identifier}`,
-                    label: Client.client.intlGet(guildId, 'toggleCap'),
-                    style: PRIMARY
-                }),
-                module.exports.getButton({
                     customId: `GroupTimer${identifier}`,
                     label: Client.client.intlGet(guildId, 'timerCap'),
                     style: PRIMARY,

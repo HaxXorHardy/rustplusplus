@@ -53,10 +53,11 @@ The embed shows the **status** of the group at a glance - 🟢 all on, 🟡 `3/5
 | Button | What it does |
 | --- | --- |
 | `TURN ON` / `TURN OFF` | Turn all switches of the group on/off. A running timer of the group is cancelled. |
-| `TOGGLE` | Everything off when anything is on, otherwise everything on. |
 | `⏱️ TIMER` | Asks for on or off (a choice) and a duration (`30s`, `10m`, `1h`): the group switches now and back after that time; the message shows when. |
 | `EDIT` | Name, Custom Command, the alarm off time and the schedule (see below). |
 | 🗑️ | Remove the group. |
+
+A switch marked ⚙️ has its own auto setting (in its own message, for example AUTO-ON or day/night): it switches that switch back right after the group, so set it to OFF for a switch the group should control.
 
 **Select menus**
 
