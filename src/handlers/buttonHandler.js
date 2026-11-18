@@ -1058,8 +1058,7 @@ module.exports = async (client, interaction) => {
 
         if (rustplus) {
             /* A running "on/off for X minutes" of the group must not switch it back after the button. */
-            clearTimeout(rustplus.currentSwitchTimeouts[ids.groupId]);
-            delete rustplus.currentSwitchTimeouts[ids.groupId];
+            SmartSwitchGroupHandler.cancelGroupTimer(rustplus, ids.groupId);
 
             if (rustplus.serverId === ids.serverId) {
                 const active = (interaction.customId.startsWith('GroupTurnOn') ? true : false);
@@ -1082,10 +1081,52 @@ module.exports = async (client, interaction) => {
                     value: `${active}`
                 }));
 
-                await SmartSwitchGroupHandler.TurnOnOffGroup(
-                    client, rustplus, guildId, ids.serverId, ids.groupId, active);
+                await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active);
             }
         }
+    }
+    else if (interaction.customId.startsWith('GroupToggle')) {
+        const ids = JSON.parse(interaction.customId.replace('GroupToggle', ''));
+        const server = instance.serverList[ids.serverId];
+
+        if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
+            await interaction.message.delete();
+            return;
+        }
+
+        interaction.deferUpdate();
+
+        if (rustplus && rustplus.serverId === ids.serverId) {
+            const state = SmartSwitchGroupHandler.getGroupState(server, server.switchGroups[ids.groupId]);
+            const active = state.on === 0;
+
+            if (instance.generalSettings.smartSwitchNotifyInGameWhenChangedFromDiscord) {
+                await rustplus.sendInGameMessage(client.intlGet(guildId, 'userTurnedOnOffSmartSwitchGroupFromDiscord', {
+                    user: interaction.user.username,
+                    name: server.switchGroups[ids.groupId].name,
+                    status: active ? client.intlGet(guildId, 'onCap') : client.intlGet(guildId, 'offCap')
+                }));
+            }
+
+            client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+                id: `${verifyId}`,
+                value: `${active}`
+            }));
+
+            await SmartSwitchGroupHandler.setGroup(client, rustplus, guildId, ids.serverId, ids.groupId, active);
+        }
+    }
+    else if (interaction.customId.startsWith('GroupTimer')) {
+        const ids = JSON.parse(interaction.customId.replace('GroupTimer', ''));
+        const server = instance.serverList[ids.serverId];
+
+        if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
+            await interaction.message.delete();
+            return;
+        }
+
+        const modal = DiscordModals.getGroupTimerModal(guildId, ids.serverId, ids.groupId);
+        await interaction.showModal(modal);
     }
     else if (interaction.customId.startsWith('GroupEdit')) {
         const ids = JSON.parse(interaction.customId.replace('GroupEdit', ''));
@@ -1114,8 +1155,7 @@ module.exports = async (client, interaction) => {
         }
 
         if (rustplus) {
-            clearTimeout(rustplus.currentSwitchTimeouts[ids.groupId]);
-            delete rustplus.currentSwitchTimeouts[ids.groupId];
+            SmartSwitchGroupHandler.cancelGroupTimer(rustplus, ids.groupId);
         }
 
         if (server.switchGroups.hasOwnProperty(ids.groupId)) {

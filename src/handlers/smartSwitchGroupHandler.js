@@ -19,6 +19,7 @@
 */
 
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const SwitchGroupState = require('../util/switchGroupState.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const Timer = require('../util/timer');
 
@@ -28,11 +29,183 @@ const SWITCH_CONCURRENCY = 4;
 /* A switch that did not answer is tried once more after this pause. */
 const RETRY_DELAY_MS = 2000;
 
+/* group.autoDayNight */
+const { AUTO_OFF, AUTO_DAY, AUTO_NIGHT } = SwitchGroupState;
+
 module.exports = {
     SWITCH_CONCURRENCY: SWITCH_CONCURRENCY,
     RETRY_DELAY_MS: RETRY_DELAY_MS,
+    AUTO_OFF: AUTO_OFF,
+    AUTO_DAY: AUTO_DAY,
+    AUTO_NIGHT: AUTO_NIGHT,
 
-    handler: async function (rustplus, client) {
+    /*
+        Day/night automation of the groups (group.autoDayNight): 1 = on during the day, off at night, 2 = on at
+        night, off during the day. Runs every poll, acts only when the in-game time just turned.
+    */
+    handler: async function (rustplus, client, time) {
+        const guildId = rustplus.guildId;
+        const serverId = rustplus.serverId;
+        const instance = client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        if (!server || !server.switchGroups || !rustplus.time) return;
+
+        let turned = null;
+        if (rustplus.time.isTurnedDay(time)) turned = 'day';
+        else if (rustplus.time.isTurnedNight(time)) turned = 'night';
+        if (turned === null) return;
+
+        for (const [groupId, group] of Object.entries(server.switchGroups)) {
+            const mode = module.exports.getAutoDayNight(group);
+            if (mode === AUTO_OFF) continue;
+
+            const active = (mode === AUTO_DAY) === (turned === 'day');
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `Switch group ${groupId} (${group.name}) is turned ${active ? 'on' : 'off'}, it became ${turned}.`);
+
+            await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, active);
+        }
+    },
+
+    getAutoDayNight: SwitchGroupState.getAutoDayNight,
+    getTriggerAlarms: SwitchGroupState.getTriggerAlarms,
+    getAlarmOffAfterSeconds: SwitchGroupState.getAlarmOffAfterSeconds,
+    getGroupState: SwitchGroupState.getGroupState,
+
+    /* Cancel a running "on/off for X" of the group. */
+    cancelGroupTimer: function (rustplus, groupId) {
+        const timeouts = rustplus.currentSwitchTimeouts;
+        const key = SwitchTimeouts.groupKey(groupId);
+        if (!timeouts.hasOwnProperty(key)) return;
+
+        clearTimeout(timeouts[key]);
+        delete timeouts[key];
+    },
+
+    /*
+        Turn the group on or off - from the in-game command, the Discord buttons, the timer, the day/night
+        automation and the alarm trigger alike. A running timer of the group is cancelled.
+
+        options.seconds: switch back after this long (a timer, shown in the group message),
+        options.inGame: announce it in the team chat and name switches that did not answer,
+        options.deps: passed to TurnOnOffGroup (tests).
+    */
+    setGroup: async function (client, rustplus, guildId, serverId, groupId, active, options = {}) {
+        const onCap = client.intlGet(guildId, 'onCap');
+        const offCap = client.intlGet(guildId, 'offCap');
+        const group = client.getInstance(guildId).serverList[serverId].switchGroups[groupId];
+
+        module.exports.cancelGroupTimer(rustplus, groupId);
+
+        const turnAndReport = async (rustplus, value) => {
+            const result = await module.exports.TurnOnOffGroup(client, rustplus, guildId, serverId, groupId, value,
+                options.deps);
+
+            /* The timer line of the group message changes even when no switch had to change. */
+            if (result.switched.length === 0 && result.failed.length === 0) {
+                await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId);
+            }
+
+            if (!options.inGame || result.failed.length === 0) return result;
+
+            /* The switches that did not answer are named in game as well, in one line. */
+            const switches = client.getInstance(guildId).serverList[serverId].switches;
+            rustplus.sendInGameMessage(client.intlGet(guildId, 'noCommunicationSmartSwitch', {
+                name: result.failed.map((entityId) => switches[entityId] ? switches[entityId].name : entityId)
+                    .join(', ')
+            }));
+
+            return result;
+        };
+
+        const seconds = options.seconds ? options.seconds : null;
+
+        if (options.inGame) {
+            let str = client.intlGet(guildId, 'turningGroupOnOff', { group: group.name, status: active ? onCap : offCap });
+            if (seconds !== null) {
+                str += client.intlGet(guildId, 'automaticallyTurnBackOnOff', {
+                    status: active ? offCap : onCap,
+                    time: Timer.secondsToFullScale(seconds)
+                });
+            }
+            rustplus.sendInGameMessage(str);
+        }
+
+        if (seconds !== null) {
+            const timeouts = rustplus.currentSwitchTimeouts;
+            const key = SwitchTimeouts.groupKey(groupId);
+            timeouts[key] = setTimeout(async function () {
+                delete timeouts[key];
+
+                const instance = client.getInstance(guildId);
+                if (!instance.serverList.hasOwnProperty(serverId) ||
+                    !instance.serverList[serverId].switchGroups.hasOwnProperty(groupId)) {
+                    return;
+                }
+
+                /* The connection may have been rebuilt since the timer started: the current one switches. */
+                const rustplus = SwitchTimeouts.currentInstance(client, guildId, serverId);
+                if (rustplus === null) return;
+
+                if (options.inGame) {
+                    rustplus.sendInGameMessage(client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
+                        device: instance.serverList[serverId].switchGroups[groupId].name,
+                        status: !active ? onCap : offCap
+                    }));
+                }
+
+                try {
+                    await turnAndReport(rustplus, !active);
+                }
+                catch (e) {
+                    client.log(client.intlGet(null, 'warningCap'),
+                        `The timer of switch group ${groupId} could not switch it back: ${e && e.message ? e.message : e}`,
+                        'warn');
+                }
+            }, seconds * 1000);
+
+            SwitchTimeouts.setEnd(guildId, serverId, key, Date.now() + seconds * 1000, !active);
+        }
+
+        return await turnAndReport(rustplus, active);
+    },
+
+    /* Turn everything off when anything is on, otherwise turn it on. */
+    toggleGroup: async function (client, rustplus, guildId, serverId, groupId, options = {}) {
+        const server = client.getInstance(guildId).serverList[serverId];
+        const state = module.exports.getGroupState(server, server.switchGroups[groupId]);
+
+        return await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, state.on === 0, options);
+    },
+
+    /* A smart alarm of the connected server went off: the groups it is a trigger of are turned on. */
+    onAlarmTriggered: async function (client, rustplus, alarmId) {
+        const guildId = rustplus.guildId;
+        const serverId = rustplus.serverId;
+        const instance = client.getInstance(guildId);
+        const server = instance.serverList[serverId];
+        if (!server || !server.switchGroups || !server.alarms || !server.alarms[`${alarmId}`]) return;
+
+        const alarmName = server.alarms[`${alarmId}`].name;
+
+        for (const [groupId, group] of Object.entries(server.switchGroups)) {
+            if (!module.exports.getTriggerAlarms(server, group).includes(`${alarmId}`)) continue;
+
+            const seconds = module.exports.getAlarmOffAfterSeconds(group);
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `Switch group ${groupId} (${group.name}) is turned on by the alarm ${alarmName}` +
+                `${seconds !== 0 ? `, off again in ${seconds} s` : ''}.`);
+
+            if (instance.generalSettings.smartAlarmNotifyInGame) {
+                rustplus.sendInGameMessage(client.intlGet(guildId, 'groupTurnedOnByAlarm', {
+                    group: group.name,
+                    alarm: alarmName
+                }));
+            }
+
+            await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, true,
+                { seconds: seconds !== 0 ? seconds : null });
+        }
     },
 
     updateSwitchGroupIfContainSwitch: async function (client, guildId, serverId, switchId) {
@@ -210,71 +383,14 @@ module.exports = {
             return true;
         }
 
-        if (rustplus.currentSwitchTimeouts.hasOwnProperty(groupId)) {
-            clearTimeout(rustplus.currentSwitchTimeouts[groupId]);
-            delete rustplus.currentSwitchTimeouts[groupId];
-        }
-
         const timeSeconds = Timer.getSecondsFromStringTime(rest);
-
-        let str = client.intlGet(guildId, 'turningGroupOnOff', {
-            group: switchGroups[groupId].name,
-            status: active ? onCap : offCap
-        });
 
         rustplus.log(client.intlGet(null, 'infoCap'), client.intlGet(null, `logSmartSwitchGroupValueChange`, {
             value: active
         }));
 
-        /* The switches that did not answer are named in game as well, in one line. */
-        const turnAndReport = async (rustplus, value) => {
-            const result = await module.exports.TurnOnOffGroup(client, rustplus, guildId, serverId, groupId, value);
-            if (result.failed.length === 0) return;
-
-            const switches = client.getInstance(guildId).serverList[serverId].switches;
-            rustplus.sendInGameMessage(client.intlGet(guildId, 'noCommunicationSmartSwitch', {
-                name: result.failed.map((entityId) => switches[entityId] ? switches[entityId].name : entityId)
-                    .join(', ')
-            }));
-        };
-
-        if (timeSeconds === null) {
-            rustplus.sendInGameMessage(str);
-            await turnAndReport(rustplus, active);
-            return true;
-        }
-
-        const time = Timer.secondsToFullScale(timeSeconds);
-        str += client.intlGet(guildId, 'automaticallyTurnBackOnOff', {
-            status: active ? offCap : onCap,
-            time: time
-        });
-
-        const timeouts = rustplus.currentSwitchTimeouts;
-        timeouts[groupId] = setTimeout(async function () {
-            delete timeouts[groupId];
-
-            const instance = client.getInstance(guildId);
-            if (!instance.serverList.hasOwnProperty(serverId) ||
-                !instance.serverList[serverId].switchGroups.hasOwnProperty(groupId)) {
-                return;
-            }
-
-            /* The connection may have been rebuilt since the timer started: the current one switches. */
-            const rustplus = SwitchTimeouts.currentInstance(client, guildId, serverId);
-            if (rustplus === null) return;
-
-            const str = client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
-                device: instance.serverList[serverId].switchGroups[groupId].name,
-                status: !active ? onCap : offCap
-            });
-            rustplus.sendInGameMessage(str);
-
-            await turnAndReport(rustplus, !active);
-        }, timeSeconds * 1000);
-
-        rustplus.sendInGameMessage(str);
-        await turnAndReport(rustplus, active);
+        await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, active,
+            { seconds: timeSeconds, inGame: true });
         return true;
     },
 }
