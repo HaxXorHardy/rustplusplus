@@ -114,7 +114,7 @@ The images above is what paired Storage Monitors looks like in Discord. There ar
 <br><br>
 Tool Cupboard type Storage Monitor have the `@everyone` button that lets you decide if @everyone tag should be used in Discord when the Tool Cupboard starts to decay. By clicking on the `IN-GAME` button, you decide if decay notifications should be made In-Game as well.
 <br><br>
-**Upkeep early warning** - a Tool Cupboard warns once when its upkeep runs out within the time set in the `settings` channel (default 6 hours, `OFF` disables it), in the activity channel and in-game when `IN-GAME` is on. It warns again only after the cupboard was filled up past that time plus an hour.
+**Upkeep early warning** - a Tool Cupboard warns once when its upkeep runs out within the time set in the `settings` channel (default 6 hours, `OFF` disables it), in the activity channel and in-game when `IN-GAME` is on. It is checked whenever the cupboard changes and every 5 minutes. It warns again only after the cupboard was filled up past that time plus an hour.
 <br><br>
 Container type Storage Monitor have the `RECYCLE` button which lets you calculate what resources you would get if you recycled the content of the container.
 <br><br>

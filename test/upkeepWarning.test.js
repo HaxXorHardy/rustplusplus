@@ -49,3 +49,55 @@ Test.describe('upkeep early warning', () => {
         Assert.strictEqual(UpkeepWarning.check({ upkeepWarned: false }, now + HOUR, now, 0), null);
     });
 });
+
+/* The cycle reads the monitors at once after a connect and then every 5 minutes; the warning reaches Discord and the chat. */
+Test.describe('storage monitor cycle and upkeep warning', () => {
+    const Registry = require('../src/structures/clientRegistry.js');
+    const DiscordMessages = require('../src/discordTools/discordMessages.js');
+    const StorageMonitorHandler = require('../src/handlers/storageMonitorHandler.js');
+
+    Test.it('reads the monitors in the first cycle, then every 5th', async () => {
+        const instance = { serverList: { s: { storageMonitors: {} } } };
+        const client = { getInstance: () => instance, setInstance: () => undefined };
+        const rustplus = { guildId: 'g', serverId: 's', storageMonitorIntervalCounter: null };
+
+        const counters = [];
+        for (let i = 0; i < 7; i++) {
+            await StorageMonitorHandler.handler(rustplus, client);
+            counters.push(rustplus.storageMonitorIntervalCounter);
+        }
+        Assert.deepStrictEqual(counters, [0, 1, 2, 3, 4, 0, 1], '0 = the monitors are read');
+    });
+
+    Test.it('warns in Discord and in game once, below the guild setting', (t) => {
+        const monitor = { name: 'TC', inGame: true };
+        const instance = { generalSettings: { upkeepWarningHours: 2 }, serverList: { s: { storageMonitors: { e: monitor } } } };
+        const client = {
+            getInstance: () => instance,
+            setInstance: () => undefined,
+            intlGet: (guildId, key, args) => `${key} ${args ? args.device : ''}`,
+        };
+        const discord = [];
+        const chat = [];
+        const rustplus = { guildId: 'g', sendInGameMessage: (text) => chat.push(text) };
+
+        const originalClient = Registry.client;
+        const originalSend = DiscordMessages.sendUpkeepWarningMessage;
+        Registry.client = client;
+        DiscordMessages.sendUpkeepWarningMessage = async (...args) => { discord.push(args); };
+        t.after(() => {
+            Registry.client = originalClient;
+            DiscordMessages.sendUpkeepWarningMessage = originalSend;
+        });
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        StorageMonitorHandler.warnUpkeep(rustplus, client, 's', 'e', nowSeconds + 3 * HOUR);
+        Assert.strictEqual(discord.length, 0, '3 h left: above 2 h');
+
+        StorageMonitorHandler.warnUpkeep(rustplus, client, 's', 'e', nowSeconds + HOUR + 53 * 60);
+        StorageMonitorHandler.warnUpkeep(rustplus, client, 's', 'e', nowSeconds + HOUR + 50 * 60);
+        Assert.strictEqual(discord.length, 1, '1h53m left: warned once');
+        Assert.deepStrictEqual(chat, ['upkeepRunsOut TC']);
+        Assert.strictEqual(monitor.upkeepWarned, true);
+    });
+});
