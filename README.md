@@ -30,16 +30,19 @@ A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/r
 
 ## **Features**
 
-* Receive notifications for [In-Game Events](docs/discord_text_channels.md#events-channel) (Patrol Helicopter, Cargo Ship, Chinook 47, Oil Rigs triggered).
-* Control [Smart Switches](docs/smart_devices.md#smart-switches) or Groups of Smart Switches via Discord or In-Game Team Chat.
-* Setup [Smart Alarms](docs/smart_devices.md#smart-alarms) to notify in Discord or In-Game Team Chat whenever they are triggered.
-* Use [Storage Monitors](docs/smart_devices.md#storage-monitors) to keep track of Tool Cupboard Upkeep or Large Wooden Box/Vending Machine content.
-* Head over to the [Information Text Channel](docs/images/information_channel.png) to see all sorts of information about the server, ongoing events and team member status.
+* Control [Smart Switches](docs/smart_devices.md#smart-switches) and [Switch Groups](docs/smart_devices.md#smart-switch-groups) from Discord or the In-Game Team Chat - with timers that survive restarts, day/night automation, real-time schedules and alarms that turn a group on.
+* [Smart Alarms](docs/smart_devices.md#smart-alarms) notify in Discord and In-Game, with a cooldown, `@everyone` escalation and a **raid mode** (direct message while nobody of the team is online, raid report afterwards).
+* [Storage Monitors](docs/smart_devices.md#storage-monitors) keep track of tool cupboard upkeep (with an early warning) and of box contents (alerts such as `Rifle Ammo < 100`).
+* [Push notifications](docs/credentials.md#push-notifications-fcm) of the Rust+ app: pairings appear within seconds, smart alarms and team logins of other servers and raid alarm plugins are reported.
+* The [Information Text Channel](docs/discord_text_channels.md#information-channel) shows the map, the server (with the next forced wipe), monuments and the team.
 * Communicate with teammates from [Discord to In-Game](docs/discord_text_channels.md#teamchat-channel) and vice versa.
+* Team statistics with a weekly report, a death map of the team and a [wipe helper](docs/smart_devices.md#after-a-wipe) that removes the devices of the old map.
 * Keep track of other teams on the server with the [Battlemetrics Player Tracker](docs/discord_text_channels.md#trackers-channel).
-* Follow what the bot is doing in the [Serverlog Channel](docs/discord_text_channels.md#serverlog-channel), which is only visible for the bot and the administrators (level selectable: `OFF`, `ERROR`, `INFO`, `FULL`).
+* `/status` shows the health of the bot (connection, token, push, recent warnings); the [Serverlog Channel](docs/discord_text_channels.md#serverlog-channel) mirrors the log for the administrators.
 * Alot of [QoL Commands](docs/commands.md) that can be used In-Game or from Discord.
 * View the [Full list of features](docs/full_list_features.md).
+
+> **Event notifications:** Facepunch's Rust+ API no longer reports Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates and Vending Machines (verified against a live server on 2026-11-18: the map markers contain only players). Their notifications were removed; the commands for them (`!cargo`, `!heli`, `!chinook`, `!small`, `!large`, `!market`, ...) still answer, but have no data.
 
 
 ## **Documentation**
@@ -57,7 +60,9 @@ A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/r
 
 > To run the bot, simply open the terminal of your choice and run the following from repository root:
 
-    $ npm start run
+    $ npm start
+
+> The configuration is read from the environment or a `.env` file in the repository root, see [`.env.example`](.env.example) (`RPP_DISCORD_CLIENT_ID` and `RPP_DISCORD_TOKEN` are required).
 
 
 ## **How to update the repository**
@@ -82,13 +87,21 @@ or
 
 ## **Running via docker**
 
-    $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/haxxorhardy/rustplusplus
+    $ docker run --rm -it -v ${pwd}/credentials:/app/credentials -v ${pwd}/instances:/app/instances -v ${pwd}/logs:/app/logs -v ${pwd}/maps:/app/maps -v ${pwd}/data:/app/data -e RPP_DISCORD_CLIENT_ID=111....1111 -e RPP_DISCORD_TOKEN=token --name rpp ghcr.io/haxxorhardy/rustplusplus
 
 or
 
     $ docker-compose up -d
 
-Make sure you use the correct values for DISCORD_CLIENT_ID as well as DISCORD_TOKEN in the docker command/docker-compose.yml
+Make sure you use the correct values for `RPP_DISCORD_CLIENT_ID` as well as `RPP_DISCORD_TOKEN` in the docker command/docker-compose.yml.
+
+| Volume | Content | Without it |
+| --- | --- | --- |
+| `/app/credentials` | Rust+ login and push device | log in again after every update |
+| `/app/instances` | settings, servers, devices, switch timers, team stats | everything is set up again |
+| `/app/logs` | log files | logs are lost on every update |
+| `/app/maps` | map images | they are rebuilt on the next connect |
+| `/app/data` | runtime data (custom in-game timers, offline times of teammates) | lost on every update |
 
 ## **Thanks to**
 

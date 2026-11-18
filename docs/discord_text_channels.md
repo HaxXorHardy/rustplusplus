@@ -30,20 +30,18 @@
 - Players currently online
 - Time In-Game
 - How long ago Map Wipe was
+- The next forced wipe (first Thursday of the month, 19:00 London time)
 - Time till day/night
 - Map Size
 - Map Seed
-- Map Salt
 - Map Name
 - Connect information for join through In-Game console
 <br>
 
-**Event Information** shows event activities In-Game such as:
-- Cargoship
-- Patrol Helicopter
-- Small Oil Rig
-- Large Oil Rig
-- Chinookk 47
+**Event Information** shows event activities In-Game: Cargoship, Patrol Helicopter, Small Oil Rig, Large Oil Rig, Chinook 47, Traveling Vendor and Deep Sea. Facepunch's Rust+ API no longer reports most of them (see [Events Channel](discord_text_channels.md#events-channel)), so these lines show no current data; the section can be switched off in the settings.
+<br>
+
+The information messages are only edited when their content changed (at the latest every 10 minutes, which also brings back a message that was deleted by hand), so the channel causes far fewer Discord requests than an edit every minute.
 <br>
 
 **Monument Information** shows a table of all monuments on the map with how many there are and which grid they are located in, for example `Oxum's Gas Station  2x  G3, J17`.
@@ -65,14 +63,25 @@
 The server embed displays a bunch of information. The title of the embed is the name of the server. The Battlemetrics Id is also displayed as well as if the server is streamer mode or not. The Description of the embed is basically the description of the Rust Server. Here you can also find the connect information that could be found in `information` channel. You can also see who is the hoster of the bot for the server.
 <br>
 
-There are a few buttons for each server. The `CONNECT` button lets you start a connection to the server. Once connected you can disconnect by clicking the `DISCONNECT` button. By clicking the `WEBSITE` button, you will be re-directed to the Rust Servers website. By clicking the `BATTLEMETRICS` button, you will be re-directed to the Battlemetrics page for the Rust Server. By clicking the `EDIT` button, you can change the `Battlemetrics Id` for the server. By clicking the `CUSTOM TIMERS` button, you can change Custom Timers for Cargoship egress time and time before a Locked Crate at Oil Rig is unlocked. By clicking the `CREATE TRACKER` button, you create a battlemetrics tracker that will appear in the `trackers` Text-Channel on Discord. By clicking the `CREATE GROUP` button, you create a Smart Switch Group that can be used to manage several Smart Switches at once. The Smart Switch Group will appear in the `switchgroups` Text-Channel on Discord. To remove the Server, just click the trashcan button.
+There are a few buttons for each server. The `CONNECT` button lets you start a connection to the server. Once connected you can disconnect by clicking the `DISCONNECT` button. By clicking the `WEBSITE` button, you will be re-directed to the Rust Servers website. By clicking the `BATTLEMETRICS` button, you will be re-directed to the Battlemetrics page for the Rust Server. By clicking the `EDIT` button, you can change the `Battlemetrics Id` for the server. By clicking the `CUSTOM TIMERS` button, you can change Custom Timers for Cargoship egress time and time before a Locked Crate at Oil Rig is unlocked (both events are no longer reported by the Rust+ API, so the timers have no effect at the moment). By clicking the `CREATE TRACKER` button, you create a battlemetrics tracker that will appear in the `trackers` Text-Channel on Discord. By clicking the `CREATE GROUP` button, you create a Smart Switch Group that can be used to manage several Smart Switches at once. The Smart Switch Group will appear in the `switchgroups` Text-Channel on Discord. To remove the Server, just click the trashcan button.
 
 ![Discord Text Channel Servers](images/channels/servers_channel.png)
 
 
 ## Settings Channel
 
-> The Settings Channel contain a bunch of different settings for rustplusplus. There are settings for language, voice gender, command prefix, trademark visibility, allow in-game commands, mute in-game, in-game teammate notifications, command delay, Smart Alarm notifications, enable leader command, battlemetrics notifications, wipe detection, vending machine subscription and event notifications.
+> The Settings Channel contain a bunch of different settings for rustplusplus. There are settings for language, voice gender, command prefix, trademark visibility, allow in-game commands, mute in-game, in-game teammate notifications, command delay, Smart Alarm notifications, enable leader command, battlemetrics notifications, wipe detection, vending machine subscription (no vending machine data at the moment) and event notifications (Traveling Vendor and Deep Sea - the settings of the events the API no longer reports were removed in 1.50.1).
+
+Four settings decide how alarms, the upkeep and the clock work (they are added to an existing settings channel on start, `/reset settings` is not needed):
+
+| Setting | Choices | Default |
+| --- | --- | --- |
+| `Smart alarm cooldown` | off, 30 s, 60 s, 2 min, 5 min, 10 min | `RPP_ALARM_COOLDOWN` (60 s) |
+| `Raid mode` | enabled / disabled | `RPP_RAID_MODE` (enabled) |
+| `Upkeep early warning` | off, 1, 2, 4, 6, 12, 24 h | `RPP_UPKEEP_WARNING_HOURS` (6 h) |
+| `Time zone` | 18 common zones (each shows the time there) | `RPP_TIMEZONE` (UTC) |
+
+They apply per Discord server; until something is chosen the environment value is used. The time zone is used by switch group schedules without their own zone and by the weekly team report.
 
 The `Which lines should the bot post to the server-log channel?` dropdown decides what the bot writes into the [Serverlog Channel](discord_text_channels.md#serverlog-channel): `OFF` (nothing, the channel stays empty), `ERROR` (only errors), `INFO` (information, warnings and errors) or `FULL` (everything, including the debug lines that require `RPP_DEBUG=true`). The default is `ERROR`. The change is live, a restart is not needed.
 
@@ -92,18 +101,12 @@ If the chosen interval is shorter than one round through all cameras, the bot ra
 
 ## Events Channel
 
-> The Events Channel contains all the event notifications that occurs such as:
+> The Events Channel contains the event notifications:
 
-- `Cargoship spawn`
-- `Cargoship despawn`
-- `Cargoship enters egress stage`
-- `Patrol Helicopter spawn`
-- `Patrol Helicopter despawn`
-- `Patrol Helicopter destroyed`
-- `Locked Crate at Oil Rig Unlocked`
-- `Oil Rig have been triggered`
-- `Chinook 47 spawn`
-- `New Vending Machine detected`
+- `Traveling Vendor` appears, halts, leaves
+- `Deep Sea` appears, leaves
+
+Facepunch's Rust+ API no longer reports Cargo Ship, Patrol Helicopter, Chinook 47, Oil Rig crates and Vending Machines - on a live server (2026-11-18) the map markers contained only players. Their notifications (cargo spawn/despawn/egress/docking, heli spawn/despawn/destroyed, oil rig triggered/crate unlocked, chinook, new vending machine) were removed in 1.50.1. Deep Sea is recognized by vending machines outside the map grid, so it has no data while the vending machines are missing either.
 
 ![Discord Text Channel Events](images/channels/events_channel.png)
 
@@ -145,7 +148,7 @@ If the chosen interval is shorter than one round through all cameras, the bot ra
 
 ## Activity Channel
 
-> The Activity Channel is used to display a bunch of different things such as team member joined/ left/ connected/ disconnected/ killed/ offline killed, Not found notifications from Smart Devices, Smart Alarm notifications, Decaying notifications, Tracker information, Server went down/up notifications, facepunch news, Battlemetrics notifications etc...
+> The Activity Channel is used to display a bunch of different things such as team member joined/ left/ connected/ disconnected/ killed/ offline killed, Not found notifications from Smart Devices (one message for the switches of a group), Smart Alarm notifications, raid reports, storage alerts, upkeep warnings, Decaying notifications, the map wipe checklist, the weekly team report, Tracker information, Server went down/up notifications, raid alarm plugin alerts (push), Battlemetrics notifications etc...
 
 ![Discord Text Channel Activity](images/channels/activity_channel.png)
 
@@ -179,7 +182,7 @@ The alert shows the camera, the name of every player in view with the distance t
 
 **Who can see it?** Only the bot and the administrators. The channel denies `View Channel`, `Send Messages` and `Read Message History` for `@everyone` (and for the role the bot manages, if one is set up) and allows them for the bot only. Members and roles with the **Administrator** permission bypass channel overwrites in Discord, so they always have access - they do not need an own overwrite entry.
 
-**How much is posted?** The `Which lines should the bot post to the server-log channel?` dropdown in the [Settings Channel](discord_text_channels.md#settings-channel) switches between `OFF`, `ERROR`, `INFO` (default) and `FULL`:
+**How much is posted?** The `Which lines should the bot post to the server-log channel?` dropdown in the [Settings Channel](discord_text_channels.md#settings-channel) switches between `OFF`, `ERROR` (default), `INFO` and `FULL`:
 
 | Level | What is posted |
 | --- | --- |

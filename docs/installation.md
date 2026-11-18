@@ -8,7 +8,10 @@ Program | Version | Download | Note
 `Git` | Any | [**here**](https://git-scm.com/downloads) | &nbsp;
 
 ## Optional Software
-To enable step-trace for cargoship and patrol helicopter, [**GraphicsMagick**](http://www.graphicsmagick.org/download.html) needs to be downloaded.
+[**GraphicsMagick**](http://www.graphicsmagick.org/download.html) draws the step-trace of the cargoship and the patrol helicopter on the map. The Rust+ API no longer reports those two, so it is not needed at the moment; the Docker image contains it anyway.
+
+## Configuration
+Copy [`.env.example`](../.env.example) to `.env` and fill in at least `RPP_DISCORD_CLIENT_ID` and `RPP_DISCORD_TOKEN` (see [Discord Bot Setup](discord_bot_setup.md)). Every other value has a default.
 
 
 ## Clone the repository

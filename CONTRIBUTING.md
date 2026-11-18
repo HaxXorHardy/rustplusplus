@@ -13,10 +13,10 @@ Please note we have a code of conduct, please follow it in all your interactions
 
 ## Pull Request Process
 
-1. Fork the repository and create your branch from `main`.
+1. Fork the repository and create your branch from `master`.
 2. Implement the changes and test it !!!
 3. Test it again.
-4. If you've changed APIs, update the documentation (README.md or documentation.md).
+4. Run `npm test` (type checks and the unit tests). If you've changed features or APIs, update the documentation (README.md and the files in `docs/`).
 5. Issue that pull request!
 
 ## Code Formatting

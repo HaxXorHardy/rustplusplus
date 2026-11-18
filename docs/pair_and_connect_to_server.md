@@ -1,13 +1,13 @@
 # Pair and Connect to a Server
 
-1. Make sure that you've setup the Credentials and that the bot is currently running (`npm start run`).
+1. Make sure that you've setup the Credentials and that the bot is currently running (`npm start`).
 2. Login to the Rust server you want to play.
 3. Click `ESC` and then on `Rust+`.
 4. Click `PAIR WITH SERVER`.
 
 ![Pair to server image](images/bot_setup/pairing_server.png)
 
-5. When you've paired the server it should appear in the Discord Text Channel `servers`.
+5. When you've paired the server it should appear in the Discord Text Channel `servers` - within seconds with push notifications, otherwise on the next read of the notification history (`RPP_RUSTPLUS_HISTORY_INTERVAL`).
 
 ![server in servers image](images/channels/servers_channel.png)
 
