@@ -39,10 +39,24 @@ const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 /* A device whose FCM connection keeps failing is registered again (Google may have dropped it). */
 const MAX_CONNECT_FAILURES = 3;
 
-const listeners = new Map();    /* steamId -> { receiver, androidId } */
+/*
+    The receiver reconnects by itself after a dropped socket (1 s, 2 s, ... up to 15 s). Two cases it does not cover:
+    a reconnect whose check-in at Google fails (the promise rejects inside its timer, the retries end) and a connection
+    that died without a close (router reset: only the TCP keepalive notices, by default after two hours). The watchdog
+    starts a connection again that has been down this long, and keeps trying at the same pace until it is back.
+*/
+const WATCHDOG_INTERVAL_MS = 60 * 1000;
+const RESTART_AFTER_DOWN_MS = 5 * 60 * 1000;
+
+/* Probe an idle connection after a minute instead of the OS default of two hours (Linux: then 9 probes, 75 s apart). */
+const KEEPALIVE_IDLE_MS = 60 * 1000;
+
+const listeners = new Map();    /* steamId -> { receiver, androidId, state: { downSince } } */
+const restarts = new Map();     /* steamId -> time of the next attempt after a watchdog restart failed */
 const starting = new Map();     /* steamId -> promise of a running startAccount() */
 const connectFailures = new Map();
 let checkTimer = null;
+let watchdogTimer = null;
 let unsubscribe = null;
 
 function errorText(e) {
@@ -83,6 +97,88 @@ async function onData(client, steamId, data, deps) {
     }
 }
 
+function secondsSince(ms) {
+    return Math.round((Date.now() - ms) / 1000);
+}
+
+/*
+    Logs drops and returns, tunes the keepalive and catches the reconnects of the receiver. Returns the state the
+    watchdog reads: downSince is set while the connection is down.
+*/
+function watchConnection(client, steamId, receiver) {
+    const state = { started: false, downSince: null };
+
+    receiver.on('connect', () => {
+        /* _socket is internal to push-receiver: only used when it looks as expected. */
+        try {
+            const socket = receiver._socket;
+            if (socket && typeof socket.setKeepAlive === 'function') socket.setKeepAlive(true, KEEPALIVE_IDLE_MS);
+        }
+        catch (e) {
+            /* The default keepalive stays. */
+        }
+
+        if (state.downSince !== null) {
+            client.log(client.intlGet(null, 'infoCap'),
+                `Rust+ push: the FCM connection of ${steamId} is back after ${secondsSince(state.downSince)} s.`);
+        }
+        state.downSince = null;
+    });
+
+    receiver.on('disconnect', () => {
+        if (state.downSince !== null) return;
+
+        state.downSince = Date.now();
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: the FCM connection of ${steamId} dropped, it reconnects.`, 'warn');
+    });
+
+    /*
+        The receiver calls connect() again from a timer after a drop. A failed check-in rejected there unhandled and
+        ended the retries: caught now, the watchdog takes over. The first connect still throws to doStartAccount.
+    */
+    const connect = receiver.connect.bind(receiver);
+    receiver.connect = () => connect().catch((e) => {
+        if (!state.started) throw e;
+
+        if (state.downSince === null) state.downSince = Date.now();
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: reconnecting ${steamId} failed (${errorText(e)}), the watchdog starts it again.`, 'warn');
+    });
+
+    return state;
+}
+
+/* Start what has been down too long again, and retry the restarts that failed. deps.now for tests. */
+async function checkConnections(client, deps = {}) {
+    const now = deps.now ? deps.now() : Date.now();
+
+    for (const [steamId, entry] of [...listeners.entries()]) {
+        const downSince = entry.state ? entry.state.downSince : null;
+        if (downSince === null || (now - downSince) < RESTART_AFTER_DOWN_MS) continue;
+
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: the FCM connection of ${steamId} is down for ${Math.round((now - downSince) / 1000)} s, ` +
+            'it is started again.', 'warn');
+
+        stopAccount(steamId);
+        restarts.set(steamId, now);
+    }
+
+    for (const [steamId, nextAttempt] of [...restarts.entries()]) {
+        /* The hourly check or a new token started it meanwhile. */
+        if (isListening(steamId)) {
+            restarts.delete(steamId);
+            continue;
+        }
+        if (nextAttempt > now) continue;
+
+        const started = await startAccount(client, steamId, deps);
+        if (started) restarts.delete(steamId);
+        else restarts.set(steamId, now + RESTART_AFTER_DOWN_MS);
+    }
+}
+
 async function doStartAccount(client, steamId, deps) {
     const log = (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug');
 
@@ -119,8 +215,11 @@ async function doStartAccount(client, steamId, deps) {
         onData(client, steamId, data, deps).catch(() => undefined);
     });
 
+    const state = watchConnection(client, steamId, receiver);
+
     try {
         await receiver.connect();
+        state.started = true;
     }
     catch (e) {
         const failures = (connectFailures.get(`${steamId}`) || 0) + 1;
@@ -151,7 +250,7 @@ async function doStartAccount(client, steamId, deps) {
     }
 
     connectFailures.delete(`${steamId}`);
-    listeners.set(`${steamId}`, { receiver: receiver, androidId: fcm.androidId });
+    listeners.set(`${steamId}`, { receiver: receiver, androidId: fcm.androidId, state: state });
 
     client.log(client.intlGet(null, 'infoCap'), `Rust+ push: listening for the notifications of ${steamId}.`);
 
@@ -205,6 +304,12 @@ async function start(client, deps = {}) {
 
     if (typeof checkTimer.unref === 'function') checkTimer.unref();
 
+    watchdogTimer = setInterval(() => {
+        checkConnections(client, deps).catch(() => undefined);
+    }, WATCHDOG_INTERVAL_MS);
+
+    if (typeof watchdogTimer.unref === 'function') watchdogTimer.unref();
+
     await checkAll(client, deps);
 }
 
@@ -212,6 +317,11 @@ function stop() {
     if (checkTimer !== null) {
         clearInterval(checkTimer);
         checkTimer = null;
+    }
+
+    if (watchdogTimer !== null) {
+        clearInterval(watchdogTimer);
+        watchdogTimer = null;
     }
 
     if (unsubscribe !== null) {
@@ -222,12 +332,16 @@ function stop() {
     for (const steamId of [...listeners.keys()]) stopAccount(steamId);
 
     connectFailures.clear();
+    restarts.clear();
 }
 
 module.exports = {
     CHECK_INTERVAL_MS: CHECK_INTERVAL_MS,
     MAX_CONNECT_FAILURES: MAX_CONNECT_FAILURES,
+    RESTART_AFTER_DOWN_MS: RESTART_AFTER_DOWN_MS,
+    KEEPALIVE_IDLE_MS: KEEPALIVE_IDLE_MS,
     isListening: isListening,
+    checkConnections: checkConnections,
     startAccount: startAccount,
     stopAccount: stopAccount,
     checkAll: checkAll,
