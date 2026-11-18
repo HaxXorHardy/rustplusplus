@@ -67,6 +67,14 @@ function isListening(steamId) {
     return listeners.has(`${steamId}`);
 }
 
+/* For /status: null when the account has no listener, else whether its FCM connection is up. */
+function connectionState(steamId) {
+    const entry = listeners.get(`${steamId}`);
+    if (!entry) return null;
+
+    return { up: !entry.state || entry.state.downSince === null, downSince: entry.state ? entry.state.downSince : null };
+}
+
 function stopAccount(steamId) {
     const entry = listeners.get(`${steamId}`);
     if (!entry) return;
@@ -341,6 +349,7 @@ module.exports = {
     RESTART_AFTER_DOWN_MS: RESTART_AFTER_DOWN_MS,
     KEEPALIVE_IDLE_MS: KEEPALIVE_IDLE_MS,
     isListening: isListening,
+    connectionState: connectionState,
     checkConnections: checkConnections,
     startAccount: startAccount,
     stopAccount: stopAccount,

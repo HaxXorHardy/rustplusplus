@@ -33,6 +33,7 @@ const RegisterSlashCommands = require('../discordTools/RegisterSlashCommands.js'
 const SetupGuildCategory = require('../discordTools/SetupGuildCategory.js');
 const SetupGuildChannels = require('../discordTools/SetupGuildChannels.js');
 const SetupSettingsMenu = require('../discordTools/SetupSettingsMenu.js');
+const BotStatus = require('../util/botStatus.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 const Items = require('./Items');
 const LogChannelRelay = require('../util/logChannelRelay.js');
@@ -206,6 +207,7 @@ class DiscordBot extends Discord.Client {
 
     log(title, text, level = 'info') {
         this.logger.log(title, text, level);
+        BotStatus.record(level, title, text);
     }
 
     debug(title, text) {

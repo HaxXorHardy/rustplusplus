@@ -19,6 +19,7 @@
 */
 
 const BackgroundHandler = require('../handlers/backgroundHandler.js');
+const BotStatus = require('../util/botStatus.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const OfflineAnnouncement = require('../util/offlineAnnouncement.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
@@ -80,6 +81,7 @@ module.exports = {
             }
 
             client.rustplusReconnecting[guildId] = true;
+            BotStatus.noteDisconnect(guildId);
 
             rustplus.log(client.intlGet(null, 'reconnectingCap'), client.intlGet(null, 'reconnectingToServer'));
 
