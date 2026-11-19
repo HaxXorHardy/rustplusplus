@@ -21,6 +21,7 @@
 const Discord = require('discord.js');
 const Path = require('path');
 
+const Config = require('../../config');
 const Constants = require('../util/constants.js');
 const Client = require('../structures/clientRegistry.js');
 const DiscordButtons = require('./discordButtons.js');
@@ -30,6 +31,7 @@ const MapEvents = require('../util/mapEvents.js');
 const DeviceImages = require('../util/deviceImages.js');
 const DiscordTools = require('./discordTools.js');
 const InstanceUtils = require('../util/instanceUtils.js');
+const KeyedThrottle = require('../util/keyedThrottle.js');
 const WithTimeout = require('../util/withTimeout.js');
 const RustPlusMap = require('../structures/Map.js');
 const Scrape = require('../util/scrape.js');
@@ -50,30 +52,16 @@ const INFORMATION_ORDER_INTERVAL_MS = 15 * 60 * 1000;
 const SEND_MESSAGE_TIMEOUT_MS = 90 * 1000;
 const TIMED_OUT = Symbol('timed out');
 
-/* Storage monitor edits in flight, see sendStorageMonitorMessage. */
-const storageMonitorUpdates = new Object();
+/* Storage monitor edits in flight or due, see sendStorageMonitorMessage. */
+const storageMonitorUpdates = KeyedThrottle.createKeyedThrottle(
+    () => module.exports.storageMonitorEditIntervalMs(),
+    (key, e) => {
+        Client.client.log(Client.client.intlGet(null, 'warningCap'),
+            `Updating storage monitor ${key} failed: ${e && e.message ? e.message : e}`, 'warn');
+    });
 
 function sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction = null) {
     return module.exports.sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction);
-}
-
-/* Runs detached: edits until no newer change came in during the last one. */
-function drainStorageMonitorUpdates(key, state, guildId, serverId, entityId) {
-    (async () => {
-        try {
-            do {
-                state.again = false;
-                await sendStorageMonitorMessageNow(guildId, serverId, entityId);
-            } while (state.again);
-        }
-        catch (e) {
-            Client.client.log(Client.client.intlGet(null, 'warningCap'),
-                `Updating storage monitor ${entityId} failed: ${e && e.message ? e.message : e}`, 'warn');
-        }
-        finally {
-            if (storageMonitorUpdates[key] === state) delete storageMonitorUpdates[key];
-        }
-    })();
 }
 
 /*
@@ -276,33 +264,36 @@ module.exports = {
         Now at most one edit per monitor runs. A call that comes in meanwhile only marks the message as outdated and
         returns; when the running edit is done, one more edit posts the latest state. Only the first caller waits, and
         only for its own edit, so a stream of pushes cannot hold up the storage monitor round.
+
+        This one is for the round, the setup and the user's own changes: it edits at once (or right after the running
+        edit). The pushes of the game go through sendStorageMonitorMessageThrottled.
     */
     sendStorageMonitorMessage: async function (guildId, serverId, entityId, interaction = null) {
         if (interaction) return await sendStorageMonitorMessageNow(guildId, serverId, entityId, interaction);
 
-        const key = `${guildId}:${serverId}:${entityId}`;
-        const running = storageMonitorUpdates[key];
-
-        if (running) {
-            running.again = true;
-            return;
-        }
-
-        const state = { again: false };
-        storageMonitorUpdates[key] = state;
-
-        try {
-            await sendStorageMonitorMessageNow(guildId, serverId, entityId);
-        }
-        finally {
-            if (state.again) {
-                drainStorageMonitorUpdates(key, state, guildId, serverId, entityId);
-            }
-            else {
-                delete storageMonitorUpdates[key];
-            }
-        }
+        await storageMonitorUpdates.request(`${guildId}:${serverId}:${entityId}`,
+            () => sendStorageMonitorMessageNow(guildId, serverId, entityId), { immediate: true });
     },
+
+    /*
+        Issue #8: a tool cupboard pushes a change every few seconds, around the clock, and the edit after the running
+        one started as soon as it was done - the message was edited every ~6 s, every edit rate limited, and buttons
+        on the message waited behind the edits. A push now edits at most once per storageMonitorEditIntervalMs
+        (measured from the end of the last edit); pushes in the pause only mark the message as outdated, the edit
+        after the pause shows the latest state.
+    */
+    sendStorageMonitorMessageThrottled: async function (guildId, serverId, entityId) {
+        await storageMonitorUpdates.request(`${guildId}:${serverId}:${entityId}`,
+            () => sendStorageMonitorMessageNow(guildId, serverId, entityId));
+    },
+
+    /* RPP_STORAGE_MONITOR_EDIT_INTERVAL, read on every push so tests can change it. */
+    storageMonitorEditIntervalMs: function () {
+        return Math.max(0, Config.general.storageMonitorEditIntervalSeconds || 0) * 1000;
+    },
+
+    /* exported for tests */
+    resetStorageMonitorUpdates: () => storageMonitorUpdates.reset(),
 
     sendStorageMonitorMessageNow: async function (guildId, serverId, entityId, interaction = null) {
         let instance = Client.client.getInstance(guildId);
