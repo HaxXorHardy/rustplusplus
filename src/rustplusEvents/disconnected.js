@@ -54,6 +54,8 @@ module.exports = {
         clearInterval(rustplus.tokensReplenishTaskId);
         BackgroundHandler.stop(rustplus);
         clearTimeout(rustplus.inGameChatTimeout);
+        clearTimeout(rustplus.operationalWatchdog);
+        rustplus.operationalWatchdog = null;
 
         /* Reset map markers, timers & arrays */
         if (rustplus.mapMarkers) rustplus.mapMarkers.reset();
@@ -65,9 +67,9 @@ module.exports = {
 
         /* Was the disconnection unexpected? */
         if (client.activeRustplusInstances[guildId]) {
-            /* An instance that was already replaced must not touch the current one. */
+            /* An instance that was already replaced must not touch the current one, and never connects again. */
             const current = client.rustplusInstances[guildId];
-            if (current && current !== rustplus) return;
+            if (current && current !== rustplus) return rustplus.retire();
 
             if (!client.rustplusReconnecting[guildId]) {
                 /*
@@ -86,6 +88,13 @@ module.exports = {
             rustplus.log(client.intlGet(null, 'reconnectingCap'), client.intlGet(null, 'reconnectingToServer'));
 
             delete client.rustplusInstances[guildId];
+
+            /*
+                The reconnect is a new instance. This one is retired: a request that was still scheduled on it (a
+                storage monitor read after a push) failed with "Not connected" and reconnected this removed instance -
+                a second socket next to the reconnect, which ran a connect flow nobody polled.
+            */
+            rustplus.retire();
 
             if (client.rustplusReconnectTimers[guildId]) {
                 clearTimeout(client.rustplusReconnectTimers[guildId]);
