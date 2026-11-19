@@ -87,6 +87,8 @@ function fakeInstance(fields) {
     instance.log = function (title, text, level) { this.logged.push({ text: text, level: level }); };
     instance.scheduleAuthRetry = function (reason) { this.retries.push(reason); };
     instance.cancelAuthRetry = function () { this.retriesCancelled = true; };
+    /* The client of these tests has no instance registry, so an instance that was not deleted is the current one. */
+    instance.isCurrentInstance = RustPlus.prototype.isCurrentInstance;
 
     return instance;
 }
