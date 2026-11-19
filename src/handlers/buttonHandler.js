@@ -523,6 +523,12 @@ module.exports = async (client, interaction) => {
             return;
         }
 
+        /*
+            Acknowledged first: removing the previous server's devices and rewriting its message can take longer
+            than Discord's 3 s for the first answer (10062 Unknown interaction). The message is edited at the end.
+        */
+        await client.interactionDeferUpdate(interaction);
+
         client.resetRustplusVariables(guildId);
 
         if (instance.activeServer !== null) {
@@ -575,7 +581,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
 
         const groupsToUpdate = [];
         for (const [entityId, content] of Object.entries(server.switches)) {
@@ -635,7 +641,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
 
         /* Find an available tracker id */
         const trackerId = client.findAvailableTrackerId(guildId);
@@ -665,7 +671,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
 
         const groupId = client.findAvailableGroupId(guildId, ids.serverId);
 
@@ -695,6 +701,10 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: removing the devices below can take longer than Discord's 3 s for the first answer. */
+        await client.interactionDeferUpdate(interaction);
+
         instance.activeServer = null;
         client.setInstance(guildId, instance);
 
@@ -716,7 +726,7 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -724,6 +734,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* The click was never answered; clearing the device channels takes far longer than Discord's 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         /* Only the server that is being deleted may end the connection, never another one of the guild. */
         if (rustplus && (ids.serverId === instance.activeServer || ids.serverId === rustplus.serverId)) {
@@ -776,9 +789,15 @@ module.exports = async (client, interaction) => {
         }
 
         if (!rustplus || (rustplus && (rustplus.serverId !== ids.serverId))) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
+
+        /*
+            Acknowledged first: the Rust+ request and the in-game message can take longer than Discord's 3 s.
+            The switch message is edited through the interaction at the end.
+        */
+        await client.interactionDeferUpdate(interaction);
 
         SwitchTimeouts.cancel(guildId, ids.serverId, ids.entityId);
 
@@ -843,7 +862,7 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -851,6 +870,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: the message is removed through a regular Discord call, which can take over 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         await DiscordTools.deleteMessageById(guildId, instance.channelId.switches,
             server.switches[ids.entityId].messageId);
@@ -896,7 +918,7 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -904,6 +926,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: the message is removed through a regular Discord call, which can take over 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         await DiscordTools.deleteMessageById(guildId, instance.channelId.alarms,
             server.alarms[ids.entityId].messageId);
@@ -982,7 +1007,7 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -990,6 +1015,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: the message is removed through a regular Discord call, which can take over 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         await DiscordTools.deleteMessageById(guildId, instance.channelId.storageMonitors,
             server.storageMonitors[ids.entityId].messageId);
@@ -1007,7 +1035,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
 
         if (!rustplus || (rustplus && rustplus.serverId !== ids.serverId)) return;
 
@@ -1041,7 +1069,7 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -1049,6 +1077,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: the message is removed through a regular Discord call, which can take over 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         await DiscordTools.deleteMessageById(guildId, instance.channelId.storageMonitors,
             server.storageMonitors[ids.entityId].messageId);
@@ -1059,7 +1090,7 @@ module.exports = async (client, interaction) => {
     }
     else if (interaction.customId === 'RecycleDelete') {
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -1076,7 +1107,7 @@ module.exports = async (client, interaction) => {
         }
 
         /* Awaited: the group message is edited through this interaction afterwards (setGroup options.interaction). */
-        await interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
 
         if (rustplus) {
             /* A running "on/off for X minutes" of the group must not switch it back after the button. */
@@ -1113,11 +1144,11 @@ module.exports = async (client, interaction) => {
 
         if (!await client.requireAdminPrivileges(interaction)) return;
         if (!instance.serverList[ids.serverId]) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
-        await interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
         const removed = await WipeHelper.removeOldDevices(client, guildId, ids.serverId, { all: Boolean(ids.all) });
 
         client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
@@ -1138,7 +1169,7 @@ module.exports = async (client, interaction) => {
 
         if (!await client.requireAdminPrivileges(interaction)) return;
         if (!server) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -1162,7 +1193,7 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        await interaction.deferUpdate();
+        await client.interactionDeferUpdate(interaction);
 
         if (rustplus && rustplus.serverId === ids.serverId) {
             const state = SmartSwitchGroupHandler.getGroupState(server, server.switchGroups[ids.groupId]);
@@ -1214,7 +1245,7 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -1222,6 +1253,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: the message is removed through a regular Discord call, which can take over 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         if (rustplus) {
             SmartSwitchGroupHandler.cancelGroupTimer(rustplus, ids.groupId);
@@ -1284,7 +1318,7 @@ module.exports = async (client, interaction) => {
         const tracker = instance.trackers[ids.trackerId];
 
         if (!client.hasAdminPrivileges(interaction)) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -1292,6 +1326,9 @@ module.exports = async (client, interaction) => {
             await interaction.message.delete();
             return;
         }
+
+        /* Acknowledged first: the message is removed through a regular Discord call, which can take over 3 s. */
+        await client.interactionDeferUpdate(interaction);
 
         await DiscordTools.deleteMessageById(guildId, instance.channelId.trackers,
             tracker.messageId);
