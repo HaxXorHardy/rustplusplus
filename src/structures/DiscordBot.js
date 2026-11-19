@@ -544,6 +544,22 @@ class DiscordBot extends Discord.Client {
         return undefined;
     }
 
+    /*
+        Acknowledges a click within Discord's 3 s limit when the work behind it waits on other Discord or Rust+ calls.
+        The message is changed afterwards through interactionUpdate, which then edits the reply.
+    */
+    async interactionDeferUpdate(interaction) {
+        if (interaction.deferred || interaction.replied) return;
+
+        try {
+            await interaction.deferUpdate();
+        }
+        catch (e) {
+            this.log(this.intlGet(null, 'errorCap'),
+                `${this.intlGet(null, 'couldNotDeferInteraction')} ${e}`, 'error');
+        }
+    }
+
     async messageEdit(message, content) {
         try {
             return await message.edit(content);
