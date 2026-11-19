@@ -189,8 +189,34 @@ Test.describe('DiscordMessages.sendStorageMonitorMessage coalescing', () => {
     const originalNow = DiscordMessages.sendStorageMonitorMessageNow;
     const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+    const originalInterval = DiscordMessages.storageMonitorEditIntervalMs;
+
     Test.afterEach(() => {
         DiscordMessages.sendStorageMonitorMessageNow = originalNow;
+        DiscordMessages.storageMonitorEditIntervalMs = originalInterval;
+        DiscordMessages.resetStorageMonitorUpdates();
+    });
+
+    Test.it('edits a pushed monitor at most once per interval (issue #8)', async () => {
+        DiscordMessages.storageMonitorEditIntervalMs = () => 60;
+        let edits = 0;
+        DiscordMessages.sendStorageMonitorMessageNow = async () => { edits++; };
+
+        await DiscordMessages.sendStorageMonitorMessageThrottled('g', 's', 'tc');
+        for (let i = 0; i < 10; i++) await DiscordMessages.sendStorageMonitorMessageThrottled('g', 's', 'tc');
+        Assert.strictEqual(edits, 1);
+
+        /* The latest state after the pause, one edit for the ten pushes. */
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        Assert.strictEqual(edits, 2);
+
+        /* The round and the user's own changes do not wait for the pause. */
+        await DiscordMessages.sendStorageMonitorMessage('g', 's', 'tc');
+        Assert.strictEqual(edits, 3);
+    });
+
+    Test.it('the default pause is RPP_STORAGE_MONITOR_EDIT_INTERVAL (30 s)', () => {
+        Assert.strictEqual(DiscordMessages.storageMonitorEditIntervalMs(), 30 * 1000);
     });
 
     Test.it('runs one edit at a time and one more for the changes that came in meanwhile', async () => {

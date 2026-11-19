@@ -31,7 +31,14 @@ const StorageMonitorHandler = require('../handlers/storageMonitorHandler.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const TeamChatHandler = require("../handlers/teamChatHandler.js");
 const TeamHandler = require('../handlers/teamHandler.js');
+const KeyedThrottle = require('../util/keyedThrottle.js');
 const { CHANNELS } = require('../util/inGameChat.js');
+
+/* A tool cupboard is read this long after its push, as before the throttle. */
+const TOOL_CUPBOARD_READ_DELAY_MS = 2000;
+
+/* The reads of the tool cupboards after their pushes, one per cupboard and pause (see updateToolCupboard). */
+const toolCupboardUpdates = KeyedThrottle.createKeyedThrottle(() => DiscordMessages.storageMonitorEditIntervalMs());
 
 /* A chat text reduced to its letters and digits: how the bot recognizes its own messages coming back. */
 function botMessageKey(text) {
@@ -41,6 +48,10 @@ function botMessageKey(text) {
 module.exports = {
     name: 'message',
     botMessageKey: botMessageKey,
+    /* exported for tests */
+    messageBroadcastEntityChangedStorageMonitor: (...args) => messageBroadcastEntityChangedStorageMonitor(...args),
+    resetToolCupboardUpdates: () => toolCupboardUpdates.reset(),
+    toolCupboardReadDelayMs: TOOL_CUPBOARD_READ_DELAY_MS,
     async execute(rustplus, client, message) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
@@ -285,7 +296,20 @@ async function messageBroadcastEntityChangedStorageMonitor(rustplus, client, mes
 
     if (server.storageMonitors[entityId].type === 'toolCupboard' ||
         message.broadcast.entityChanged.payload.capacity === Constants.STORAGE_MONITOR_TOOL_CUPBOARD_CAPACITY) {
-        setTimeout(updateToolCupboard.bind(null, rustplus, client, message), 2000);
+        /*
+            Read 2 s after the push, and at most once per RPP_STORAGE_MONITOR_EDIT_INTERVAL: a tool cupboard pushes
+            every few seconds (issue #8), each push used to cost one getEntityInfo. The read after the pause gets the
+            latest state, the upkeep warning and the storage alerts are checked with it.
+        */
+        toolCupboardUpdates.request(`${rustplus.guildId}:${serverId}:${entityId}`, async () => {
+            try {
+                await updateToolCupboard(rustplus, client, entityId);
+            }
+            catch (e) {
+                rustplus.log(client.intlGet(null, 'warningCap'),
+                    `Reading tool cupboard ${entityId} failed: ${e && e.message ? e.message : e}`, 'warn');
+            }
+        }, { delayMs: module.exports.toolCupboardReadDelayMs });
     }
     else {
         rustplus.storageMonitors[entityId] = {
@@ -308,17 +332,31 @@ async function messageBroadcastEntityChangedStorageMonitor(rustplus, client, mes
         }
         client.setInstance(rustplus.guildId, instance);
 
-        await DiscordMessages.sendStorageMonitorMessage(rustplus.guildId, serverId, entityId);
+        /* The alerts are checked on every push, only the Discord edit waits for the pause. */
+        DiscordMessages.sendStorageMonitorMessageThrottled(rustplus.guildId, serverId, entityId).catch((e) => {
+            rustplus.log(client.intlGet(null, 'warningCap'),
+                `Updating storage monitor ${entityId} failed: ${e && e.message ? e.message : e}`, 'warn');
+        });
         await StorageAlerts.check(client, rustplus, entityId);
     }
 }
 
-async function updateToolCupboard(rustplus, client, message) {
+async function updateToolCupboard(rustplus, client, entityId) {
+    /*
+        The read waits up to RPP_STORAGE_MONITOR_EDIT_INTERVAL and keeps the instance of the push. A reconnect replaces
+        that instance meanwhile (isOperational stays true on the old one): its failed request would mark the cupboard
+        unreachable in Discord until the next read.
+    */
+    if (!rustplus.isOperational || !rustplus.isCurrentInstance()) return;
+
     const instance = client.getInstance(rustplus.guildId);
     const server = instance.serverList[rustplus.serverId];
-    const entityId = message.broadcast.entityChanged.entityId;
+    /* Removed while the read waited for the pause. */
+    if (!server || !server.storageMonitors[entityId]) return;
 
     const info = await rustplus.getEntityInfoAsync(entityId);
+    /* Replaced or removed while the server answered. */
+    if (!rustplus.isCurrentInstance() || !server.storageMonitors[entityId]) return;
     server.storageMonitors[entityId].reachable = await rustplus.isResponseValid(info) ? true : false;
     client.setInstance(rustplus.guildId, instance);
 
@@ -353,7 +391,11 @@ async function updateToolCupboard(rustplus, client, message) {
             info.entityInfo.payload.protectionExpiry);
     }
 
-    await DiscordMessages.sendStorageMonitorMessage(rustplus.guildId, rustplus.serverId, entityId);
+    /* The alerts do not wait for Discord. */
+    DiscordMessages.sendStorageMonitorMessageThrottled(rustplus.guildId, rustplus.serverId, entityId).catch((e) => {
+        rustplus.log(client.intlGet(null, 'warningCap'),
+            `Updating storage monitor ${entityId} failed: ${e && e.message ? e.message : e}`, 'warn');
+    });
     await StorageAlerts.check(client, rustplus, entityId);
 }
 

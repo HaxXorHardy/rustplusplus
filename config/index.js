@@ -102,6 +102,12 @@ module.exports = {
         imageBaseUrl: process.env.RPP_IMAGE_BASE_URL || '',
         /* Warn this many hours before a tool cupboard (with a storage monitor) runs out of upkeep. 0 = off. */
         upkeepWarningHours: envInt('RPP_UPKEEP_WARNING_HOURS', 6),
+        /*
+            A storage monitor that pushes changes non-stop (a tool cupboard) edits its Discord message at most once in
+            this many seconds, the edit after the pause shows the latest state. A tool cupboard is also read from the
+            server at most once in this time. Buttons still update at once. 0 = no pause.
+        */
+        storageMonitorEditIntervalSeconds: envInt('RPP_STORAGE_MONITOR_EDIT_INTERVAL', 30),
         /* The time zone of switch group schedules without their own (e.g. Europe/Berlin). */
         scheduleTimeZone: process.env.RPP_TIMEZONE || 'UTC',
     },
