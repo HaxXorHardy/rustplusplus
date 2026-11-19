@@ -89,7 +89,8 @@ class RustPlus extends RustPlusLib {
 
         /* Status flags */
         this.isOperational = false;         /* Connected to the server, and request is verified. */
-        this.isDeleted = false;             /* Is the rustplus instance deleted? */
+        this.isDeleted = false;             /* Deleted or retired: it must never connect again. */
+        this.operationalWatchdog = null;    /* Checks that the first poll follows "RUSTPLUS OPERATIONAL". */
         this.isNewConnection = false;       /* Is it an actively selected connection (pressed CONNECT button)? */
         this.isFirstPoll = true;            /* Is this the first poll since connection started? */
 
@@ -542,6 +543,9 @@ class RustPlus extends RustPlusLib {
         library transports when no login/token is available.
     */
     connect() {
+        /* A retired instance stays retired: its reconnect is a new instance (rustplusEvents/disconnected.js). */
+        if (this.isDeleted) return undefined;
+
         /*
             Read the stored token on every attempt: the token is renewed in one place (util/tokenRecovery.js) and a
             renewal by another guild, the login or scripts/rustplusLogin.js must reach this socket as well.
@@ -630,7 +634,7 @@ class RustPlus extends RustPlusLib {
 
         this.authRetryTimer = setTimeout(() => {
             this.authRetryTimer = null;
-            if (!this.isDeleted) this.connect();
+            if (this.isCurrentInstance()) this.connect();
         }, delayMs);
 
         if (typeof this.authRetryTimer.unref === 'function') this.authRetryTimer.unref();
@@ -667,7 +671,7 @@ class RustPlus extends RustPlusLib {
             this.awaitingTokenRenewal = false;
         }
 
-        if (this.isDeleted) return undefined;
+        if (!this.isCurrentInstance()) return undefined;
 
         const stored = RustPlusAuth.readAuth(this.playerId);
 
@@ -713,15 +717,21 @@ class RustPlus extends RustPlusLib {
         return super.sendRequest(data, callback);
     }
 
-    /* Reconnect once when a request had to be dropped, the polling loop keeps running meanwhile. */
+    /*
+        Reconnect once when a request had to be dropped, the polling loop keeps running meanwhile.
+
+        Only the connection of the guild reconnects: a request that a broadcast had scheduled on an instance whose
+        socket was closed meanwhile (removed by its 'disconnected' event, the reconnect is already a new instance)
+        opened a second socket for the guild. That one became a connection nobody polled for two hours.
+    */
     scheduleTransportReconnect() {
-        if (this.isDeleted || this.transportReconnectScheduled) return;
+        if (!this.isCurrentInstance() || this.transportReconnectScheduled) return;
 
         this.transportReconnectScheduled = true;
 
         const timer = setTimeout(() => {
             this.transportReconnectScheduled = false;
-            if (!this.isDeleted) this.connect();
+            if (this.isCurrentInstance()) this.connect();
         }, 2000);
 
         if (typeof timer.unref === 'function') timer.unref();
@@ -954,16 +964,44 @@ class RustPlus extends RustPlusLib {
         return (this.clanInfo !== null && this.clanInfo.clanId !== null);
     }
 
-    deleteThisRustplusInstance() {
+    /*
+        True while this instance is the connection of its guild. Without a registry (tests, scripts) an instance that
+        was not deleted counts as the current one.
+    */
+    isCurrentInstance() {
+        if (this.isDeleted) return false;
+
+        const instances = Client.client ? Client.client.rustplusInstances : undefined;
+        if (!instances) return true;
+
+        return instances[this.guildId] === this;
+    }
+
+    /*
+        The instance was removed from the guild (its socket closed, or another instance replaced it): it must never
+        connect again. Its retry timers stop, a pending reconnect of the guild is a new instance.
+    */
+    retire() {
         this.isDeleted = true;
         this.cancelAuthRetry();
+
+        if (this.operationalWatchdog) {
+            clearTimeout(this.operationalWatchdog);
+            this.operationalWatchdog = null;
+        }
+    }
+
+    deleteThisRustplusInstance() {
+        this.retire();
         this.disconnect();
 
-        if (Client.client.rustplusInstances.hasOwnProperty(this.guildId)) {
-            if (Client.client.rustplusInstances[this.guildId].serverId === this.serverId) {
-                delete Client.client.rustplusInstances[this.guildId];
-                return true;
-            }
+        /*
+            Only this instance is removed from the guild. Compared by server before: deleting a replaced instance of the
+            same server removed the entry of its successor, which then ran its connect flow without being registered.
+        */
+        if (Client.client.rustplusInstances[this.guildId] === this) {
+            delete Client.client.rustplusInstances[this.guildId];
+            return true;
         }
         return false;
     }
