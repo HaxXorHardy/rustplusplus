@@ -143,6 +143,13 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
     const WebSocketImpl = settings.WebSocketImpl;
 
     loadProtoRoot().then((root) => {
+        /*
+            The proto file loads asynchronously: an instance that was retired meanwhile (its 'disconnected' event
+            removed it, or it was replaced) must not open a socket. Such a socket ran the connect flow of a guild that
+            already had another connection and stayed open for hours, out of reach of every reconnect and button.
+        */
+        if (rustplus.isDeleted) return;
+
         if (rustplus.websocket) {
             rustplus.disconnect();
         }

@@ -40,6 +40,15 @@ const WithTimeout = require('../util/withTimeout.js');
 const DISCORD_STEP_TIMEOUT_MS = 30 * 1000;
 const SETUP_STEP_TIMEOUT_MS = 2 * 60 * 1000;
 
+/*
+    The first poll cycle follows "RUSTPLUS OPERATIONAL" within about a minute. A connection that has not polled after
+    this long is stuck somewhere in the connect flow: it looked connected but did nothing (no alarms, no switches, no
+    storage monitors), and util/tokenRecovery.js counted every refused history read as a failed renewal until the owner
+    got a "please log in again" message - with a working token. Generous on purpose: the device setup steps may each
+    wait SETUP_STEP_TIMEOUT_MS for Discord.
+*/
+const FIRST_POLL_WATCHDOG_MS = 10 * 60 * 1000;
+
 /* Runs one Discord step of the connect flow with a deadline. A failure or a timeout is logged, the flow goes on. */
 async function discordStep(client, rustplus, label, step, timeoutMs = DISCORD_STEP_TIMEOUT_MS) {
     try {
@@ -55,6 +64,45 @@ async function discordStep(client, rustplus, label, step, timeoutMs = DISCORD_ST
 }
 
 /*
+    Only the connection of the guild may run the connect flow. Another one - a replaced instance, or one whose
+    'disconnected' event already removed it from the guild while a late request reconnected it - is retired and its
+    socket closed. Returned silently before, such a socket stayed open for hours: nobody polled it, and the Connect
+    button could not reach it.
+*/
+function dropIfNotCurrent(client, rustplus, stage) {
+    if (rustplus.isCurrentInstance()) return false;
+
+    if (!rustplus.isDeleted) {
+        rustplus.log(client.intlGet(null, 'infoCap'),
+            `This connection is not the one of the guild anymore (${stage}), its socket is closed.`, 'debug');
+    }
+
+    rustplus.deleteThisRustplusInstance();
+    return true;
+}
+
+/* Rebuilds a connection that reached "RUSTPLUS OPERATIONAL" but never started to poll (see FIRST_POLL_WATCHDOG_MS). */
+function startFirstPollWatchdog(client, rustplus) {
+    clearTimeout(rustplus.operationalWatchdog);
+
+    rustplus.operationalWatchdog = setTimeout(() => {
+        rustplus.operationalWatchdog = null;
+
+        /* pollCycleId is set by the first cycle of pollingHandler. */
+        if (rustplus.isDeleted || rustplus.pollCycleId) return;
+        if (dropIfNotCurrent(client, rustplus, 'no poll cycle ran')) return;
+
+        rustplus.log(client.intlGet(null, 'warningCap'),
+            `No poll cycle ran within ${FIRST_POLL_WATCHDOG_MS / 60000} minutes after the connection became ` +
+            'operational, the connection is rebuilt.', 'warn');
+
+        rustplus.rebuildConnection('no poll cycle after the connect', { force: true });
+    }, FIRST_POLL_WATCHDOG_MS);
+
+    if (typeof rustplus.operationalWatchdog.unref === 'function') rustplus.operationalWatchdog.unref();
+}
+
+/*
     Runs one device setup step. A failure is logged and must not abort the steps after it: when a single message could
     not be built, the guild lost the alarms and storage monitors of that server as well (and the rejection ended as an
     unhandled one that stopped the whole connect flow).
@@ -66,13 +114,14 @@ async function runSetup(client, rustplus, label, setupPath) {
 
 module.exports = {
     name: 'connected',
+    /* exported for tests */
+    FIRST_POLL_WATCHDOG_MS: FIRST_POLL_WATCHDOG_MS,
+    startFirstPollWatchdog: startFirstPollWatchdog,
     async execute(rustplus, client) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
-        /* A replaced instance must not run the connect flow of the guild. */
-        if (rustplus.isDeleted) return;
-        const current = client.rustplusInstances[rustplus.guildId];
-        if (current && current !== rustplus) return rustplus.deleteThisRustplusInstance();
+        /* A replaced or removed instance must not run the connect flow of the guild, nor keep its socket. */
+        if (dropIfNotCurrent(client, rustplus, 'before the connect flow')) return;
 
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'connectedToServer'));
 
@@ -126,12 +175,17 @@ module.exports = {
 
             /*
                 Reconnect through the `disconnected` event, keeping activeServer and the server message. A refresh that
-                renewed the token already replaced the instance, then this one is done.
+                renewed the token already replaced the instance, then this one is done (and its socket closed).
             */
-            if (client.rustplusInstances[guildId] === rustplus) rustplus.disconnect();
+            if (!dropIfNotCurrent(client, rustplus, 'the map was not answered')) rustplus.disconnect();
             return;
         }
+
+        /* The map request awaited the server: a connection that was replaced meanwhile is not operational. */
+        if (dropIfNotCurrent(client, rustplus, 'after the map request')) return;
+
         rustplus.log(client.intlGet(null, 'connectedCap'), client.intlGet(null, 'rustplusOperational'));
+        startFirstPollWatchdog(client, rustplus);
 
         /* The connection works: the strikes, the renewal count and the backoff of the account are forgotten. */
         if (rustplus.playerId) TokenRecovery.markHealthy(rustplus.playerId);
@@ -175,7 +229,7 @@ module.exports = {
             () => DiscordMessages.sendServerMessage(guildId, serverId, null));
 
         /* A replaced instance must not set up devices, subscribe entities or poll for the guild. */
-        if (client.rustplusInstances[guildId] !== rustplus) return;
+        if (dropIfNotCurrent(client, rustplus, 'before the device setup')) return;
 
         /* Setup Smart Devices */
         await runSetup(client, rustplus, 'the smart switches', '../discordTools/SetupSwitches');
@@ -186,7 +240,7 @@ module.exports = {
         rustplus.loadMarkers();
 
         /* The setup awaits Discord calls, so the instance can be replaced meanwhile (renewed pairing). */
-        if (client.rustplusInstances[guildId] !== rustplus) return;
+        if (dropIfNotCurrent(client, rustplus, 'after the device setup')) return;
 
         /* Let the server push changes of the paired entities, like the Rust+ app does. */
         const subscribed = await rustplus.subscribeEntities(instance);
