@@ -342,7 +342,12 @@ async function messageBroadcastEntityChangedStorageMonitor(rustplus, client, mes
 }
 
 async function updateToolCupboard(rustplus, client, entityId) {
-    if (!rustplus.isOperational) return;
+    /*
+        The read waits up to RPP_STORAGE_MONITOR_EDIT_INTERVAL and keeps the instance of the push. A reconnect replaces
+        that instance meanwhile (isOperational stays true on the old one): its failed request would mark the cupboard
+        unreachable in Discord until the next read.
+    */
+    if (!rustplus.isOperational || !rustplus.isCurrentInstance()) return;
 
     const instance = client.getInstance(rustplus.guildId);
     const server = instance.serverList[rustplus.serverId];
@@ -350,7 +355,8 @@ async function updateToolCupboard(rustplus, client, entityId) {
     if (!server || !server.storageMonitors[entityId]) return;
 
     const info = await rustplus.getEntityInfoAsync(entityId);
-    if (!server.storageMonitors[entityId]) return;
+    /* Replaced or removed while the server answered. */
+    if (!rustplus.isCurrentInstance() || !server.storageMonitors[entityId]) return;
     server.storageMonitors[entityId].reachable = await rustplus.isResponseValid(info) ? true : false;
     client.setInstance(rustplus.guildId, instance);
 

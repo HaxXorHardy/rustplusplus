@@ -67,14 +67,18 @@ Test.describe('tool cupboard pushes', () => {
             guildId: 'g',
             serverId: 's',
             isOperational: true,
+            current: true,
             storageMonitors: {},
             log: () => undefined,
+            isCurrentInstance: () => rustplus.current,
             isResponseValid: async () => true,
             getEntityInfoAsync: async () => {
                 counts.reads++;
+                if (onRead) onRead();
                 return { entityInfo: { payload: { items: [], protectionExpiry: expiry, capacity: 24 } } };
             },
         };
+        let onRead = null;
 
         DiscordMessages.storageMonitorEditIntervalMs = () => 60;
         Message.toolCupboardReadDelayMs = 10;
@@ -91,7 +95,11 @@ Test.describe('tool cupboard pushes', () => {
             }
         });
 
-        return { counts, push, instance, setExpiry: (value) => { expiry = value; } };
+        return {
+            counts, push, instance, rustplus,
+            setExpiry: (value) => { expiry = value; },
+            setOnRead: (fn) => { onRead = fn; },
+        };
     }
 
     Test.it('reads and edits once per pause, with the latest state', async () => {
@@ -119,5 +127,26 @@ Test.describe('tool cupboard pushes', () => {
         delete instance.serverList.s.storageMonitors[7];
         await sleep(30);
         Assert.deepStrictEqual([counts.reads, counts.edits], [0, 0]);
+    });
+
+    /* The read waits for the pause with the instance of the push; a reconnect replaces that instance meanwhile. */
+    Test.it('skips the read of an instance replaced before it', async () => {
+        const { counts, push, instance, rustplus } = setup();
+
+        await push();
+        rustplus.current = false;
+        await sleep(30);
+        Assert.deepStrictEqual([counts.reads, counts.edits, counts.alerts], [0, 0, 0]);
+        Assert.strictEqual(instance.serverList.s.storageMonitors[7].reachable, undefined);
+    });
+
+    Test.it('drops the answer of an instance replaced during the read', async () => {
+        const { counts, push, instance, rustplus, setOnRead } = setup();
+        setOnRead(() => { rustplus.current = false; });
+
+        await push();
+        await sleep(30);
+        Assert.deepStrictEqual([counts.reads, counts.edits, counts.alerts], [1, 0, 0]);
+        Assert.strictEqual(instance.serverList.s.storageMonitors[7].reachable, undefined);
     });
 });
