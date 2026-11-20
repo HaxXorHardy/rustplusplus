@@ -26,7 +26,8 @@
       in-game team chat; this one only exists as a push notification,
     - smart alarm of a server the bot is not connected to (the connected server reports its alarms over the socket),
     - team login on a server the bot is not connected to (the connected server reports it through the team poll),
-    - pairing of a server or device -> the history of the account is read right away instead of in up to 5 minutes.
+    - pairing of a server or device -> applied straight from the push payload (the history is only read when the
+      payload carries no pairing, and its timer stays the fallback for pushes that never arrived).
 
     Deaths are left to the history (util/rustplusHistory.js), it reports them once per guild already.
 */
@@ -220,16 +221,27 @@ async function handle(client, steamId, notification, deps = {}) {
     const results = [];
 
     if (kind === 'pairing') {
-        /* The history knows the pairing (with the player token and the device), it posts the Discord messages. */
+        /*
+            The push carries the whole pairing (player token, device), it is applied right away - the same queue as the
+            history timer, which posts the Discord messages. A payload without a pairing makes it read the history.
+        */
+        const body = notification.body;
+        const present = (value) => value !== undefined && value !== null && value !== '';
+        const usable = Boolean(body.id) && (present(body.entityId) || present(body.playerToken));
+
         if (typeof client.refreshPairingHistory === 'function') {
-            schedule(() => {
-                client.refreshPairingHistory({ steamIds: [`${steamId}`], freshAccountState: true })
-                    .catch(() => undefined);
-            }, PAIRING_REFRESH_DELAY_MS);
+            const run = () => client.refreshPairingHistory(usable ?
+                { pushPairing: { steamId: `${steamId}`, body: body } } :
+                { steamIds: [`${steamId}`], freshAccountState: true }).catch(() => undefined);
+
+            /* The history may not carry a pairing yet when its push arrives, only that path waits. */
+            if (usable) run();
+            else schedule(run, PAIRING_REFRESH_DELAY_MS);
         }
 
         client.log(client.intlGet(null, 'infoCap'),
-            `Rust+ push: pairing (${notification.body.type || 'unknown'}) for ${steamId}, the history is read now.`);
+            `Rust+ push: pairing (${body.type || 'unknown'}${body.entityName ? ` "${body.entityName}"` : ''}) for ` +
+            `${steamId}, ${usable ? 'applied from the push' : 'no pairing data in the push, the history is read'}.`);
 
         return [{ kind: kind, handled: true }];
     }

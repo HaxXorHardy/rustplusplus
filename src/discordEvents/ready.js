@@ -144,7 +144,28 @@ module.exports = {
             so this works without FCM credentials.
         */
         const runPairingHistory = async (options = {}) => {
-            const { devices, deaths } = await RustPlusHistory.refresh(client, undefined, undefined, options);
+            /*
+                A pairing push notification (options.pushPairing) is applied from its own payload. Only a payload
+                without a usable pairing falls back to reading the history of the account.
+            */
+            let result = null;
+            let source = 'notification history';
+
+            if (options.pushPairing) {
+                const { steamId, body } = options.pushPairing;
+
+                result = RustPlusHistory.applyPushPairing(client, steamId, body);
+                source = 'push notification';
+
+                if (result === null) {
+                    source = 'notification history';
+                    options = { steamIds: [`${steamId}`], freshAccountState: true };
+                }
+            }
+
+            if (result === null) result = await RustPlusHistory.refresh(client, undefined, undefined, options);
+
+            const { devices, deaths } = result;
             const refreshedStorageMonitors = new Set();
 
             for (const device of devices) {
@@ -177,7 +198,7 @@ module.exports = {
                     }
 
                     client.log(client.intlGet(null, 'infoCap'),
-                        `Paired device ${device.entityId} was adopted from the notification history.`);
+                        `Paired device ${device.entityId} was adopted from the ${source}.`);
                 }
                 catch (e) {
                     client.log(client.intlGet(null, 'warningCap'), e, 'warning');

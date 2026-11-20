@@ -135,7 +135,7 @@ What the notifications are used for (`util/rustplusPushNotifications.js`):
 | Raid alarm of the [raid-alarm plugin](https://umod.org/plugins/raid-alarm) | `@everyone` in the activity channel, the team chat in-game when connected to that server |
 | Smart alarm | reported when the bot is **not** connected to that server (`RPP_PUSH_ALARMS_OTHER_SERVERS`); the connected server reports its alarms over the socket |
 | Team login | reported when the bot is **not** connected to that server; the team poll reports the rest |
-| Pairing | the history of the account is read right away instead of on the next run |
+| Pairing | applied straight from the push (server, player token, device) - no history read; only a push without pairing data makes the bot read the history. The history timer stays the fallback for pushes that never arrived (the history API answers `429` when it is read more often than about 30 times in 10 minutes) |
 | Death | left to the history, it reports deaths already |
 | anything else | logged in full (`Rust+ push: unhandled notification ...`) |
 

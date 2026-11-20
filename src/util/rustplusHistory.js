@@ -547,6 +547,50 @@ async function refresh(client, fetchHistoryFn = fetchHistory, fetchSyncFn = Rust
 }
 
 /*
+    A pairing push notification (FCM) carries the same payload as the `data` of its history entry - the history only
+    stores what was pushed. So the pairing is applied straight from the push, without reading the history: that API
+    answers 429 when it is read often, and a pairing should not wait for it.
+
+    Only the pairing itself is applied (no account state, no unpaired marking, no deaths); the history timer stays the
+    fallback for pushes that never arrived. Returns { devices, deaths } like refresh(), or null when the payload carries
+    no usable pairing (the caller reads the history then).
+*/
+function applyPushPairing(client, steamId, body, now = Date.now()) {
+    const entries = parsePairingEntries([{
+        notificationId: null,
+        date: new Date(now).toISOString(),
+        data: JSON.stringify(body && typeof body === 'object' ? body : {}),
+    }]).filter((entry) => entry.kind !== 'death' && entry.serverId &&
+        (entry.entityId !== null || (entry.playerToken !== undefined && entry.playerToken !== null)));
+
+    if (entries.length === 0) return null;
+
+    /* The stored account snapshot is not replayed here, the push only adds what it carries. */
+    const account = {
+        auth: Object.assign({}, RustPlusAuth.readAuth(steamId) || {}, { servers: [] }),
+        accountServers: null,
+        entries: entries,
+    };
+    const devices = [];
+
+    for (const guildId of Object.keys(client.instances || {})) {
+        try {
+            const instance = client.getInstance(guildId);
+            if (!instance || !steamIdsOfGuild(instance).includes(`${steamId}`)) continue;
+
+            devices.push(...applyAccount(client, guildId, instance, `${steamId}`, account).added);
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Could not apply the pushed pairing of ${steamId} to ${guildId}: ` +
+                `${e && e.message ? e.message : e}`, 'warn');
+        }
+    }
+
+    return { devices: devices, deaths: [] };
+}
+
+/*
     The targeted refresh of one account, for a connection whose server answers not_found (a new player token after a
     re-pairing). Throttled: a connection that keeps failing must not ask Facepunch on every reconnect.
 */
@@ -740,6 +784,7 @@ module.exports = {
     parsePairingEntries: parsePairingEntries,
     applyPairingEntries: applyPairingEntries,
     refresh: refresh,
+    applyPushPairing: applyPushPairing,
     refreshAccount: refreshAccount,
     steamIdsOfGuild: steamIdsOfGuild,
     resetAccountStateCache: resetAccountStateCache,

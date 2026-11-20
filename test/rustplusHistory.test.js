@@ -1024,6 +1024,73 @@ Test.describe('RustPlusHistory.refresh', () => {
 
         Assert.strictEqual(calls, 2);
     });
+
+    /* The payload of a pairing push is the `data` of its history entry, so no history read is needed. */
+    function pushBody(extra) {
+        return Object.assign({ id: SERVER_ID, name: "Captain's Quarters", ip: '91.229.114.90', port: '28111',
+            playerId: STEAM_ID, playerToken: 42 }, extra);
+    }
+
+    Test.it('adopts a device straight from a pairing push', (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { instance, serverKey } = pairedServerInstance();
+        const client = fakeClient(instance);
+
+        const result = RustPlusHistory.applyPushPairing(client, STEAM_ID,
+            pushBody({ type: 'entity', entityId: '116582', entityType: '1', entityName: 'Smart Switch' }));
+
+        Assert.deepStrictEqual(result.deaths, []);
+        Assert.strictEqual(result.devices.length, 1);
+        Assert.strictEqual(result.devices[0].serverKey, serverKey);
+        Assert.strictEqual(result.devices[0].entityId, '116582');
+        Assert.deepStrictEqual(Object.keys(instance.serverList[serverKey].switches), ['116582']);
+        Assert.strictEqual(client.saved, 1);
+
+        /* The same push again (or its history entry later) adopts nothing twice. */
+        const again = RustPlusHistory.applyPushPairing(client, STEAM_ID,
+            pushBody({ type: 'entity', entityId: '116582', entityType: '1', entityName: 'Smart Switch' }));
+        Assert.strictEqual(again.devices.length, 0);
+    });
+
+    Test.it('renews the player token from a server pairing push and reconnects', (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { instance, serverKey } = pairedServerInstance();
+        const client = fakeClient(instance);
+
+        RustPlusHistory.applyPushPairing(client, STEAM_ID, pushBody({ type: 'server', playerToken: 77 }));
+
+        Assert.strictEqual(instance.serverList[serverKey].playerToken, 77);
+        Assert.strictEqual(client.createdRustplusInstances.length, 1);
+        Assert.strictEqual(client.createdRustplusInstances[0][4], 77);
+    });
+
+    Test.it('returns null for a push without pairing data, and never reads the history', (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { instance } = pairedServerInstance();
+        const client = fakeClient(instance);
+
+        Assert.strictEqual(RustPlusHistory.applyPushPairing(client, STEAM_ID, { type: 'entity', id: SERVER_ID }),
+            null);
+        Assert.strictEqual(RustPlusHistory.applyPushPairing(client, STEAM_ID, null), null);
+        Assert.strictEqual(client.saved, 0);
+    });
+
+    Test.it('leaves a guild of another account alone', (t) => {
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+        const { instance, serverKey } = pairedServerInstance();
+        instance.serverList[serverKey].steamId = '76561198000000999';
+        const client = fakeClient(instance);
+
+        const result = RustPlusHistory.applyPushPairing(client, STEAM_ID,
+            pushBody({ type: 'entity', entityId: '116582', entityType: '1', entityName: 'Smart Switch' }));
+
+        Assert.deepStrictEqual(result.devices, []);
+        Assert.strictEqual(client.saved, 0);
+    });
 });
 
 /*

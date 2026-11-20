@@ -285,7 +285,24 @@ Test.describe('RustPlusPushNotifications', () => {
         Assert.strictEqual(RustPlusPushNotifications.findServerKey(serverInstance(), { id: 'other' }), null);
     });
 
-    Test.it('reads the history right away after a pairing', async () => {
+    Test.it('applies a pairing straight from the push, without waiting', async () => {
+        const client = fakeClient(serverInstance());
+        const runs = [];
+        const scheduled = [];
+
+        client.refreshPairingHistory = async (options) => { runs.push(options); };
+
+        const body = { type: 'entity', id: SERVER_ID, playerToken: '-123', entityId: '456', entityType: '1',
+            entityName: 'Smart Switch' };
+        await RustPlusPushNotifications.handle(client, STEAM_ID,
+            RustPlusPushNotifications.parse(notification('pairing', 'Server', '', body)),
+            { schedule: (fn) => scheduled.push(fn) });
+
+        Assert.strictEqual(scheduled.length, 0);
+        Assert.deepStrictEqual(runs, [{ pushPairing: { steamId: STEAM_ID, body: body } }]);
+    });
+
+    Test.it('reads the history when the pairing push carries no pairing data', async () => {
         const client = fakeClient(serverInstance());
         const runs = [];
 
