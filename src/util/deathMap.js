@@ -45,9 +45,10 @@ function deathMapPath(guildId) {
 }
 
 /* A filled red circle with a white ring. */
-function mark(Jimp, image, cx, cy) {
-    const red = Jimp.rgbaToInt(220, 20, 20, 255);
-    const white = Jimp.rgbaToInt(255, 255, 255, 255);
+function mark(image, cx, cy) {
+    const { rgbaToInt } = require('jimp');
+    const red = rgbaToInt(220, 20, 20, 255);
+    const white = rgbaToInt(255, 255, 255, 255);
     const width = image.bitmap.width;
     const height = image.bitmap.height;
 
@@ -69,7 +70,7 @@ function mark(Jimp, image, cx, cy) {
     yet. deps.Jimp for tests.
 */
 async function render(rustplus, deaths, deps = {}) {
-    const Jimp = deps.Jimp || require('jimp');
+    const Jimp = deps.Jimp || require('jimp').Jimp;
     const map = rustplus.map;
     const mapSize = rustplus.info ? rustplus.info.mapSize : null;
     if (!map || !mapSize) return null;
@@ -78,11 +79,11 @@ async function render(rustplus, deaths, deps = {}) {
 
     for (const death of deaths) {
         const point = toImage(death.x, death.y, map.width, map.height, map.oceanMargin, mapSize);
-        mark(Jimp, image, point.x, point.y);
+        mark(image, point.x, point.y);
     }
 
     const target = deps.target || deathMapPath(rustplus.guildId);
-    await image.quality(JPEG_QUALITY).writeAsync(target);
+    await image.write(target, { quality: JPEG_QUALITY });
 
     return target;
 }

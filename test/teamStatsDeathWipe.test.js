@@ -108,17 +108,17 @@ Test.describe('death log and death map', () => {
     });
 
     Test.it('renders red marks onto the clean map', async () => {
-        const Jimp = require('jimp');
+        const { Jimp, intToRGBA } = require('jimp');
         const dir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'deathmap-'));
         const source = Path.join(dir, 'clean.png');
         const target = Path.join(dir, 'death.jpg');
-        await new Jimp(200, 200, 0x204020ff).writeAsync(source);
+        await new Jimp({ width: 200, height: 200, color: 0x204020ff }).write(source);
 
         const rustplus = { guildId: 'guild', info: { mapSize: 1000 }, map: { width: 200, height: 200, oceanMargin: 0 } };
         const path = await DeathMap.render(rustplus, [{ x: 500, y: 500 }], { source: source, target: target });
 
         const image = await Jimp.read(path);
-        const centre = Jimp.intToRGBA(image.getPixelColor(100, 100));
+        const centre = intToRGBA(image.getPixelColor(100, 100));
         Assert.ok(centre.r > 150 && centre.g < 90, `the centre is red: ${JSON.stringify(centre)}`);
         Fs.rmSync(dir, { recursive: true, force: true });
     });

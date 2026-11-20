@@ -20,7 +20,7 @@
 
 const Fs = require('fs');
 const Gm = require('gm');
-const Jimp = require('jimp');
+const { Jimp, loadFont } = require('jimp');
 const Path = require('path');
 
 const Constants = require('../util/constants.js');
@@ -338,11 +338,11 @@ class Map {
 
     async setupFont() {
         if (this.rustplus.generalSettings.language === 'en') {
-            this.font = await Jimp.loadFont(
+            this.font = await loadFont(
                 Path.join(__dirname, '..', 'resources/fonts/PermanentMarker.fnt'));
         }
         else {
-            this.font = await Jimp.loadFont(
+            this.font = await loadFont(
                 Path.join(__dirname, '..', 'resources/fonts/YuGothic.fnt'));
         }
     }
@@ -351,7 +351,7 @@ class Map {
         for (const [marker, content] of Object.entries(this.mapMarkerImageMeta)) {
             content.jimp = await Jimp.read(content.image);
             if (marker !== 'map') {
-                content.jimp.resize(content.size, content.size);
+                content.jimp.resize({ w: content.size, h: content.size });
             }
         }
     }
@@ -392,8 +392,7 @@ class Map {
                         this.monumentInfo[monument.token].map : Monuments.formatToken(monument.token).toUpperCase();
                     if (name === '') continue;
                     let comp = name.length * 5;
-                    this.mapMarkerImageMeta.map.jimp.print(
-                        this.font, x - comp, y - 10, name);
+                    this.mapMarkerImageMeta.map.jimp.print({ font: this.font, x: x - comp, y: y - 10, text: name });
                 }
             }
             catch (e) {
@@ -473,7 +472,7 @@ class Map {
 
         try {
             const image = await Jimp.read(png);
-            await image.quality(UPLOAD_JPEG_QUALITY).writeAsync(Map.uploadImagePath(this.rustplus.guildId));
+            await image.write(Map.uploadImagePath(this.rustplus.guildId), { quality: UPLOAD_JPEG_QUALITY });
         }
         catch (e) {
             this.rustplus.log(Client.client.intlGet(null, 'warningCap'),
@@ -491,7 +490,7 @@ class Map {
             await this.mapAppendMonuments();
         }
 
-        await this.mapMarkerImageMeta.map.jimp.writeAsync(
+        await this.mapMarkerImageMeta.map.jimp.write(
             this.mapMarkerImageMeta.map.image.replace('clean.png', 'full.png'));
 
         try {

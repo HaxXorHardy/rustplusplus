@@ -26,7 +26,7 @@ const Os = require('node:os');
 const Path = require('node:path');
 const Test = require('node:test');
 
-const Jimp = require('jimp');
+const { Jimp } = require('jimp');
 
 const Client = require('../src/structures/clientRegistry.js');
 const RustPlusMap = require('../src/structures/Map.js');
@@ -47,12 +47,12 @@ Test.describe('Map.writeUploadImage', () => {
         });
 
         /* Noise compresses badly as PNG, like the terrain of the map. */
-        const image = new Jimp(256, 256);
-        image.scan(0, 0, 256, 256, function (x, y, idx) {
-            for (let i = 0; i < 3; i++) this.bitmap.data[idx + i] = Math.floor(Math.random() * 256);
-            this.bitmap.data[idx + 3] = 255;
+        const image = new Jimp({ width: 256, height: 256 });
+        image.scan(0, 0, 256, 256, (x, y, idx) => {
+            for (let i = 0; i < 3; i++) image.bitmap.data[idx + i] = Math.floor(Math.random() * 256);
+            image.bitmap.data[idx + 3] = 255;
         });
-        await image.writeAsync(full);
+        await image.write(full);
 
         const warnings = [];
         await RustPlusMap.prototype.writeUploadImage.call({

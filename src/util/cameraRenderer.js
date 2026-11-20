@@ -173,10 +173,10 @@ function rayColour(ray) {
     whether more frames are needed.
 */
 async function renderPng(frames, width, height) {
-    const Jimp = require('jimp');
+    const { Jimp, JimpMime, rgbaToInt } = require('jimp');
 
     const { rays, filled } = decodeFrames(frames, width, height);
-    const image = new Jimp(width, height);
+    const image = new Jimp({ width: width, height: height });
 
     for (let pixel = 0; pixel < rays.length; pixel++) {
         const ray = rays[pixel];
@@ -186,11 +186,11 @@ async function renderPng(frames, width, height) {
         const x = pixel % width;
         /* The image is built top down, the samples come bottom up. */
         const y = height - 1 - Math.floor(pixel / width);
-        image.setPixelColor(Jimp.rgbaToInt(colour.r, colour.g, colour.b, 255), x, y);
+        image.setPixelColor(rgbaToInt(colour.r, colour.g, colour.b, 255), x, y);
     }
 
     return {
-        buffer: await image.getBufferAsync(Jimp.MIME_PNG),
+        buffer: await image.getBuffer(JimpMime.png),
         coverage: filled / (width * height),
         filled: filled,
         total: width * height,
