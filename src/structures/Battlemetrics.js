@@ -950,34 +950,68 @@ class Battlemetrics {
             return cached.seconds;
         }
 
-        const seconds = await this.fetchTotalTimePlayed(playerId);
-        if (seconds === null) return cached ? cached.seconds : null;
+        const times = await this.fetchTimesPlayed(playerId);
+        if (times === null) return cached ? cached.seconds : null;
 
-        this._timePlayedCache[playerId] = { seconds: seconds, fetchedAt: Date.now() };
-        return seconds;
+        this._timePlayedCache[playerId] = {
+            seconds: times.server,
+            totalSeconds: times.total,
+            fetchedAt: Date.now()
+        };
+        return times.server;
+    }
+
+    /**
+     *  Get the cached time played on all Rust servers together (in seconds) of a player.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {number|null} The time played on all Rust servers in seconds or null when not cached.
+     */
+    getCachedRustTimePlayed(playerId) {
+        const cached = this._timePlayedCache[playerId];
+        return (cached && typeof (cached.totalSeconds) === 'number') ? cached.totalSeconds : null;
+    }
+
+    /**
+     *  Fetch the time a player spent on this server and on all Rust servers together (in seconds).
+     *  Battlemetrics reports it as meta.timePlayed of every server entry of the player, so one request gives both.
+     *  The profile wide total of the time played statistics is deliberately not used: it sums every server and
+     *  every name based match of a profile together, which produces numbers far beyond any real play time.
+     *  @param {string} playerId The Battlemetrics player id.
+     *  @return {object|null} { server, total } in seconds (each may be null) or null when nothing could be read.
+     */
+    async fetchTimesPlayed(playerId) {
+        const player = await this.request(this.GET_PLAYER_API_CALL(playerId));
+        if (!player || !Array.isArray(player.included)) return null;
+
+        let server = null;
+        let total = null;
+        for (const entity of player.included) {
+            if (entity.type !== 'server') continue;
+
+            /* Only Rust servers count towards the total (a profile can carry servers of other games). */
+            const game = (entity.relationships && entity.relationships.game && entity.relationships.game.data) ?
+                entity.relationships.game.data.id : null;
+            if (typeof (game) === 'string' && game !== 'rust') continue;
+
+            const value = entity.meta ? entity.meta.timePlayed : null;
+            if (typeof (value) !== 'number') continue;
+
+            total = (total === null) ? value : total + value;
+            if (String(entity.id) === String(this.id)) server = value;
+        }
+
+        if (server === null && total === null) return null;
+        return { server: server, total: total };
     }
 
     /**
      *  Fetch the time a player spent on this server (in seconds).
-     *  Battlemetrics reports it as meta.timePlayed of the server entry of the player.
-     *  The profile wide total of the time played statistics is deliberately not used: it sums every server and
-     *  every name based match of a profile together, which produces numbers far beyond any real play time.
      *  @param {string} playerId The Battlemetrics player id.
      *  @return {number|null} The time played on this server in seconds or null.
      */
     async fetchTotalTimePlayed(playerId) {
-        const player = await this.request(this.GET_PLAYER_API_CALL(playerId));
-        if (!player || !Array.isArray(player.included)) return null;
-
-        for (const entity of player.included) {
-            if (entity.type !== 'server') continue;
-            if (String(entity.id) !== String(this.id)) continue;
-
-            const value = entity.meta ? entity.meta.timePlayed : null;
-            if (typeof (value) === 'number') return value;
-        }
-
-        return null;
+        const times = await this.fetchTimesPlayed(playerId);
+        return times ? times.server : null;
     }
 
     /**

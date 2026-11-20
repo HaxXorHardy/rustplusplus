@@ -1220,7 +1220,7 @@ module.exports = {
         /* Time and playtime go in inline code (monospace) so the numbers line up. */
         let playtimeWidth = 2;
         for (const playerId of playerIds) {
-            const playtimeValue = bmInstance.getCachedTimePlayed(playerId);
+            const playtimeValue = bmInstance.getCachedRustTimePlayed(playerId);
             if (typeof (playtimeValue) === 'number') {
                 playtimeWidth = Math.max(playtimeWidth, Timer.secondsToCompactHours(playtimeValue).length);
             }
@@ -1237,7 +1237,7 @@ module.exports = {
             /* A placeholder keeps the column width when no session or logout is reported yet. */
             const time = timeValue !== null ? timeValue[1] : '--:--';
 
-            const playtime = bmInstance.getCachedTimePlayed(playerId);
+            const playtime = bmInstance.getCachedRustTimePlayed(playerId);
             const playtimeStr = (typeof (playtime) === 'number') ?
                 Timer.secondsToCompactHours(playtime) : '-';
             const playtimePadded = playtimeStr.padStart(playtimeWidth);
