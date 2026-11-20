@@ -1,0 +1,52 @@
+version: 2
+updates:
+  # npm packages: one grouped PR per week for minor and patch updates,
+  # majors come as single PRs so their breaking changes can be checked one by one.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Pinned to a specific commit of the fork on purpose.
+      - dependency-name: "@liamcottle/rustplus.js"
+      # Push receiver has no releases beyond the version the FCM code is written against.
+      - dependency-name: "@liamcottle/push-receiver"
+
+  # Base image of the Dockerfile: stay on Node 22 (LTS), only take minor/patch rebuilds.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: "chore(docker)"
+    ignore:
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
+
+  # GitHub Actions used in the workflows, grouped into one monthly PR.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
