@@ -176,7 +176,7 @@ jobs:
 
           if [ -n "$EXISTING" ]; then
             gh pr edit "$EXISTING" --body-file "$RUNNER_TEMP/body.md"
-            gh pr comment "$EXISTING" --body "$MISSING more translation(s) missing after ${{ github.sha }}. Start the workflow manually on \`$BASE\` to add them."
+            gh pr comment "$EXISTING" --body "New keys after ${{ github.sha }}: $MISSING translation(s) are now missing from this pull request. Start the workflow manually on \`$BASE\` to add them."
             echo "Updated the open pull request: $EXISTING"
             exit 0
           fi
