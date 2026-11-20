@@ -46,7 +46,7 @@ const RAID_ALARM_TITLE = 'You\'re getting raided!';
 /* The history may not carry a pairing yet when its push notification arrives. */
 const PAIRING_REFRESH_DELAY_MS = 3000;
 
-/* { persistentId, channelId, title, message, body } of a notification of @liamcottle/push-receiver, or null. */
+/* { persistentId, channelId, title, message, body } of an FCM data message (src/util/fcm), or null. */
 function parse(data) {
     if (!data || !Array.isArray(data.appData)) return null;
 

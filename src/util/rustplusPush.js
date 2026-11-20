@@ -118,8 +118,8 @@ function isUuid(value) {
 }
 
 function loadPushReceiver() {
-    /* Loaded on first use: a bot without push (RPP_PUSH_ENABLED=false) does not need the package. */
-    return require('@liamcottle/push-receiver');
+    /* Loaded on first use: a bot without push (RPP_PUSH_ENABLED=false) does not need it. */
+    return require('./fcm/index.js');
 }
 
 /* Step 2: an Android device of the Rust+ app at Google. */

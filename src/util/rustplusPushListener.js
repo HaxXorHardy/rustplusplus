@@ -117,7 +117,7 @@ function watchConnection(client, steamId, receiver) {
     const state = { started: false, downSince: null };
 
     receiver.on('connect', () => {
-        /* _socket is internal to push-receiver: only used when it looks as expected. */
+        /* _socket is internal to the FCM client: only used when it looks as expected. */
         try {
             const socket = receiver._socket;
             if (socket && typeof socket.setKeepAlive === 'function') socket.setKeepAlive(true, KEEPALIVE_IDLE_MS);

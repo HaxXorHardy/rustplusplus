@@ -1,0 +1,8 @@
+{
+    "name": "@liamcottle/push-receiver",
+    "version": "0.0.0-stub",
+    "description": "Empty stand-in: @liamcottle/rustplus.js only uses push-receiver in its CLI, which this bot does not run. Keeps the deprecated request package out of the tree. The bot's FCM client is src/util/fcm.",
+    "main": "index.js",
+    "private": true,
+    "license": "MIT"
+}

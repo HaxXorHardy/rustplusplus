@@ -215,7 +215,7 @@ Test.describe('RustPlusPush.ensureRegistered', () => {
     });
 });
 
-/* A notification as @liamcottle/push-receiver delivers it. */
+/* A notification as the FCM client (src/util/fcm) delivers it. */
 function notification(channelId, title, message, body, persistentId = 'p-1') {
     return {
         persistentId: persistentId,

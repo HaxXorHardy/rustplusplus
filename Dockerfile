@@ -14,6 +14,8 @@ WORKDIR /app
 
 COPY package.json /app/package.json
 COPY package-lock.json /app/package-lock.json
+# Local stand-in packages referenced by package.json (file:stubs/...), needed by npm install.
+COPY stubs /app/stubs
 
 # Runtime dependencies only: the bot runs with plain node (index.js); the TypeScript toolchain is a dev dependency.
 RUN npm install --omit=dev
