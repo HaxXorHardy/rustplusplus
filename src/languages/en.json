@@ -1027,5 +1027,6 @@
     "timeZoneSetting": "Time zone",
     "timeZoneNote": "Used by switch group schedules without their own time zone and by the weekly team report.",
     "timeZoneOption": "Now {time} there.",
-    "zzTranslationTestA": "The translation pipeline works."
+    "zzTranslationTestA": "The translation pipeline works.",
+    "zzTranslationTestB": "A second key was added later."
 }
