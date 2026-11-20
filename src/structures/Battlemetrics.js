@@ -963,6 +963,7 @@ class Battlemetrics {
 
     /**
      *  Get the cached time played on all Rust servers together (in seconds) of a player.
+     *  Players Battlemetrics only matched by name (no RCON on the server) get the time on this server instead.
      *  @param {string} playerId The Battlemetrics player id.
      *  @return {number|null} The time played on all Rust servers in seconds or null when not cached.
      */
@@ -977,6 +978,7 @@ class Battlemetrics {
      *  The profile wide total of the time played statistics is deliberately not used: it sums every server and
      *  every name based match of a profile together, which produces numbers far beyond any real play time.
      *  @param {string} playerId The Battlemetrics player id.
+     *  For a player only matched by name the total is the time on this server (see below).
      *  @return {object|null} { server, total } in seconds (each may be null) or null when nothing could be read.
      */
     async fetchTimesPlayed(playerId) {
@@ -999,6 +1001,13 @@ class Battlemetrics {
             total = (total === null) ? value : total + value;
             if (String(entity.id) === String(this.id)) server = value;
         }
+
+        /* Battlemetrics only knows the Steam id of a player on servers that share their RCON with it
+         * (positiveMatch). On all other servers it matches players by name, so one record collects every
+         * player of that name on hundreds of servers and its total is meaningless: use the server hours. */
+        const positiveMatch = player.data && player.data.attributes ?
+            player.data.attributes.positiveMatch === true : false;
+        if (!positiveMatch) total = server;
 
         if (server === null && total === null) return null;
         return { server: server, total: total };
