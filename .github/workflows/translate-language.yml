@@ -7,6 +7,12 @@ on:
     paths:
       - src/languages/en.json
       - scripts/translate_language_json.py
+  # A push to master only checks for missing keys (no DeepL call) and opens a pull request for them.
+  push:
+    branches:
+      - master
+    paths:
+      - src/languages/en.json
   workflow_dispatch:
     inputs:
       languages:
@@ -32,16 +38,17 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
-  group: translate-${{ github.event.pull_request.number || github.ref }}
+  group: translate-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   translate-language:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR branch
@@ -68,17 +75,42 @@ jobs:
             > "$RUNNER_TEMP/translate_language_json.py"
 
       - name: Use translation script from checked out branch
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         run: cp scripts/translate_language_json.py "$RUNNER_TEMP/translate_language_json.py"
 
-      - name: Run translation script
-        # A manual run on the default branch cannot commit - so it only reports on dry runs instead of burning quota.
-        if: github.event_name == 'pull_request' || github.ref_name != github.event.repository.default_branch || github.event.inputs.dry_run == 'true'
+      # With a translation pull request already open, its language files are the starting point: the missing-key
+      # check then counts only keys that pull request does not cover yet, and a manual run does not pay DeepL again
+      # for keys it already translated. en.json always comes from master.
+      - name: Start from the open translation pull request
+        id: botpr
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_name == github.event.repository.default_branch)
         env:
-          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: i18n/update-translations
+          BASE: ${{ github.ref_name }}
+        run: |
+          existing=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json url --jq '.[0].url')
+          echo "url=$existing" >> "$GITHUB_OUTPUT"
+          if [ -z "$existing" ]; then
+            echo "No open translation pull request."
+            exit 0
+          fi
+
+          git fetch origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+          mapfile -t files < <(git ls-tree --name-only "origin/$BRANCH" src/languages/ | grep '\.json$' | grep -v '^src/languages/en\.json$')
+          if [ "${#files[@]}" -gt 0 ]; then
+            git checkout "origin/$BRANCH" -- "${files[@]}"
+          fi
+          echo "Using the language files of $existing"
+
+      - name: Run translation script
+        id: translate
+        env:
+          # The push check never gets the key, so it cannot spend DeepL quota.
+          DEEPL_API_KEY: ${{ github.event_name != 'push' && secrets.DEEPL_API_KEY || '' }}
           DEEPL_API_URL: ${{ vars.DEEPL_API_URL }}
           INPUT_LANGUAGES: ${{ github.event.inputs.languages }}
-          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          INPUT_DRY_RUN: ${{ github.event_name == 'push' && 'true' || github.event.inputs.dry_run }}
           INPUT_FORCE: ${{ github.event.inputs.force }}
           INPUT_FALLBACKS: ${{ github.event.inputs.retranslate_fallbacks }}
         run: |
@@ -96,11 +128,14 @@ jobs:
           if [ "$INPUT_FALLBACKS" = "true" ]; then
             args+=(--fallbacks)
           fi
-          python "$RUNNER_TEMP/translate_language_json.py" "${args[@]}"
+          set -o pipefail
+          python "$RUNNER_TEMP/translate_language_json.py" "${args[@]}" | tee "$RUNNER_TEMP/translate.log"
+          missing=$(sed -n 's/^Dry run complete\. Keys to translate: \([0-9]*\)$/\1/p' "$RUNNER_TEMP/translate.log")
+          echo "missing=${missing:-0}" >> "$GITHUB_OUTPUT"
 
       - name: Commit translation changes
         # Direct pushes to the default branch are off the table: a manual run on master once committed nothing but a
-        # re-sorted key order. Translations go to a pull request branch, everything else stays local to the run.
+        # re-sorted key order. A run on master goes through a pull request instead (next step).
         if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name != github.event.repository.default_branch)
         run: |
           git config user.name "github-actions[bot]"
@@ -117,7 +152,78 @@ jobs:
           git commit -m "chore(i18n): update translations"
           git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
 
-      - name: Report a run that must not commit
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name == github.event.repository.default_branch
+      - name: Open a pull request for missing translations
+        # Without an open pull request: an empty placeholder commit on the bot branch so one can exist. With one: its
+        # description gets the new count (only keys it does not cover yet) plus a comment, the branch stays as is.
+        # Starting this workflow manually on master then fills the pull request with the real translations.
+        if: github.event_name == 'push' && steps.translate.outputs.missing != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: i18n/update-translations
+          BASE: ${{ github.ref_name }}
+          MISSING: ${{ steps.translate.outputs.missing }}
+          EXISTING: ${{ steps.botpr.outputs.url }}
         run: |
-          echo "::warning::Translations are not committed to ${{ github.ref_name }} directly. Open a pull request with the new keys in src/languages/en.json, or start this workflow on a branch."
+          {
+            echo "$MISSING translation(s) missing on \`$BASE\` after ${{ github.sha }}, not covered by this pull request yet."
+            echo
+            echo '```'
+            grep '^\[' "$RUNNER_TEMP/translate.log"
+            echo '```'
+            echo
+            echo "Start the **Translate language files** workflow manually on \`$BASE\` to fill this pull request with DeepL translations."
+          } > "$RUNNER_TEMP/body.md"
+
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --body-file "$RUNNER_TEMP/body.md"
+            gh pr comment "$EXISTING" --body "$MISSING more translation(s) missing after ${{ github.sha }}. Start the workflow manually on \`$BASE\` to add them."
+            echo "Updated the open pull request: $EXISTING"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit --allow-empty -m "chore(i18n): translations pending"
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+
+          gh pr create --head "$BRANCH" --base "$BASE" \
+            --title "chore(i18n): update translations" \
+            --body-file "$RUNNER_TEMP/body.md"
+
+      - name: Open a pull request with the translations
+        # The bot branch is rebuilt from the default branch on every run, so the force push only replaces its own
+        # earlier output (including the placeholder). An open pull request for it is reused instead of opening a
+        # second one.
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: i18n/update-translations
+          BASE: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add src/languages/*.json
+
+          if git diff --cached --quiet; then
+            echo "No translation changes to commit."
+            exit 0
+          fi
+
+          git diff --cached --stat
+          git switch -c "$BRANCH"
+          git commit -m "chore(i18n): update translations"
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+
+          body="Translations generated by the [translate workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) from \`src/languages/en.json\` on \`$BASE\`."
+          existing=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json url --jq '.[0].url')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body "$body"
+            echo "Updated the open pull request: $existing"
+            exit 0
+          fi
+
+          gh pr create --head "$BRANCH" --base "$BASE" \
+            --title "chore(i18n): update translations" \
+            --body "$body"
