@@ -1026,5 +1026,7 @@
     "upkeepWarningOptionOff": "Only the message when it decays.",
     "timeZoneSetting": "Time zone",
     "timeZoneNote": "Used by switch group schedules without their own time zone and by the weekly team report.",
-    "timeZoneOption": "Now {time} there."
+    "timeZoneOption": "Now {time} there.",
+    "zzTranslationTestA": "O fluxo de trabalho de tradução funciona.",
+    "zzTranslationTestB": "Mais tarde, foi adicionada uma segunda chave."
 }

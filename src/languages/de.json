@@ -1026,5 +1026,7 @@
     "upkeepWarningOptionOff": "Nur die Meldung, wenn er verfällt.",
     "timeZoneSetting": "Zeitzone",
     "timeZoneNote": "Für Zeitpläne der Schaltergruppen ohne eigene Zeitzone und für den Wochenbericht des Teams.",
-    "timeZoneOption": "Dort jetzt {time}."
+    "timeZoneOption": "Dort jetzt {time}.",
+    "zzTranslationTestA": "Die Übersetzungspipeline funktioniert.",
+    "zzTranslationTestB": "Später wurde ein zweiter Schlüssel hinzugefügt."
 }
