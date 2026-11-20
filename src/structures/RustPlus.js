@@ -21,7 +21,8 @@
 const Fs = require('fs');
 const Path = require('path');
 const RustPlusLib = require('@liamcottle/rustplus.js');
-const Translate = require('translate');
+/* translate v3 is ESM only, require() of ESM (Node >= 22.12) returns the module namespace. */
+const Translate = require('translate').default;
 
 const Client = require('./clientRegistry.js');
 const CallSite = require('../util/callSite.js');
@@ -3687,7 +3688,7 @@ class RustPlus extends RustPlusLib {
             const regex = new RegExp('The language "(.*?)"');
             const invalidLanguage = regex.exec(e.message);
 
-            if (invalidLanguage.length === 2) {
+            if (invalidLanguage && invalidLanguage.length === 2) {
                 return Client.client.intlGet(this.guildId, 'languageLangNotSupported', {
                     language: invalidLanguage[1]
                 });
