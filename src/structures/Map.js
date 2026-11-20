@@ -472,7 +472,10 @@ class Map {
 
         try {
             const image = await Jimp.read(png);
-            await image.write(Map.uploadImagePath(this.rustplus.guildId), { quality: UPLOAD_JPEG_QUALITY });
+            const target = Map.uploadImagePath(this.rustplus.guildId);
+            /* jimp 1 does not create missing directories (0.22 did). */
+            Fs.mkdirSync(Path.dirname(target), { recursive: true });
+            await image.write(target, { quality: UPLOAD_JPEG_QUALITY });
         }
         catch (e) {
             this.rustplus.log(Client.client.intlGet(null, 'warningCap'),
@@ -490,8 +493,9 @@ class Map {
             await this.mapAppendMonuments();
         }
 
-        await this.mapMarkerImageMeta.map.jimp.write(
-            this.mapMarkerImageMeta.map.image.replace('clean.png', 'full.png'));
+        const fullPng = this.mapMarkerImageMeta.map.image.replace('clean.png', 'full.png');
+        Fs.mkdirSync(Path.dirname(fullPng), { recursive: true });
+        await this.mapMarkerImageMeta.map.jimp.write(fullPng);
 
         try {
             const image = Gm(this.mapMarkerImageMeta.map.image.replace('clean.png', 'full.png'));

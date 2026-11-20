@@ -23,6 +23,7 @@
     written as a JPEG next to the other map files.
 */
 
+const Fs = require('fs');
 const Path = require('path');
 
 const RADIUS = 9;
@@ -83,6 +84,8 @@ async function render(rustplus, deaths, deps = {}) {
     }
 
     const target = deps.target || deathMapPath(rustplus.guildId);
+    /* jimp 1 does not create missing directories (0.22 did). */
+    Fs.mkdirSync(Path.dirname(target), { recursive: true });
     await image.write(target, { quality: JPEG_QUALITY });
 
     return target;
