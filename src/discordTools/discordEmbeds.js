@@ -1225,7 +1225,11 @@ module.exports = {
 
         let totalCharacters = 0;
 
-        const title = Client.client.intlGet(guildId, 'battlemetricsOnlinePlayers');
+        /* Players without positiveMatch show the hours on this server (see Battlemetrics.fetchTimesPlayed). */
+        const hasNameMatches = playerIds.some(playerId =>
+            bmInstance.players[playerId]['positiveMatch'] !== true &&
+            typeof (bmInstance.getCachedRustTimePlayed(playerId)) === 'number');
+        const title = module.exports.getBattlemetricsOnlinePlayersTitle(guildId, hasNameMatches);
         const footer = { text: bmInstance.server_name };
 
         totalCharacters += title.length;
