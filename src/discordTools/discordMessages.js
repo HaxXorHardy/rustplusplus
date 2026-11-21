@@ -833,7 +833,8 @@ module.exports = {
             Client.client.intlGet(rustplus.guildId, 'monumentInformation'),
             Client.client.intlGet(rustplus.guildId, 'eventInfo'),
             Client.client.intlGet(rustplus.guildId, 'teamMemberInfo'),
-            Client.client.intlGet(rustplus.guildId, 'battlemetricsOnlinePlayers')
+            Client.client.intlGet(rustplus.guildId, 'battlemetricsOnlinePlayers'),
+            DiscordEmbeds.getBattlemetricsOnlinePlayersTitle(rustplus.guildId, true)
         ];
 
         if (Client.client.user) {

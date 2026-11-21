@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "INICIO DE SESIÓN GLOBAL",
     "battlemetricsGlobalLogoutCap": "CERRAR SESIÓN GLOBAL",
     "battlemetricsGlobalNameChangesCap": "CAMBIOS GLOBALES DE NOMBRE",
+    "battlemetricsHoursOnThisServer": "horas en este servidor",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "A la instancia de Battlemetrics le faltan el id y el nombre.",
     "battlemetricsInstanceCouldNotBeFound": "No se pudo encontrar la instancia de Battlemetrics para {id}.",

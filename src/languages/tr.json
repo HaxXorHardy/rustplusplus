@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "KÜRESEL OTURUMU AÇ",
     "battlemetricsGlobalLogoutCap": "KÜRESEL OTURUMU KAPAT",
     "battlemetricsGlobalNameChangesCap": "KÜRESEL İSİM DEĞİŞİKLİKLERİ",
+    "battlemetricsHoursOnThisServer": "bu sunucudaki saatler",
     "battlemetricsId": "Battlemetrics Kimliği",
     "battlemetricsIdAndNameMissing": "Battlemetrics örneğinde id ve name eksik.",
     "battlemetricsInstanceCouldNotBeFound": "{id} için Battlemetrics örneği bulunamadı.",

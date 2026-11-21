@@ -961,7 +961,10 @@ module.exports = {
                 { name: wipeFieldName, value: `\`${rustplus.getCommandWipe(true)}\``, inline: true },
                 {
                     name: Client.client.intlGet(guildId, 'forcedWipe'),
-                    value: `<t:${Math.floor(ForcedWipe.next().getTime() / 1000)}:R>`,
+                    /* Time left as text in inline code like the other fields; a <t:..:R> timestamp does not
+                     * render inside inline code. The message is updated regularly, so the value stays current. */
+                    value: `\`${Timer.secondsToFullScale(
+                        Math.max(0, (ForcedWipe.next().getTime() - Date.now()) / 1000), 's')}\``,
                     inline: true
                 }],
             timestamp: true
@@ -1199,6 +1202,19 @@ module.exports = {
             fields: fields,
             timestamp: true
         });
+    },
+
+    /**
+     *  Title of the Battlemetrics online players information message. When the list holds a player Battlemetrics
+     *  only matched by name, it shows that player's hours on this server, so the title says so.
+     *  @param {string} guildId The guild id.
+     *  @param {boolean} hasNameMatches True when a listed player shows the hours on this server.
+     *  @return {string} The title.
+     */
+    getBattlemetricsOnlinePlayersTitle: function (guildId, hasNameMatches) {
+        const title = Client.client.intlGet(guildId, 'battlemetricsOnlinePlayers');
+        if (!hasNameMatches) return title;
+        return `${title} (${Client.client.intlGet(guildId, 'battlemetricsHoursOnThisServer')})`;
     },
 
     getUpdateBattlemetricsOnlinePlayersInformationEmbed: function (rustplus, battlemetricsId) {

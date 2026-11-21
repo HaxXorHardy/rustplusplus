@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "GLOBÁLNÍ LOGIN",
     "battlemetricsGlobalLogoutCap": "GLOBÁLNÍ LOGOUT",
     "battlemetricsGlobalNameChangesCap": "GLOBÁLNÍ ZMĚNY JMEN",
+    "battlemetricsHoursOnThisServer": "hodiny na tomto serveru",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "Battlemetrics instanci chybí id a jméno.",
     "battlemetricsInstanceCouldNotBeFound": "Battlemetrics Instance pro {id} nebyla nalezena.",

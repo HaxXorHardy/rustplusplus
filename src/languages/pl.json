@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "LOGOWANIE GLOBALNE",
     "battlemetricsGlobalLogoutCap": "WYLOGOWANIE GLOBALNE",
     "battlemetricsGlobalNameChangesCap": "GLOBALNE ZMIANY NAZWY",
+    "battlemetricsHoursOnThisServer": "godziny na tym serwerze",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "Instacja Battlemetrics posiada brakujące id oraz nazwę.",
     "battlemetricsInstanceCouldNotBeFound": "Instancja Battlemetrics dla id {id} nie mogła zostać znaleziona.",

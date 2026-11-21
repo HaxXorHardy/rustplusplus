@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "CONNEXION GLOBALE",
     "battlemetricsGlobalLogoutCap": "DÉCONNEXION GLOBALE",
     "battlemetricsGlobalNameChangesCap": "CHANGEMENTS DE NOM GLOBAUX",
+    "battlemetricsHoursOnThisServer": "heures sur ce serveur",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "L'instance Battlemetrics n'a pas d'identifiant et de nom.",
     "battlemetricsInstanceCouldNotBeFound": "L'instance Battlemetrics pour {id} est introuvable.",

@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "ПОДКЛЮЧЕНИЕ К СЕРВЕРУ",
     "battlemetricsGlobalLogoutCap": "ОТКЛЮЧЕНИЕ ОТ СЕРВЕРА",
     "battlemetricsGlobalNameChangesCap": "СМЕНА НИКА (ГЛОБАЛ)",
+    "battlemetricsHoursOnThisServer": "часы на этом сервере",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "Экземпляр Battlemetrics отсутствует идентификатор и имя.",
     "battlemetricsInstanceCouldNotBeFound": "Экземпляр Battlemetrics для {id} не найден.",

@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "GLOBAL LOGIN",
     "battlemetricsGlobalLogoutCap": "GLOBAL LOGOUT",
     "battlemetricsGlobalNameChangesCap": "GLOBAL NAME CHANGES",
+    "battlemetricsHoursOnThisServer": "hours on this server",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "Battlemetrics instance is missing id and name.",
     "battlemetricsInstanceCouldNotBeFound": "Battlemetrics Instance for {id} could not be found.",

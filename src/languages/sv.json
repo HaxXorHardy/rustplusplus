@@ -50,6 +50,7 @@
     "battlemetricsGlobalLoginCap": "GLOBAL INLOGGNING",
     "battlemetricsGlobalLogoutCap": "GLOBAL UTLOGGNING",
     "battlemetricsGlobalNameChangesCap": "GLOBALA NAMNÄNDRINGAR",
+    "battlemetricsHoursOnThisServer": "timmar på den här servern",
     "battlemetricsId": "BattlemetricsID",
     "battlemetricsIdAndNameMissing": "Battlemetrics-instansen saknar id och namn.",
     "battlemetricsInstanceCouldNotBeFound": "Battlemetrics-instansen för {id} kunde inte hittas.",
