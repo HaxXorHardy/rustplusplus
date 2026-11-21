@@ -519,8 +519,7 @@ class Battlemetrics {
     async getServerIdFromName(name) {
         if (!Config.battlemetrics.enabled) return null;
 
-        const originalName = name;
-        name = encodeURI(name).replace('\#', '\*');
+        /* SEARCH_SERVER_NAME_API_CALL escapes the name, encoding it here as well made the search look for '%20'. */
         const search = this.SEARCH_SERVER_NAME_API_CALL(name);
         const response = await this.#request(search);
         if (response === null) return null;
@@ -535,7 +534,7 @@ class Battlemetrics {
 
         /* Find the correct server. */
         for (const server of response.data.data) {
-            if (server.attributes.name === originalName) {
+            if (server.attributes.name === name) {
                 return server.id;
             }
         }
