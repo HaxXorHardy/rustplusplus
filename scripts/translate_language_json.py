@@ -7,11 +7,14 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
+from xml.sax.saxutils import escape as xml_escape
+from xml.sax.saxutils import unescape as xml_unescape
 
 import requests
 
 PLACEHOLDER_RE = re.compile(r"\{[^{}]+\}")
 DEEPL_BYTE_LIMIT = 120 * 1024  # keep below the official 128 KiB limit
+DEEPL_TEXT_LIMIT = 50  # DeepL rejects a request with more than 50 text parameters (400 Bad Request)
 
 DEFAULT_LANGUAGES = [
     "cs",
@@ -96,12 +99,13 @@ def unmask_placeholders(text: str, mapping: Dict[str, str]) -> str:
     return text
 
 
-def build_context(key: str) -> str:
+def build_context(keys: List[str]) -> str:
+    """One context for the whole request (DeepL takes only one), naming the keys of its texts as hints."""
     return (
-        "This text is from a video game / Discord bot localization file. "
-        f"The JSON key is '{key}'. Keep placeholders like __PH_0__ unchanged. "
+        "These texts are from a video game / Discord bot localization file. "
+        "Keep placeholders like __PH_0__ unchanged. "
         "Preserve punctuation, casing, and line breaks where sensible. "
-        "Return only the translated text."
+        f"The JSON keys of the texts are: {', '.join(keys)}."
     )
 
 
@@ -111,7 +115,7 @@ def chunk_for_deepl(entries: List[Tuple[str, str]]) -> List[List[Tuple[str, str]
     current_size = 0
     for item in entries:
         item_size = len(item[1].encode("utf-8")) + 256
-        if current and current_size + item_size > DEEPL_BYTE_LIMIT:
+        if current and (current_size + item_size > DEEPL_BYTE_LIMIT or len(current) >= DEEPL_TEXT_LIMIT):
             chunks.append(current)
             current = []
             current_size = 0
@@ -146,17 +150,15 @@ class DeepLTranslator(Translator):
                 ("preserve_formatting", "1"),
             ]
 
-            contexts: List[str] = []
             masked_items: List[Tuple[str, str, Dict[str, str]]] = []
             for key, text in chunk:
                 masked_text, mapping = mask_placeholders(text)
-                masked_text = masked_text.replace("\n", "<ph br=\"1\"/>\n")
+                # tag_handling=xml needs valid XML: a bare "<", ">" or "&" in a text fails the whole request.
+                masked_text = xml_escape(masked_text).replace("\n", "<ph br=\"1\"/>\n")
                 masked_items.append((key, masked_text, mapping))
                 payload.append(("text", masked_text))
-                contexts.append(build_context(key))
 
-            # DeepL supports one context for the whole request, so combine small hints.
-            payload.append(("context", "\n".join(contexts)))
+            payload.append(("context", build_context([key for key, _ in chunk])))
 
             response = self.session.post(
                 self.api_url,
@@ -164,7 +166,9 @@ class DeepLTranslator(Translator):
                 data=payload,
                 timeout=self.timeout,
             )
-            response.raise_for_status()
+            if not response.ok:
+                # DeepL says what it did not like in the body; raise_for_status alone only prints the status code.
+                raise RuntimeError(f"DeepL request failed ({response.status_code}) for {target_lang}: {response.text[:500]}")
             data = response.json()
             translations = data.get("translations", [])
             if len(translations) != len(masked_items):
@@ -172,6 +176,7 @@ class DeepLTranslator(Translator):
 
             for (key, _, mapping), item in zip(masked_items, translations):
                 translated = item["text"].replace('<ph br="1"/>\n', "\n").replace('<ph br="1"/>', "")
+                translated = xml_unescape(translated)
                 result[key] = unmask_placeholders(translated, mapping)
             time.sleep(0.15)
         return result
