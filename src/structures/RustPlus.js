@@ -850,6 +850,26 @@ class RustPlus extends RustPlusLib {
         return subscribed;
     }
 
+    /*
+        Subscribe one alarm, for an alarm that is paired while the bot is connected: subscribeEntities only runs when
+        the socket connects, without a subscription the server never reports the triggers of the alarm.
+    */
+    async subscribeAlarm(entityId) {
+        const response = await this.setSubscriptionAsync(`${entityId}`, true);
+        const failed = response instanceof Error || Boolean(response && response.error);
+
+        if (failed) {
+            const reason = response instanceof Error ? response.message : response.error;
+            this.log(Client.client.intlGet(null, 'warningCap'),
+                `Could not subscribe to the alarm ${entityId}: ${reason}`, 'warn');
+            return false;
+        }
+
+        this.log(Client.client.intlGet(null, 'infoCap'),
+            `Subscribed to the alarm ${entityId}, its triggers are pushed by the server.`);
+        return true;
+    }
+
     updateLeaderRustPlusLiteInstance() {
         if (this.leaderRustPlusInstance !== null) {
             if (Client.client.rustplusLiteReconnectTimers[this.guildId]) {

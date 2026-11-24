@@ -46,6 +46,15 @@ const RAID_ALARM_TITLE = 'You\'re getting raided!';
 /* The history may not carry a pairing yet when its push notification arrives. */
 const PAIRING_REFRESH_DELAY_MS = 3000;
 
+/*
+    An alarm push of the connected server waits this long for the socket to report the trigger (broadcast
+    entityChanged). Without a report the alarm was not subscribed, the push reports it instead.
+*/
+const ALARM_SOCKET_GRACE_MS = 5000;
+
+/* A trigger the socket reported this long before the push is the one the push is about. */
+const ALARM_SOCKET_WINDOW_S = 60;
+
 /* { persistentId, channelId, title, message, body } of an FCM data message (src/util/fcm), or null. */
 function parse(data) {
     if (!data || !Array.isArray(data.appData)) return null;
@@ -169,22 +178,89 @@ async function raidAlarm(client, guildId, serverKey, notification) {
     return true;
 }
 
-async function smartAlarm(client, guildId, serverKey, notification) {
-    if (!Config.general.pushAlarmsOtherServers) return false;
-
-    /* The socket of the connected server reports its alarms itself (rustplusEvents/message.js). */
-    if (isConnectedTo(client, guildId, serverKey)) return false;
-
+async function smartAlarm(client, guildId, serverKey, notification, deps = {}) {
     const instance = client.getInstance(guildId);
     const entityId = notification.body.entityId;
     const server = instance.serverList[serverKey];
 
     if (!server || !server.alarms || !server.alarms[entityId]) return false;
 
+    /*
+        The socket of the connected server reports its alarms itself (rustplusEvents/message.js) - but only the
+        subscribed ones. The push is the check that it did.
+    */
+    if (isConnectedTo(client, guildId, serverKey)) {
+        const schedule = deps.schedule || ((fn, ms) => {
+            const timer = setTimeout(fn, ms);
+            if (timer && typeof timer.unref === 'function') timer.unref();
+            return timer;
+        });
+        const now = deps.now || (() => Date.now());
+        const pushedAt = Math.floor(now() / 1000);
+
+        schedule(() => reportMissedAlarm(client, guildId, serverKey, `${entityId}`, pushedAt).catch((e) => {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Rust+ push: the alarm ${entityId} of ${guildId} could not be checked: ${e && e.message ? e.message : e}`,
+                'warn');
+        }), ALARM_SOCKET_GRACE_MS);
+
+        return false;
+    }
+
+    if (!Config.general.pushAlarmsOtherServers) return false;
+
     server.alarms[entityId].lastTrigger = Math.floor(Date.now() / 1000);
     client.setInstance(guildId, instance);
 
     await DiscordMessages.sendSmartAlarmTriggerMessage(guildId, serverKey, entityId);
+
+    return true;
+}
+
+/*
+    The socket did not report an alarm whose push arrived: the alarm is not subscribed (paired while connected, or the
+    subscription failed). The trigger is reported through the path of the socket (raid mode, switch groups, in-game
+    message), then the alarm is subscribed and its state read, so the next trigger and the reset come from the server.
+    Returns whether the push reported the trigger.
+*/
+async function reportMissedAlarm(client, guildId, serverKey, entityId, pushedAt) {
+    const instance = client.getInstance(guildId);
+    const server = instance && instance.serverList ? instance.serverList[serverKey] : null;
+    const alarm = server && server.alarms ? server.alarms[entityId] : null;
+
+    if (!alarm) return false;
+
+    const lastTrigger = Number(alarm.lastTrigger);
+    if (alarm.lastTrigger !== null && alarm.lastTrigger !== undefined && Number.isFinite(lastTrigger) &&
+        lastTrigger >= pushedAt - ALARM_SOCKET_WINDOW_S) {
+        return false;
+    }
+
+    /* Disconnected meanwhile: reported like the alarm of another server. */
+    if (!isConnectedTo(client, guildId, serverKey)) {
+        alarm.lastTrigger = Math.floor(Date.now() / 1000);
+        client.setInstance(guildId, instance);
+        await DiscordMessages.sendSmartAlarmTriggerMessage(guildId, serverKey, entityId);
+        return true;
+    }
+
+    const rustplus = client.rustplusInstances[guildId];
+    const Message = require('../rustplusEvents/message.js');
+    const changed = (value) => ({ broadcast: { entityChanged: { entityId: entityId, payload: { value: value } } } });
+
+    client.log(client.intlGet(null, 'warningCap'),
+        `Rust+ push: the alarm "${alarm.name}" (${entityId}) fired but the server did not report it, ` +
+        'it is reported from the push and subscribed now.', 'warn');
+
+    await Message.messageBroadcastEntityChangedSmartAlarm(rustplus, client, changed(true));
+
+    if (!(await rustplus.subscribeAlarm(entityId))) return true;
+
+    /* The alarm may be off again already, a change before the subscription is not pushed. */
+    const info = await rustplus.getEntityInfoAsync(entityId);
+    if (info && info.entityInfo && info.entityInfo.payload && info.entityInfo.payload.value === false) {
+        await Message.messageBroadcastEntityChangedSmartAlarm(rustplus, client, changed(false));
+    }
 
     return true;
 }
@@ -273,7 +349,7 @@ async function handle(client, steamId, notification, deps = {}) {
 
         try {
             if (kind === 'raidAlarm') handled = await raidAlarm(client, guildId, serverKey, notification);
-            else if (kind === 'smartAlarm') handled = await smartAlarm(client, guildId, serverKey, notification);
+            else if (kind === 'smartAlarm') handled = await smartAlarm(client, guildId, serverKey, notification, deps);
             else if (kind === 'teamLogin') handled = await teamLogin(client, guildId, serverKey, notification);
         }
         catch (e) {
@@ -298,5 +374,8 @@ module.exports = {
     classify: classify,
     findServerKey: findServerKey,
     guildsOfAccount: guildsOfAccount,
+    isConnectedTo: isConnectedTo,
+    reportMissedAlarm: reportMissedAlarm,
+    ALARM_SOCKET_GRACE_MS: ALARM_SOCKET_GRACE_MS,
     handle: handle,
 };

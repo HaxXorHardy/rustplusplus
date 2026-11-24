@@ -28,6 +28,7 @@ const DiscordMessages = require('../discordTools/discordMessages.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusPushListener = require('../util/rustplusPushListener.js');
+const RustPlusPushNotifications = require('../util/rustplusPushNotifications.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const ServerAddressHandler = require('../handlers/serverAddressHandler.js');
 const SetupServerList = require('../discordTools/SetupServerList.js');
@@ -177,6 +178,11 @@ module.exports = {
                     }
                     else if (device.entityType === RustPlusSync.ENTITY_TYPES.ALARM) {
                         await DiscordMessages.sendSmartAlarmMessage(device.guildId, device.serverKey, device.entityId);
+
+                        /* The socket subscribes its alarms when it connects, an alarm paired later is subscribed here. */
+                        if (RustPlusPushNotifications.isConnectedTo(client, device.guildId, device.serverKey)) {
+                            await client.rustplusInstances[device.guildId].subscribeAlarm(device.entityId);
+                        }
                     }
                     else if (device.entityType === RustPlusSync.ENTITY_TYPES.STORAGE_MONITOR) {
                         /*

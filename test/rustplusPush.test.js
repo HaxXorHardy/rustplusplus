@@ -24,6 +24,7 @@ const Os = require('node:os');
 const Path = require('node:path');
 const Test = require('node:test');
 
+const Message = require('../src/rustplusEvents/message.js');
 const RustPlusAuth = require('../src/util/rustplusAuth.js');
 const RustPlusPush = require('../src/util/rustplusPush.js');
 const RustPlusPushNotifications = require('../src/util/rustplusPushNotifications.js');
@@ -319,14 +320,81 @@ Test.describe('RustPlusPushNotifications', () => {
         const instance = serverInstance();
         const client = fakeClient(instance, { serverId: `relay-${SERVER_ID}`, isOperational: true });
 
+        const scheduled = [];
         const alarm = await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(
-            notification('alarm', 'Base', 'raid', { type: 'alarm', id: SERVER_ID, entityId: 123 })));
+            notification('alarm', 'Base', 'raid', { type: 'alarm', id: SERVER_ID, entityId: 123 })),
+            { schedule: (fn, ms) => scheduled.push(ms) });
         const login = await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(
             notification('team', 'Bob', '', { type: 'login', id: SERVER_ID, targetId: '' })));
 
         Assert.strictEqual(alarm[0].handled, false);
         Assert.strictEqual(login[0].handled, false);
         Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger, null);
+        Assert.deepStrictEqual(scheduled, [RustPlusPushNotifications.ALARM_SOCKET_GRACE_MS],
+            'the push checks later that the socket reported the alarm');
+    });
+
+    /* A connected instance for the missed alarm checks. */
+    function connectedRustplus(entityValue = false) {
+        return {
+            serverId: `relay-${SERVER_ID}`,
+            isOperational: true,
+            subscribed: [],
+            async subscribeAlarm(entityId) { this.subscribed.push(entityId); return true; },
+            async getEntityInfoAsync() { return { entityInfo: { payload: { value: entityValue } } }; },
+        };
+    }
+
+    Test.it('leaves an alarm alone that the socket reported', async (t) => {
+        const instance = serverInstance();
+        const rustplus = connectedRustplus();
+        const client = fakeClient(instance, rustplus);
+        const reported = t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async () => undefined);
+
+        instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger = 1000;
+
+        Assert.strictEqual(await RustPlusPushNotifications.reportMissedAlarm(client, 'guild', `relay-${SERVER_ID}`,
+            '123', 1002), false);
+        Assert.strictEqual(reported.mock.callCount(), 0);
+        Assert.deepStrictEqual(rustplus.subscribed, []);
+    });
+
+    Test.it('reports an alarm the socket missed from the push and subscribes it', async (t) => {
+        const instance = serverInstance();
+        const rustplus = connectedRustplus(false);
+        const client = fakeClient(instance, rustplus);
+        const values = [];
+        t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async (r, c, message) => {
+            values.push([message.broadcast.entityChanged.entityId, message.broadcast.entityChanged.payload.value]);
+        });
+
+        /* An old trigger, long before the push. */
+        instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger = 100;
+
+        Assert.strictEqual(await RustPlusPushNotifications.reportMissedAlarm(client, 'guild', `relay-${SERVER_ID}`,
+            '123', 1000), true);
+        Assert.deepStrictEqual(values, [['123', true], ['123', false]], 'the trigger, then the state read afterwards');
+        Assert.deepStrictEqual(rustplus.subscribed, ['123']);
+        Assert.ok(client.logs.some((text) => text.includes('did not report it')));
+    });
+
+    Test.it('runs the missed alarm check from the push of the connected server', async (t) => {
+        const instance = serverInstance();
+        const rustplus = connectedRustplus(true);
+        const client = fakeClient(instance, rustplus);
+        const reported = t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async () => undefined);
+        const scheduled = [];
+
+        await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(
+            notification('alarm', 'Base', 'raid', { type: 'alarm', id: SERVER_ID, entityId: 123 })),
+            { schedule: (fn) => scheduled.push(fn), now: () => 1000 * 1000 });
+
+        Assert.strictEqual(scheduled.length, 1);
+        await scheduled[0]();
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.strictEqual(reported.mock.callCount(), 1, 'only the trigger, the alarm is still on');
+        Assert.deepStrictEqual(rustplus.subscribed, ['123']);
     });
 
     Test.it('ignores a notification of a server the guild does not know', async () => {

@@ -87,3 +87,22 @@ Test.describe('RustPlus.subscribeEntities', () => {
         Assert.deepStrictEqual(rustplus.calls, []);
     });
 });
+
+Test.describe('RustPlus.subscribeAlarm', () => {
+    Test.it('subscribes one alarm and tells whether it worked', async () => {
+        const previousClient = Client.client;
+        Client.client = { intlGet: () => 'INFO' };
+
+        try {
+            const ok = fakeRustplus();
+            Assert.strictEqual(await RustPlus.prototype.subscribeAlarm.call(ok, 7854530), true);
+            Assert.deepStrictEqual(ok.calls, [['7854530', true]]);
+
+            const failing = fakeRustplus(['7854530']);
+            Assert.strictEqual(await RustPlus.prototype.subscribeAlarm.call(failing, '7854530'), false);
+        }
+        finally {
+            Client.client = previousClient;
+        }
+    });
+});

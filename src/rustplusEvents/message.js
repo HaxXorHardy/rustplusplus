@@ -50,6 +50,8 @@ module.exports = {
     botMessageKey: botMessageKey,
     /* exported for tests */
     messageBroadcastEntityChangedStorageMonitor: (...args) => messageBroadcastEntityChangedStorageMonitor(...args),
+    /* The alarm push reports a trigger the socket missed through the same path (util/rustplusPushNotifications.js). */
+    messageBroadcastEntityChangedSmartAlarm: (...args) => messageBroadcastEntityChangedSmartAlarm(...args),
     resetToolCupboardUpdates: () => toolCupboardUpdates.reset(),
     toolCupboardReadDelayMs: TOOL_CUPBOARD_READ_DELAY_MS,
     async execute(rustplus, client, message) {
