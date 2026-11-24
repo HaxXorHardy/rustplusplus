@@ -397,7 +397,7 @@ module.exports = {
         return modal;
     },
 
-    getTrackerAddPlayerModal(guildId, trackerId) {
+    getTrackerAddPlayerModal(guildId, trackerId, sinceWipe = null) {
         const instance = Client.client.getInstance(guildId);
         const tracker = instance.trackers[trackerId];
         const identifier = JSON.stringify({ "trackerId": trackerId });
@@ -407,16 +407,62 @@ module.exports = {
             title: Client.client.intlGet(guildId, 'trackerAddPlayerDesc', { tracker: tracker.name })
         });
 
+        /*
+            Players on the tracker's server to pick from, each choice sorted by name, without the players already in
+            the tracker. Online: as Battlemetrics sees them now. Offline: played since the last wipe (sinceWipe, most
+            time first), or without that list the players seen since the bot started. A form holds 5 fields and a
+            choice 25 players: offline are the 25 with the most time, online get the remaining fields (25 each, A-Z).
+        */
+        const bmInstance = Client.client.battlemetricsInstances[tracker.battlemetricsId];
+        const tracked = new Set(tracker.players.map(e => e.playerId).filter(e => e));
+        const sinceWipeNames = new Map((sinceWipe || []).map(e => [`${e.id}`, e.name]));
+        const playerName = (id) => {
+            const name = bmInstance.players[id] ? bmInstance.players[id]['name'] : sinceWipeNames.get(`${id}`);
+            return typeof name === 'string' && name.trim() !== '' ? name : '-';
+        };
+        const byName = (a, b) => playerName(a).localeCompare(playerName(b), undefined, { sensitivity: 'base' });
+        const onlineAll = bmInstance ? bmInstance.onlinePlayers.map(e => `${e}`) : [];
+        const online = onlineAll.filter(e => !tracked.has(e)).sort(byName);
+        const offlineSource = !bmInstance ? [] : sinceWipe ? sinceWipe.map(e => `${e.id}`) :
+            bmInstance.getOfflinePlayerIdsOrderedByLeastTimeSinceOnline();
+        const offline = offlineSource.filter(e => !tracked.has(e) && !onlineAll.includes(e)).slice(0, 25).sort(byName);
 
-        modal.addComponents(
-            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
-                customId: 'TrackerAddPlayerId',
-                label: `${Client.client.intlGet(guildId, 'steamId')} / ` +
-                    `${Client.client.intlGet(guildId, 'battlemetricsId')}`,
-                value: '',
-                style: Discord.TextInputStyle.Short
-            }))
-        );
+        const playerChoice = (customId, label, ids) => new Discord.LabelBuilder()
+            .setLabel(label.slice(0, 45))
+            .setStringSelectMenuComponent(new Discord.StringSelectMenuBuilder()
+                .setCustomId(customId)
+                .setRequired(false)
+                .setMinValues(0)
+                .setMaxValues(ids.length)
+                .addOptions(ids.map(id => ({ label: playerName(id).slice(0, 100), value: `${id}` }))));
+
+        const labels = [];
+        const onlineChunks = [];
+        const onlineFields = 4 - (offline.length !== 0 ? 1 : 0);
+        for (let i = 0; i < online.length && onlineChunks.length < onlineFields; i += 25) {
+            onlineChunks.push(online.slice(i, i + 25));
+        }
+        onlineChunks.forEach((ids, i) => {
+            const range = onlineChunks.length > 1 ?
+                ` (${playerName(ids[0]).charAt(0).toUpperCase()}-` +
+                `${playerName(ids[ids.length - 1]).charAt(0).toUpperCase()})` : '';
+            labels.push(playerChoice(`TrackerAddPlayerOnline${i}`,
+                `${Client.client.intlGet(guildId, 'trackerAddPlayerOnline')}${range}`, ids));
+        });
+        if (offline.length !== 0) {
+            labels.push(playerChoice('TrackerAddPlayerOffline',
+                Client.client.intlGet(guildId, 'trackerAddPlayerOffline'), offline));
+        }
+
+        labels.push(new Discord.LabelBuilder()
+            .setLabel((`${Client.client.intlGet(guildId, 'steamId')} / ` +
+                `${Client.client.intlGet(guildId, 'battlemetricsId')}`).slice(0, 45))
+            .setTextInputComponent(new Discord.TextInputBuilder()
+                .setCustomId('TrackerAddPlayerId')
+                .setStyle(Discord.TextInputStyle.Short)
+                .setRequired(labels.length === 0)));
+
+        modal.addLabelComponents(...labels);
 
         return modal;
     },
@@ -431,16 +477,59 @@ module.exports = {
             title: Client.client.intlGet(guildId, 'trackerRemovePlayerDesc', { tracker: tracker.name })
         });
 
-        modal.addComponents(
-            new Discord.ActionRowBuilder().addComponents(TextInput.getTextInput({
-                customId: 'TrackerRemovePlayerId',
-                label: `${Client.client.intlGet(guildId, 'steamId')} / ` +
-                    `${Client.client.intlGet(guildId, 'battlemetricsId')}`,
-                value: '',
-                style: Discord.TextInputStyle.Short
-            }))
-        );
+        /*
+            The players in the tracker to pick from, sorted by name, 25 per choice (up to 4 choices, the 5th field is
+            the SteamID / Battlemetrics ID). The value says which id the player is removed by (see trackerPlayerKey).
+        */
+        const playerName = (player) =>
+            typeof player.name === 'string' && player.name.trim() !== '' ? player.name : '-';
+        const players = tracker.players.slice().sort((a, b) =>
+            playerName(a).localeCompare(playerName(b), undefined, { sensitivity: 'base' }));
+        const keys = new Set();
+        const options = [];
+        for (const player of players) {
+            const key = module.exports.trackerPlayerKey(player);
+            if (keys.has(key)) continue;
+            keys.add(key);
+            const description = [player.steamId ? `Steam ${player.steamId}` : null,
+                player.playerId ? `BM ${player.playerId}` : null].filter(e => e).join(' / ');
+            options.push({ label: playerName(player).slice(0, 100), value: key.slice(0, 100),
+                ...(description !== '' ? { description: description.slice(0, 100) } : {}) });
+        }
+
+        const labels = [];
+        const chunks = [];
+        for (let i = 0; i < options.length && chunks.length < 4; i += 25) chunks.push(options.slice(i, i + 25));
+        chunks.forEach((chunk, i) => {
+            const range = chunks.length > 1 ? ` (${chunk[0].label.charAt(0).toUpperCase()}-` +
+                `${chunk[chunk.length - 1].label.charAt(0).toUpperCase()})` : '';
+            labels.push(new Discord.LabelBuilder()
+                .setLabel(`${Client.client.intlGet(guildId, 'trackerRemovePlayerChoice')}${range}`.slice(0, 45))
+                .setStringSelectMenuComponent(new Discord.StringSelectMenuBuilder()
+                    .setCustomId(`TrackerRemovePlayerPick${i}`)
+                    .setRequired(false)
+                    .setMinValues(0)
+                    .setMaxValues(chunk.length)
+                    .addOptions(chunk)));
+        });
+
+        labels.push(new Discord.LabelBuilder()
+            .setLabel((`${Client.client.intlGet(guildId, 'steamId')} / ` +
+                `${Client.client.intlGet(guildId, 'battlemetricsId')}`).slice(0, 45))
+            .setTextInputComponent(new Discord.TextInputBuilder()
+                .setCustomId('TrackerRemovePlayerId')
+                .setStyle(Discord.TextInputStyle.Short)
+                .setRequired(labels.length === 0)));
+
+        modal.addLabelComponents(...labels);
 
         return modal;
+    },
+
+    /* Which id a tracker player is picked by in the remove form: SteamID, else Battlemetrics id, else the name. */
+    trackerPlayerKey(player) {
+        if (player.steamId) return `s:${player.steamId}`;
+        if (player.playerId) return `b:${player.playerId}`;
+        return `n:${player.name}`;
     },
 }

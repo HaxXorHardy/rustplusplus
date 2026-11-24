@@ -1345,7 +1345,20 @@ module.exports = async (client, interaction) => {
             return;
         }
 
-        const modal = DiscordModals.getTrackerAddPlayerModal(guildId, ids.trackerId);
+        /*
+            The offline choice lists the players since the wipe (fetched ahead by the Battlemetrics handler). The form
+            must be shown within 3 s: without an answer in time it uses the last fetched list, or else the players seen
+            since the bot started.
+        */
+        const bmInstance = client.battlemetricsInstances[tracker.battlemetricsId];
+        let sinceWipe = null;
+        if (bmInstance) {
+            const request = bmInstance.getPlayersSinceWipe().catch(() => null);
+            sinceWipe = await Promise.race([request, new Promise(resolve => setTimeout(() => resolve(null), 1800))]);
+            if (sinceWipe === null) sinceWipe = bmInstance.getCachedPlayersSinceWipe();
+        }
+
+        const modal = DiscordModals.getTrackerAddPlayerModal(guildId, ids.trackerId, sinceWipe);
         await interaction.showModal(modal);
     }
     else if (interaction.customId.startsWith('TrackerRemovePlayer')) {

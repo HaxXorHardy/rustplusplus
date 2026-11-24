@@ -39,6 +39,27 @@ const SESSION_START_DEFAULT_LIMIT = 10;
 const SESSION_START_RETRY_MS = 10 * 60 * 1000; /* 10 minutes */
 /* A request without an answer must not hang its caller forever (the information messages waited on one for hours). */
 const REQUEST_TIMEOUT_MS = 20 * 1000;
+const PLAYERS_SINCE_WIPE_CACHE_TTL_MS = 10 * 60 * 1000; /* 10 minutes */
+
+/*
+    The last forced wipe at or before a time: the first Thursday of the month at 19:00 UK time, which is 18:00 UTC
+    from April to October (summer time, first Thursdays are never near the switch) and 19:00 UTC otherwise.
+    @param {number} now Time in ms.
+    @returns {number} Time in ms.
+*/
+function lastForcedWipe(now) {
+    const date = new Date(now);
+    for (let back = 0; back < 2; back++) {
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth() - back;
+        const first = new Date(Date.UTC(year, month, 1));
+        const day = 1 + ((4 - first.getUTCDay() + 7) % 7);
+        const hour = (first.getUTCMonth() >= 3 && first.getUTCMonth() <= 9) ? 18 : 19;
+        const wipe = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), day, hour);
+        if (wipe <= now) return wipe;
+    }
+    return null;
+}
 
 /*
     The reason a request failed, as it should appear in the log: the HTTP status of an answered error (429 rate limit,
@@ -91,6 +112,9 @@ class Battlemetrics {
 
         this._timePlayedCache = new Object();    /* { [playerId]: { seconds, fetchedAt } } */
         this._timePlayedPending = new Object();
+
+        this._playersSinceWipe = null;          /* { fetchedAt, since, players: [{ id, name, time }] } */
+        this._playersSinceWipePending = null;
 
         this._sessionStartPending = new Object();   /* { [playerId]: true } */
         this._sessionStartTried = new Object();     /* { [playerId]: timestamp of the last failed lookup } */
@@ -257,6 +281,17 @@ class Battlemetrics {
         }
 
         return `https://api.battlemetrics.com/servers/${id}/relationships/leaderboards/time?filter[period]=${period}`;
+    }
+
+    /**
+     *  Construct the Battlemetrics API call for the players with the most time played on the server since a time.
+     *  @param {number} id The id of the server.
+     *  @param {number} since Time in ms.
+     *  @return {string} The Battlemetrics API call string.
+     */
+    GET_SERVER_TIME_PLAYED_SINCE_API_CALL(id, since) {
+        return `https://api.battlemetrics.com/servers/${id}/relationships/leaderboards/time` +
+            `?filter[period]=${new Date(since).toISOString()}:${new Date().toISOString()}&page[size]=100`;
     }
 
     /**
@@ -509,6 +544,57 @@ class Battlemetrics {
         for (const player of parsed.players) {
             if (!randomUsernames.includes(player.name)) this.streamerMode = false;
         }
+    }
+
+    /**
+     *  The last wipe of the server: the one the server reports, but never before the last forced wipe (every server
+     *  is wiped then, a date before it is out of date). The forced wipe when the server reports none.
+     *  @return {number} Time in ms.
+     */
+    getLastWipeTime() {
+        const now = Date.now();
+        const forced = lastForcedWipe(now);
+        const reported = this.server_rust_last_wipe ? Date.parse(this.server_rust_last_wipe) : NaN;
+        if (Number.isFinite(reported) && reported <= now && (forced === null || reported >= forced)) return reported;
+        return forced;
+    }
+
+    /**
+     *  The players with the most time played on the server since the last wipe (up to 100, most time first), kept
+     *  for 10 minutes. One request at a time; null when Battlemetrics did not answer.
+     *  @return {Promise<Array|null>} [{ id, name, time }]
+     */
+    async getPlayersSinceWipe() {
+        const since = this.getLastWipeTime();
+        const cached = this._playersSinceWipe;
+        if (cached && cached.since === since && Date.now() - cached.fetchedAt < PLAYERS_SINCE_WIPE_CACHE_TTL_MS) {
+            return cached.players;
+        }
+        if (this._playersSinceWipePending) return this._playersSinceWipePending;
+
+        this._playersSinceWipePending = (async () => {
+            try {
+                const data = await this.request(this.GET_SERVER_TIME_PLAYED_SINCE_API_CALL(this.id, since));
+                if (!data || !Array.isArray(data.data)) return null;
+
+                const players = this.#parseMostTimePlayedApiResponse(data).players
+                    .map(e => ({ id: `${e.id}`, name: e.name, time: e.time }));
+                this._playersSinceWipe = { fetchedAt: Date.now(), since: since, players: players };
+                return players;
+            }
+            finally {
+                this._playersSinceWipePending = null;
+            }
+        })();
+        return this._playersSinceWipePending;
+    }
+
+    /**
+     *  The players since the last wipe as they were last fetched (also when older than 10 minutes), or null.
+     *  @return {Array|null} [{ id, name, time }]
+     */
+    getCachedPlayersSinceWipe() {
+        return this._playersSinceWipe ? this._playersSinceWipe.players : null;
     }
 
     /**

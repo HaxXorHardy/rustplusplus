@@ -80,6 +80,12 @@ module.exports = {
 
                 if (!bmInstance || !bmInstance.lastUpdateSuccessful) continue;
 
+                /*
+                    The players since the wipe for the tracker's add player form, fetched ahead (one request every
+                    10 minutes per server): the form has to be shown within 3 s and the request can take over 2 s.
+                */
+                bmInstance.getPlayersSinceWipe().catch(() => null);
+
                 if (firstTime || searchSteamProfiles) {
                     for (const player of content.players) {
                         if (player.steamId === null) continue;

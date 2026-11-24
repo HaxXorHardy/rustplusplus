@@ -27,6 +27,7 @@ const CredentialsLoginHandler = require('./credentialsLoginHandler.js');
 const CustomIds = require('../util/customIds.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const DiscordModals = require('../discordTools/discordModals.js');
 const Keywords = require('../util/keywords.js');
 const Scrape = require('../util/scrape.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
@@ -427,15 +428,58 @@ module.exports = async (client, interaction) => {
     else if (interaction.customId.startsWith('TrackerAddPlayer')) {
         const ids = JSON.parse(interaction.customId.replace('TrackerAddPlayer', ''));
         const tracker = instance.trackers[ids.trackerId];
-        const input = interaction.fields.getTextInputValue('TrackerAddPlayerId');
+        const input = (optionalField(interaction, 'TrackerAddPlayerId') || '').trim();
 
         if (!tracker) {
             interaction.deferUpdate();
             return;
         }
 
+        /* Players picked from the online / offline choices (Battlemetrics ids). */
+        const picked = [];
+        for (const customId of ['TrackerAddPlayerOnline0', 'TrackerAddPlayerOnline1', 'TrackerAddPlayerOnline2',
+            'TrackerAddPlayerOnline3', 'TrackerAddPlayerOffline']) {
+            try {
+                picked.push(...interaction.fields.getStringSelectValues(customId));
+            }
+            catch (e) {
+                /* Not in this form. */
+            }
+        }
+
+        const pickedBmInstance = client.battlemetricsInstances[tracker.battlemetricsId];
+        const added = [];
+        for (const playerId of picked) {
+            if (tracker.players.some(e => e.playerId === playerId)) continue;
+            /* Offline players since the wipe are not in the players Battlemetrics sent with the server. */
+            const sinceWipe = pickedBmInstance ? (pickedBmInstance.getCachedPlayersSinceWipe() || []) : [];
+            const sinceWipePlayer = sinceWipe.find(e => e.id === playerId);
+            const name = pickedBmInstance && pickedBmInstance.players.hasOwnProperty(playerId) ?
+                pickedBmInstance.players[playerId]['name'] : sinceWipePlayer ? sinceWipePlayer.name : '-';
+            tracker.players.push({ name: name, steamId: null, playerId: playerId });
+            added.push(playerId);
+        }
+
+        if (added.length !== 0) {
+            client.setInstance(interaction.guildId, instance);
+            client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'modalValueChange', {
+                id: `${verifyId}`,
+                value: added.join(', ')
+            }));
+        }
+
+        if (input === '') {
+            if (added.length !== 0) await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
+            client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userModalInteractionSuccess', {
+                id: `${verifyId}`
+            }));
+            interaction.deferUpdate();
+            return;
+        }
+
         const parsedInput = TrackerInputParser.parseTrackerPlayerInput(input);
         if (!parsedInput.valid) {
+            if (added.length !== 0) await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
             const str = client.intlGet(interaction.guildId, 'trackerPlayerInputInvalid');
             await client.interactionReply(interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
             return;
@@ -446,6 +490,7 @@ module.exports = async (client, interaction) => {
         if (parsedInput.type === 'steamVanityUrl') {
             const resolvedSteamId = await Scrape.scrapeSteamIdFromVanity(client, parsedInput.value);
             if (!resolvedSteamId) {
+                if (added.length !== 0) await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
                 const str = client.intlGet(interaction.guildId, 'trackerPlayerInputInvalid');
                 await client.interactionReply(interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
                 return;
@@ -459,6 +504,7 @@ module.exports = async (client, interaction) => {
 
         if ((isSteamId64 && tracker.players.some(e => e.steamId === id)) ||
             (!isSteamId64 && tracker.players.some(e => e.playerId === id))) {
+            if (added.length !== 0) await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
             interaction.deferUpdate();
             return;
         }
@@ -503,9 +549,43 @@ module.exports = async (client, interaction) => {
     else if (interaction.customId.startsWith('TrackerRemovePlayer')) {
         const ids = JSON.parse(interaction.customId.replace('TrackerRemovePlayer', ''));
         const tracker = instance.trackers[ids.trackerId];
-        const input = interaction.fields.getTextInputValue('TrackerRemovePlayerId');
+        const input = (optionalField(interaction, 'TrackerRemovePlayerId') || '').trim();
 
         if (!tracker) {
+            interaction.deferUpdate();
+            return;
+        }
+
+        /* Players picked from the choices of the players in the tracker. */
+        const picked = new Set();
+        for (let i = 0; i < 4; i++) {
+            try {
+                for (const key of interaction.fields.getStringSelectValues(`TrackerRemovePlayerPick${i}`)) {
+                    picked.add(key);
+                }
+            }
+            catch (e) {
+                /* Not in this form. */
+            }
+        }
+
+        const pickedRemoved = tracker.players.filter(e => picked.has(DiscordModals.trackerPlayerKey(e)));
+        if (pickedRemoved.length !== 0) {
+            tracker.players = tracker.players.filter(e => !picked.has(DiscordModals.trackerPlayerKey(e)));
+            client.setInstance(interaction.guildId, instance);
+            client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'modalValueChange', {
+                id: `${verifyId}`,
+                value: pickedRemoved.map(e => e.steamId || e.playerId || e.name).join(', ')
+            }));
+        }
+
+        if (input === '') {
+            if (pickedRemoved.length !== 0) {
+                await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
+            }
+            client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userModalInteractionSuccess', {
+                id: `${verifyId}`
+            }));
             interaction.deferUpdate();
             return;
         }
@@ -540,6 +620,9 @@ module.exports = async (client, interaction) => {
         }
 
         if (useRawRemoval && previousLength === tracker.players.length) {
+            if (pickedRemoved.length !== 0) {
+                await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
+            }
             const str = client.intlGet(interaction.guildId, 'trackerPlayerInputInvalid');
             await client.interactionReply(interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
             return;
