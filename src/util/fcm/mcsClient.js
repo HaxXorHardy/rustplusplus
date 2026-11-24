@@ -26,6 +26,11 @@
 
     Rust+ notifications are plain data messages, so the unused web push decryption of the original is left out
     (its check never matched: it looked for a key in the appData array with the "in" operator).
+
+    Heartbeats (not in the original): the login turns adaptive heartbeats off, so the server expects the client to
+    ping. Without pings Google closed the connection about every 28 minutes. After the login the client pings every
+    HEARTBEAT_INTERVAL_MS and answers the pings of the server; a ping with nothing received since the previous one
+    means the connection is dead, it is dropped and reconnects.
 */
 
 const EventEmitter = require('events');
@@ -38,6 +43,7 @@ const { McsParser, TAGS, MCS_VERSION, lookupType } = require('./mcsParser.js');
 const HOST = 'mtalk.google.com';
 const PORT = 5228;
 const MAX_RETRY_SECONDS = 15;
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
 class McsClient extends EventEmitter {
     /* deps: { checkIn, connectSocket } for tests. */
@@ -53,6 +59,8 @@ class McsClient extends EventEmitter {
         this._destroyed = false;
         this._socket = null;
         this._parser = null;
+        this._heartbeatTimer = null;
+        this._receivedSincePing = true;
     }
 
     async connect() {
@@ -110,6 +118,8 @@ class McsClient extends EventEmitter {
         }
 
         for (const message of messages) {
+            if (this._socket !== socket) return;
+            this._receivedSincePing = true;
             this._onMessage(message);
         }
     }
@@ -118,6 +128,10 @@ class McsClient extends EventEmitter {
         if (tag === TAGS.loginResponse) {
             /* The ids went to the server with the login; it does not send these messages again. */
             this._persistentIds = [];
+            this._startHeartbeat();
+        }
+        else if (tag === TAGS.heartbeatPing) {
+            this._send(TAGS.heartbeatAck, 'HeartbeatAck', {});
         }
         else if (tag === TAGS.dataMessageStanza) {
             if (object.persistentId && this._persistentIds.includes(object.persistentId)) return;
@@ -154,6 +168,34 @@ class McsClient extends EventEmitter {
         ]);
     }
 
+    /* A message after the login: tag, then the length-delimited protobuf (the version byte only starts the stream). */
+    _send(tag, typeName, payload) {
+        if (!this._socket) return;
+
+        const Type = lookupType(typeName);
+        this._socket.write(Buffer.concat([
+            Buffer.from([tag]),
+            Type.encodeDelimited(Type.create(payload)).finish(),
+        ]));
+    }
+
+    _startHeartbeat() {
+        clearInterval(this._heartbeatTimer);
+        this._receivedSincePing = true;
+
+        this._heartbeatTimer = setInterval(() => {
+            if (!this._receivedSincePing) {
+                this._drop();
+                return;
+            }
+
+            this._receivedSincePing = false;
+            this._send(TAGS.heartbeatPing, 'HeartbeatPing', {});
+        }, HEARTBEAT_INTERVAL_MS);
+
+        if (typeof this._heartbeatTimer.unref === 'function') this._heartbeatTimer.unref();
+    }
+
     _drop() {
         this._teardown();
         if (this._destroyed) return;
@@ -174,6 +216,8 @@ class McsClient extends EventEmitter {
     _teardown() {
         clearTimeout(this._retryTimeout);
         this._retryTimeout = null;
+        clearInterval(this._heartbeatTimer);
+        this._heartbeatTimer = null;
 
         const socket = this._socket;
         this._socket = null;
@@ -186,5 +230,7 @@ class McsClient extends EventEmitter {
         }
     }
 }
+
+McsClient.HEARTBEAT_INTERVAL_MS = HEARTBEAT_INTERVAL_MS;
 
 module.exports = McsClient;

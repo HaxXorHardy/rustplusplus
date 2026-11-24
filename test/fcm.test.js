@@ -315,6 +315,48 @@ Test.describe('fcm/mcsClient', () => {
         Assert.strictEqual(sockets.length, 0);
     });
 
+    Test.it('answers the pings of the server', async (t) => {
+        const { client, sockets } = clientWithFakes(t);
+
+        await client.connect();
+        sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse(),
+            frame(TAGS.heartbeatPing, 'HeartbeatPing', null)]));
+
+        Assert.strictEqual(sockets[0].written.length, 2);
+        Assert.deepStrictEqual([...sockets[0].written[1]], [TAGS.heartbeatAck, 0]);
+    });
+
+    Test.it('pings after the login and drops a connection that stopped answering', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+        const { client, sockets } = clientWithFakes(t);
+        const events = [];
+        client.on('disconnect', () => events.push('disconnect'));
+
+        await client.connect();
+        t.mock.timers.tick(McsClient.HEARTBEAT_INTERVAL_MS);
+        Assert.strictEqual(sockets[0].written.length, 1, 'no ping before the login');
+
+        sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
+        t.mock.timers.tick(McsClient.HEARTBEAT_INTERVAL_MS);
+        Assert.deepStrictEqual([...sockets[0].written[1]], [TAGS.heartbeatPing, 0]);
+
+        /* Answered: the next ping goes out, the connection stays. */
+        sockets[0].emit('data', frame(TAGS.heartbeatAck, 'HeartbeatAck', null));
+        t.mock.timers.tick(McsClient.HEARTBEAT_INTERVAL_MS);
+        Assert.strictEqual(sockets[0].written.length, 3);
+        Assert.deepStrictEqual(events, []);
+
+        /* Not answered: dropped at the next ping, and it reconnects. */
+        t.mock.timers.tick(McsClient.HEARTBEAT_INTERVAL_MS);
+        Assert.strictEqual(sockets[0].destroyed, true);
+        Assert.strictEqual(sockets[0].written.length, 3);
+        Assert.deepStrictEqual(events, ['disconnect']);
+
+        t.mock.timers.tick(1000);
+        await new Promise((resolve) => setImmediate(resolve));
+        Assert.strictEqual(sockets.length, 2);
+    });
+
     Test.it('keeps retrying when a reconnect check-in fails', async (t) => {
         t.mock.timers.enable({ apis: ['setTimeout'] });
         const options = {};
