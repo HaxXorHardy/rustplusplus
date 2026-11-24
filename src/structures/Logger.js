@@ -24,6 +24,7 @@ const Winston = require("winston");
 const Config = require('../../config');
 const formatLogValue = require('../util/formatLogValue');
 const LogChannelRelay = require('../util/logChannelRelay');
+const OutageLogThrottle = require('../util/outageLogThrottle');
 
 class Logger {
     constructor(logFilePath, type) {
@@ -41,6 +42,9 @@ class Logger {
         this.type = type;
         this.guildId = null;
         this.serverName = null;
+
+        /* The bot log tells when an outage is over and what it left out. */
+        if (type === 'default') OutageLogThrottle.setWriter((summary) => this.log('INFO', summary, 'info'));
     }
 
     setGuildId(guildId) {
@@ -74,8 +78,13 @@ class Logger {
         }
 
         let time = this.getTime();
-        const lines = this.formatError(text, level === 'error' && Config.general.showCallStackError)
-            .split(/\r?\n/);
+        const formatted = this.formatError(text, level === 'error' && Config.general.showCallStackError);
+
+        /* During a network outage each kind of warning and error is written once (util/outageLogThrottle.js). */
+        const scope = this.type === 'guild' ? `guild:${this.guildId}` : this.type;
+        if (!OutageLogThrottle.shouldWrite(scope, title, formatted, level)) return;
+
+        const lines = formatted.split(/\r?\n/);
         lines[0] = `${title}: ${lines[0]}`;
 
         switch (this.type) {
