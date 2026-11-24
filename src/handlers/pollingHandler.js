@@ -271,15 +271,19 @@ module.exports = {
 
     /* One poll cycle, true when every request of the cycle was answered. */
     poll: async function (rustplus, client) {
-        /* Poll information such as info, mapMarkers, teamInfo and time */
+        /*
+            Poll information such as info, mapMarkers, teamInfo and time. A lone timeout is a warning: the next tick asks
+            again and several failed polls in a row rebuild the connection (updatePollHealth).
+        */
+        const options = { timeoutIsWarning: true };
         let info = await rustplus.getInfoAsync();
-        if (!(await rustplus.isResponseValid(info))) return false;
+        if (!(await rustplus.isResponseValid(info, options))) return false;
         let mapMarkers = await rustplus.getMapMarkersAsync();
-        if (!(await rustplus.isResponseValid(mapMarkers))) return false;
+        if (!(await rustplus.isResponseValid(mapMarkers, options))) return false;
         let teamInfo = await rustplus.getTeamInfoAsync();
-        if (!(await rustplus.isResponseValid(teamInfo))) return false;
+        if (!(await rustplus.isResponseValid(teamInfo, options))) return false;
         let time = await rustplus.getTimeAsync();
-        if (!(await rustplus.isResponseValid(time))) return false;
+        if (!(await rustplus.isResponseValid(time, options))) return false;
 
         if (rustplus.isFirstPoll) {
             rustplus.info = new Info(info.info);

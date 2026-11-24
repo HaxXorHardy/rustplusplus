@@ -207,6 +207,38 @@ Test.describe('Rust+ socket close diagnostics', () => {
         Assert.deepStrictEqual(eventNames(rustplus).slice(-1), ['disconnected']);
     });
 
+    Test.it('answers the open requests at once when the socket closes', async () => {
+        const rustplus = fakeRustplus();
+        const answers = [];
+        rustplus.seqCallbacks = [];
+        rustplus.seqCallbacks[7] = (message) => answers.push(message);
+
+        const socket = await connect(rustplus);
+        socket.emit('open');
+        socket.emit('close', 1006, '');
+
+        Assert.strictEqual(answers.length, 1);
+        Assert.strictEqual(answers[0].response.seq, 7);
+        Assert.ok(answers[0].response.error instanceof Error);
+        Assert.strictEqual(answers[0].response.error.code, RustPlusSocket.RELAY_CLOSED_CODE);
+        Assert.deepStrictEqual(Object.keys(rustplus.seqCallbacks), []);
+    });
+
+    Test.it('keeps the open requests of a newer socket', async () => {
+        const rustplus = fakeRustplus();
+        const answers = [];
+        rustplus.seqCallbacks = [];
+        rustplus.seqCallbacks[3] = (message) => answers.push(message);
+
+        const socket = await connect(rustplus);
+        socket.emit('open');
+        rustplus.websocket = { replacement: true };
+        socket.emit('close', 1006, '');
+
+        Assert.strictEqual(answers.length, 0);
+        Assert.strictEqual(typeof rustplus.seqCallbacks[3], 'function');
+    });
+
     Test.it('says when the heartbeat closed the socket', async () => {
         const rustplus = fakeRustplus();
         const socket = await connect(rustplus);

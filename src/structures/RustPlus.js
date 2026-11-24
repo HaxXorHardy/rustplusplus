@@ -1556,11 +1556,23 @@ class RustPlus extends RustPlusLib {
         else if (response instanceof Error) {
             /* A timeout, a closed relay socket or an AppError - log what actually happened. */
             const message = `${response.message}`;
+            const isTimeout = message.includes('Timeout reached while waiting for response');
 
-            this.log(Client.client.intlGet(null, 'errorCap'),
-                ((message.includes('Timeout reached while waiting for response')) ?
-                    Client.client.intlGet(null, 'responseTimeout') :
-                    message) + where, 'error');
+            /* The socket closed with the request open: the DISCONNECTED line already says so (util/rustplusSocket.js). */
+            if (response.code === RustPlusSocket.RELAY_CLOSED_CODE) {
+                this.log(Client.client.intlGet(null, 'infoCap'), message + where, 'debug');
+                return false;
+            }
+
+            /*
+                options.timeoutIsWarning: the poll asks again on its next tick and reconnects after several failed polls
+                in a row (handlers/pollingHandler.js), so one unanswered poll request is a warning, not an error.
+            */
+            const isWarning = isTimeout && Boolean(options && options.timeoutIsWarning);
+
+            this.log(Client.client.intlGet(null, isWarning ? 'warningCap' : 'errorCap'),
+                (isTimeout ? Client.client.intlGet(null, 'responseTimeout') : message) + where,
+                isWarning ? 'warn' : 'error');
             return false;
         }
         else if (response.hasOwnProperty('error')) {

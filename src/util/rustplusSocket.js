@@ -43,6 +43,10 @@ const HEARTBEAT_INTERVAL_MS = 30000;
 /* A handshake that the relay does not answer in this time is dropped and reconnected. */
 const CONNECT_TIMEOUT_MS = 20000;
 
+/* The answer to a request that was still open when its socket closed, see failPendingRequests. */
+const RELAY_CLOSED_CODE = 'ERELAYCLOSED';
+const RELAY_CLOSED_MESSAGE = 'The relay socket closed before the server answered.';
+
 /* The proto file is parsed once instead of on every connect. */
 let protoRootPromise = null;
 
@@ -132,6 +136,35 @@ function describeUptime(fromMs, toMs = Date.now()) {
 /* The instance writes into the guild log, a socket that a test builds has no logger. */
 function logSocket(rustplus, cap, text, level) {
     if (rustplus && typeof rustplus.log === 'function') rustplus.log(cap, text, level);
+}
+
+/*
+    A closed socket never answers the requests it still waits for: each of them used to wait for its full timeout and
+    then logged "Timeout reached while waiting for response" as an ERROR, ten seconds after the DISCONNECTED line that
+    already named the cause. They are answered now with an error the library rejects with (sendRequestAsync rejects
+    with message.response.error), code ERELAYCLOSED, so the waiting poll ends at once and RustPlus.isResponseValid
+    can tell it from a real timeout.
+*/
+function failPendingRequests(rustplus) {
+    const callbacks = rustplus.seqCallbacks;
+    if (!callbacks) return;
+
+    for (const seq of Object.keys(callbacks)) {
+        const callback = callbacks[seq];
+        delete callbacks[seq];
+
+        if (typeof callback !== 'function') continue;
+
+        const error = new Error(RELAY_CLOSED_MESSAGE);
+        error.code = RELAY_CLOSED_CODE;
+
+        try {
+            callback({ response: { seq: Number(seq), error: error } });
+        }
+        catch (e) {
+            /* A callback of a request that is gone anyway. */
+        }
+    }
 }
 
 function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
@@ -281,6 +314,9 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
             rustplus.relayConnectedAtMs = null;
             rustplus.relayHeartbeatMissed = false;
 
+            /* The requests of a newer socket (a reconnect replaced this one before it closed) stay open. */
+            if (!rustplus.websocket || rustplus.websocket === websocket) failPendingRequests(rustplus);
+
             rustplus.emit('disconnected');
         });
     }).catch((e) => rustplus.emit('error', e));
@@ -290,6 +326,8 @@ module.exports = {
     PROTO_PATH: PROTO_PATH,
     HEARTBEAT_INTERVAL_MS: HEARTBEAT_INTERVAL_MS,
     CONNECT_TIMEOUT_MS: CONNECT_TIMEOUT_MS,
+    RELAY_CLOSED_CODE: RELAY_CLOSED_CODE,
+    failPendingRequests: failPendingRequests,
     connectAuthenticatedSocket: connectAuthenticatedSocket,
     describeClose: describeClose,
     describeUptime: describeUptime,

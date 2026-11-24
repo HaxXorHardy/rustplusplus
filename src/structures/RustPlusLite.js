@@ -139,6 +139,12 @@ class RustPlusLite extends RustPlusLib {
         else if (response instanceof Error) {
             const message = `${response.message}`;
 
+            /* The socket closed with the request open: the disconnect is logged already (util/rustplusSocket.js). */
+            if (response.code === RustPlusSocket.RELAY_CLOSED_CODE) {
+                this.log(Client.client.intlGet(null, 'infoCap'), message, 'debug');
+                return false;
+            }
+
             this.log(Client.client.intlGet(null, 'errorCap'),
                 (message.includes('Timeout reached while waiting for response')) ?
                     Client.client.intlGet(null, 'responseTimeout') :

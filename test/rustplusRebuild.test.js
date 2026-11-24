@@ -128,6 +128,28 @@ Test.describe('RustPlus.isResponseValid', () => {
         Assert.match(rustplus.logs[0].text, /\(rustplusRebuild\.test\.js:\d+\)$/);
     });
 
+    Test.it('logs a poll timeout as a warning, other timeouts as errors', async () => {
+        const rustplus = fakeRustPlus();
+        const timeout = () => new Error('Timeout reached while waiting for response');
+
+        Assert.strictEqual(await rustplus.isResponseValid(timeout(), { timeoutIsWarning: true }), false);
+        Assert.strictEqual(await rustplus.isResponseValid(timeout()), false);
+        Assert.strictEqual(await rustplus.isResponseValid(new Error('socket hang up'), { timeoutIsWarning: true }),
+            false);
+
+        Assert.deepStrictEqual(rustplus.logs.map((line) => line.level), ['warn', 'error', 'error']);
+        Assert.match(rustplus.logs[0].text, /^responseTimeout/);
+    });
+
+    Test.it('logs a request that its closed socket answered as debug', async () => {
+        const rustplus = fakeRustPlus();
+        const error = new Error('The relay socket closed before the server answered.');
+        error.code = 'ERELAYCLOSED';
+
+        Assert.strictEqual(await rustplus.isResponseValid(error), false);
+        Assert.strictEqual(rustplus.logs[0].level, 'debug');
+    });
+
     /* A device that answers wrong_type is a different problem, a device round must not hide it. */
     Test.it('keeps another error an error in a device round', async () => {
         const rustplus = fakeRustPlus();
