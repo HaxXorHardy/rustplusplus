@@ -44,6 +44,7 @@ const HOST = 'mtalk.google.com';
 const PORT = 5228;
 const MAX_RETRY_SECONDS = 15;
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+const LOGIN_TIMEOUT_MS = 30 * 1000;
 
 class McsClient extends EventEmitter {
     /* deps: { checkIn, connectSocket } for tests. */
@@ -60,6 +61,7 @@ class McsClient extends EventEmitter {
         this._socket = null;
         this._parser = null;
         this._heartbeatTimer = null;
+        this._loginTimer = null;
         this._receivedSincePing = true;
     }
 
@@ -103,6 +105,17 @@ class McsClient extends EventEmitter {
         });
 
         socket.write(this._loginBuffer());
+
+        /*
+            The heartbeat only starts with the login response: a connection that never answers the login would stay
+            silent for as long as TCP keeps it, so it gets LOGIN_TIMEOUT_MS and is then dropped and reconnected.
+        */
+        this._loginTimer = setTimeout(() => {
+            this._loginTimer = null;
+            if (this._socket === socket) this._drop();
+        }, LOGIN_TIMEOUT_MS);
+
+        if (typeof this._loginTimer.unref === 'function') this._loginTimer.unref();
     }
 
     _onData(socket, chunk) {
@@ -128,6 +141,8 @@ class McsClient extends EventEmitter {
         if (tag === TAGS.loginResponse) {
             /* The ids went to the server with the login; it does not send these messages again. */
             this._persistentIds = [];
+            clearTimeout(this._loginTimer);
+            this._loginTimer = null;
             this._startHeartbeat();
         }
         else if (tag === TAGS.heartbeatPing) {
@@ -218,6 +233,8 @@ class McsClient extends EventEmitter {
         this._retryTimeout = null;
         clearInterval(this._heartbeatTimer);
         this._heartbeatTimer = null;
+        clearTimeout(this._loginTimer);
+        this._loginTimer = null;
 
         const socket = this._socket;
         this._socket = null;
@@ -232,5 +249,6 @@ class McsClient extends EventEmitter {
 }
 
 McsClient.HEARTBEAT_INTERVAL_MS = HEARTBEAT_INTERVAL_MS;
+McsClient.LOGIN_TIMEOUT_MS = LOGIN_TIMEOUT_MS;
 
 module.exports = McsClient;

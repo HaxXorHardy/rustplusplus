@@ -333,7 +333,7 @@ Test.describe('fcm/mcsClient', () => {
         client.on('disconnect', () => events.push('disconnect'));
 
         await client.connect();
-        t.mock.timers.tick(McsClient.HEARTBEAT_INTERVAL_MS);
+        t.mock.timers.tick(McsClient.LOGIN_TIMEOUT_MS - 1);
         Assert.strictEqual(sockets[0].written.length, 1, 'no ping before the login');
 
         sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
@@ -355,6 +355,33 @@ Test.describe('fcm/mcsClient', () => {
         t.mock.timers.tick(1000);
         await new Promise((resolve) => setImmediate(resolve));
         Assert.strictEqual(sockets.length, 2);
+    });
+
+    Test.it('drops a connection that never answers the login, and keeps one that did', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+        const { client, sockets } = clientWithFakes(t);
+        const events = [];
+        client.on('disconnect', () => events.push('disconnect'));
+
+        await client.connect();
+        t.mock.timers.tick(McsClient.LOGIN_TIMEOUT_MS - 1);
+        Assert.deepStrictEqual(events, []);
+
+        t.mock.timers.tick(1);
+        Assert.strictEqual(sockets[0].destroyed, true);
+        Assert.deepStrictEqual(events, ['disconnect']);
+
+        t.mock.timers.tick(1000);
+        await new Promise((resolve) => setImmediate(resolve));
+        Assert.strictEqual(sockets.length, 2);
+
+        /* Answered in time: the login timer is gone. */
+        sockets[1].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
+        t.mock.timers.tick(McsClient.LOGIN_TIMEOUT_MS * 2);
+        Assert.strictEqual(sockets[1].destroyed, false);
+        Assert.deepStrictEqual(events, ['disconnect']);
+
+        client.destroy();
     });
 
     Test.it('keeps retrying when a reconnect check-in fails', async (t) => {
