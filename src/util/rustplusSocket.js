@@ -184,6 +184,18 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
         if (rustplus.isDeleted) return;
 
         if (rustplus.websocket) {
+            /*
+                A connect over a running socket replaces it. Its 'close' comes after the new socket is set and is
+                ignored then (see the 'close' handler), so everything that belongs to it ends here: its timers, and the
+                requests it still waits for - they were sent on it and the new socket never answers them.
+            */
+            if (rustplus.relayConnectTimer) {
+                clearTimeout(rustplus.relayConnectTimer);
+                rustplus.relayConnectTimer = null;
+            }
+            stopHeartbeat(rustplus);
+            failPendingRequests(rustplus);
+
             rustplus.disconnect();
         }
 
@@ -300,6 +312,17 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
         });
 
         websocket.on('close', (code, reason) => {
+            /*
+                A socket that a newer one replaced (see above) closes late: the timers, the state and the requests on
+                the instance belong to the new socket now, and 'disconnected' would stop the polling and reconnect of
+                a connection that is just being built.
+            */
+            if (rustplus.websocket && rustplus.websocket !== websocket) {
+                logSocket(rustplus, 'DISCONNECTED',
+                    `A replaced relay socket was closed (${describeClose(code, reason)}).`, 'debug');
+                return;
+            }
+
             stopConnectTimer();
             stopHeartbeat(rustplus);
 
@@ -314,8 +337,7 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
             rustplus.relayConnectedAtMs = null;
             rustplus.relayHeartbeatMissed = false;
 
-            /* The requests of a newer socket (a reconnect replaced this one before it closed) stay open. */
-            if (!rustplus.websocket || rustplus.websocket === websocket) failPendingRequests(rustplus);
+            failPendingRequests(rustplus);
 
             rustplus.emit('disconnected');
         });

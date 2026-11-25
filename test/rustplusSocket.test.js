@@ -224,20 +224,43 @@ Test.describe('Rust+ socket close diagnostics', () => {
         Assert.deepStrictEqual(Object.keys(rustplus.seqCallbacks), []);
     });
 
-    Test.it('keeps the open requests of a newer socket', async () => {
-        const rustplus = fakeRustplus();
-        const answers = [];
-        rustplus.seqCallbacks = [];
-        rustplus.seqCallbacks[3] = (message) => answers.push(message);
+    Test.it('ends the requests of a socket that a new connect replaces, and its late close leaves the new one alone',
+        async () => {
+            const rustplus = fakeRustplus();
+            const answers = [];
+            rustplus.seqCallbacks = [];
+            rustplus.seqCallbacks[3] = (message) => answers.push(message);
 
-        const socket = await connect(rustplus);
-        socket.emit('open');
-        rustplus.websocket = { replacement: true };
-        socket.emit('close', 1006, '');
+            const oldSocket = await connect(rustplus);
+            oldSocket.emit('open');
+            Assert.ok(rustplus.relayHeartbeatTimer, 'the old socket runs its heartbeat');
 
-        Assert.strictEqual(answers.length, 0);
-        Assert.strictEqual(typeof rustplus.seqCallbacks[3], 'function');
-    });
+            /* A connect over the running socket (auth retry, transport reconnect) replaces it. */
+            const newSocket = await connect(rustplus);
+            Assert.notStrictEqual(newSocket, oldSocket);
+            Assert.strictEqual(rustplus.websocket, newSocket);
+            Assert.strictEqual(answers.length, 1, 'the request of the old socket is answered at once');
+            Assert.strictEqual(answers[0].response.error.code, RustPlusSocket.RELAY_CLOSED_CODE);
+            Assert.strictEqual(rustplus.relayHeartbeatTimer, null, 'the heartbeat of the old socket is stopped');
+
+            const connectTimer = rustplus.relayConnectTimer;
+            Assert.ok(connectTimer, 'the new socket waits for its handshake');
+            rustplus.seqCallbacks[9] = (message) => answers.push(message);
+            const before = eventNames(rustplus).length;
+
+            /* The old socket closes only now. */
+            oldSocket.emit('close', 1006, '');
+
+            Assert.strictEqual(rustplus.relayConnectTimer, connectTimer, 'the handshake timeout of the new socket stays');
+            Assert.strictEqual(typeof rustplus.seqCallbacks[9], 'function', 'the request of the new socket stays open');
+            Assert.deepStrictEqual(eventNames(rustplus).slice(before), [], 'no disconnected for the new connection');
+            Assert.ok(rustplus.logs.some((entry) => entry.text.includes('A replaced relay socket was closed')));
+
+            newSocket.emit('open');
+            newSocket.emit('close', 1006, '');
+            Assert.strictEqual(answers.length, 2, 'the new socket ends its own requests when it closes');
+            Assert.ok(eventNames(rustplus).includes('disconnected'));
+        });
 
     Test.it('says when the heartbeat closed the socket', async () => {
         const rustplus = fakeRustplus();
