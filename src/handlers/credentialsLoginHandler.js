@@ -125,6 +125,17 @@ function restartActiveServer(client, guildId) {
     account. The pairing id lives in the server entry, the account token in credentials/rustplusAuth/<steamId>.json, so
     the FCM fields of older versions are dropped with the entry.
 */
+/*
+    The Discord user that registered the steam account in this guild, or null. A second member who also has the
+    account's token or password must not take it over: the owner (or an admin) removes it first.
+*/
+function getOtherOwner(guildId, steamId, discordUserId) {
+    const credentials = InstanceUtils.readCredentialsFile(guildId);
+    const entry = credentials[`${steamId}`];
+    const owner = entry && entry.discord_user_id ? `${entry.discord_user_id}` : null;
+    return (owner !== null && owner !== `${discordUserId}`) ? owner : null;
+}
+
 function registerCredentials(guildId, steamId, discordUserId) {
     const credentials = InstanceUtils.readCredentialsFile(guildId);
 
@@ -267,6 +278,13 @@ async function finish(client, interaction, { steamId, token, servers, refreshTok
     const guildId = interaction.guildId;
 
     try {
+        /* Checked before anything is stored: a refused login must not replace the owner's token file either. */
+        if (getOtherOwner(guildId, steamId, interaction.member.user.id) !== null) {
+            return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsOwnedByOtherUser', {
+                steamId: `${steamId}`
+            }));
+        }
+
         /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
         const stored = RustPlusLogin.storeAuth(steamId, token, servers, refreshToken);
 
@@ -485,6 +503,7 @@ module.exports = {
     confirm: confirm,
     complete: complete,
     finish: finish,
+    getOtherOwner: getOtherOwner,
     getFlow: getFlow,
     getLoginChooser: getLoginChooser,
 };

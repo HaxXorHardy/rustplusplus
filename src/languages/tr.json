@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "FCM bilgileri bu grup için ayarlı değil {id}, lütfen bir yayıncı ayarlayın.",
     "credentialsNotRegistered": "FCM Bilgileri bu Steam64ID için {steamId} kayıtlı değil!",
     "credentialsNotRegisteredForGuild": "Bu grup için FCM bilgileri ayarlı değil: {id}, FCM Takipçisi başlatılamıyor.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "GİRİŞ BİLGİLERİNİ YENİLE",
     "credentialsRemovedSuccessfully": "FCM Bilgileri bu Steam64ID için {steamId} başarıyla silindi!",
     "credentialsSetHosterSuccessfully": "FCM bilgileri sağlayıcısı bu Steam64ID için {steamId} başarıyla ayarlandı.",

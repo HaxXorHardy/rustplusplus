@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "Hoster der FCM-Anmeldedaten ist nicht für Discord-Server {id} festgelegt, bitte lege einen Hoster fest.",
     "credentialsNotRegistered": "FCM-Anmeldedaten für steamId: {steamId} sind nicht registriert!",
     "credentialsNotRegisteredForGuild": "FCM-Anmeldedaten sind nicht für den Discord-Server registriert: {id}, kann den FCM-Listener nicht starten.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "ANMELDEDATEN AKTUALISIEREN",
     "credentialsRemovedSuccessfully": "FCM-Anmeldedaten für steamId: {steamId} wurden erfolgreich entfernt!",
     "credentialsSetHosterSuccessfully": "steamId: {steamId} wurde erfolgreich als Hoster der FCM-Anmeldedaten festgelegt.",

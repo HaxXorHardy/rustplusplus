@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "Лидер FCM данных, для guild {id} не установлен. Пожалуйста укажите его.",
     "credentialsNotRegistered": "Учетные данные FCM для steamId: {steamId} не зарегистрированы!",
     "credentialsNotRegisteredForGuild": "Учетные данные FCM не зарегистрированы для guild: {id}, поэтому не может запустить FCM-Listener.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "ОБНОВИТЬ УЧЕТНЫЕ ДАННЫЕ",
     "credentialsRemovedSuccessfully": "Учетные данные FCM для SteamID: {steamId} успешно удалены!",
     "credentialsSetHosterSuccessfully": "FCM данные для лидера SteamID: {steamId}, были успешно применены.",

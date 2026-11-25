@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "L'hébergeur des informations d'identification FCM n'est pas défini pour la guilde {id}, veuillez définir un hébergeur.",
     "credentialsNotRegistered": "Identifiants FCM pour steamId : {steamId} n'est pas enregistré !",
     "credentialsNotRegisteredForGuild": "Les informations d'identification FCM ne sont pas enregistrées pour la guilde : {id}, impossible de démarrer l'écouteur FCM.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "ACTUALISER LES INFORMATIONS D'IDENTIFICATION",
     "credentialsRemovedSuccessfully": "Les informations d'identification FCM pour steamId : {steamId} ont été supprimées avec succès !",
     "credentialsSetHosterSuccessfully": "L'hébergeur des informations d'identification FCM a été défini avec succès sur steamId : {steamId}.",

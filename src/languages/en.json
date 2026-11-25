@@ -341,6 +341,7 @@
     "credentialsHosterNotSetForGuild": "FCM Credentials hoster is not set for guild {id}, please set a hoster.",
     "credentialsNotRegistered": "FCM Credentials for steamId: {steamId} is not registered!",
     "credentialsNotRegisteredForGuild": "FCM Credentials are not registered for guild: {id}, cannot start FCM-listener.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRemovedSuccessfully": "FCM Credentials for steamId: {steamId} was removed successfully!",
     "credentialsSetHosterSuccessfully": "FCM Credentials hoster was successfully set to steamId: {steamId}.",
     "credentialsExpired": "Your Rust+ login for steamId `{steamId}` expired on {date}. Run \"/credentials login\" in Discord to sign in with Steam again.",

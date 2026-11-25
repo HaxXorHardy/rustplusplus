@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "FCM-uppgifter värd är inte inställd för guilden: {id}, vänligen ange en värd.",
     "credentialsNotRegistered": "FCM-uppgifter för steamId: {steamId} är inte registrerade!",
     "credentialsNotRegisteredForGuild": "FCM-uppgifter är inte registrerade för guilden: {id}, kan inte starta FCM-lyssnaren.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "UPPDATERA INLOGGNINGSUPPGIFTER",
     "credentialsRemovedSuccessfully": "FCM-uppgifterna för steamId: {steamId} togs bort framgångsrikt!",
     "credentialsSetHosterSuccessfully": "FCM-uppgifter värd satt framgångsrikt till steamId: {steamId}.",

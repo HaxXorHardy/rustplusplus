@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "길드 {id}에 FCM 자격 증명 호스트가 설정되지 않았습니다.호스트를 설정하세요.",
     "credentialsNotRegistered": "steamId에 대한 FCM 자격 증명: {steamId}가 등록되지 않았습니다.",
     "credentialsNotRegisteredForGuild": "길드에 FCM 자격 증명이 등록되지 않았습니다: {id}, FCM-Listener를 시작할 수 없습니다.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "인증 정보 새로 고침",
     "credentialsRemovedSuccessfully": "steamId에 대한 FCM 자격 증명: {steamId}가 제거되었습니다.",
     "credentialsSetHosterSuccessfully": "{steamId}가 FCM 자격 증명 호스트로 설정되었습니다.",

@@ -347,6 +347,7 @@
     "credentialsHosterNotSetForGuild": "Hostitel FCM přihlašovacích údajů není nastaven pro guild {id}, nastavte prosím hostitele.",
     "credentialsNotRegistered": "FCM přihlašovací údaje pro steamId: {steamId} nejsou zaregistrovány!",
     "credentialsNotRegisteredForGuild": "FCM přihlašovací údaje nejsou zaregistrovány pro guild: {id}, nelze spustit FCM listener.",
+    "credentialsOwnedByOtherUser": "The steam account {steamId} is already registered by another Discord user. That user or an admin has to remove it with /credentials remove first.",
     "credentialsRefreshCap": "AKTUALIZOVAT PŘIHLÁŠOVACÍ ÚDAJE",
     "credentialsRemovedSuccessfully": "FCM přihlašovací údaje pro steamId: {steamId} byly úspěšně odebrány!",
     "credentialsSetHosterSuccessfully": "Hostitel FCM přihlašovacích údajů byl úspěšně nastaven na steamId: {steamId}.",
