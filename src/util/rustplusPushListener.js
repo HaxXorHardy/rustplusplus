@@ -89,8 +89,29 @@ function stopAccount(steamId) {
     }
 }
 
+/*
+    One debug line per received push: an alarm of the connected server that the socket reported leaves no other trace,
+    so without it a push that never arrived and one that arrived with other fields look the same. Only the field names,
+    the texts and the ids - never the body of a pairing (it holds the player token).
+*/
+function describeReceived(data, notification) {
+    const keys = data && Array.isArray(data.appData) ? data.appData.map((entry) => entry && entry.key) : [];
+
+    if (notification === null) return `Rust+ push received without a channel, fields ${JSON.stringify(keys)}.`;
+
+    const body = notification.body || {};
+
+    return `Rust+ push received: ${RustPlusPushNotifications.classify(notification)}, fields ${JSON.stringify(keys)}, ` +
+        `title ${JSON.stringify(notification.title)}, message ${JSON.stringify(notification.message)}, ` +
+        `type ${JSON.stringify(body.type)}, entity ${JSON.stringify(body.entityId)}, ` +
+        `body fields ${JSON.stringify(Object.keys(body))}, sent ${notification.sentAtMs}.`;
+}
+
 async function onData(client, steamId, data, deps) {
     const notification = RustPlusPushNotifications.parse(data);
+
+    client.log(client.intlGet(null, 'infoCap'), describeReceived(data, notification), 'debug');
+
     if (notification === null) return;
 
     /* Firebase redelivers what was not acknowledged before a reconnect or a restart. */

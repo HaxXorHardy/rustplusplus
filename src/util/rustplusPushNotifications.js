@@ -35,6 +35,7 @@
 const Discord = require('discord.js');
 const Path = require('path');
 
+const AlarmTexts = require('./alarmTexts.js');
 const Config = require('../../config');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
@@ -60,6 +61,9 @@ const ALARM_SOCKET_WINDOW_S = 60;
     reconnect, minutes or hours late, and the raid would long be over. The alarm is still subscribed.
 */
 const ALARM_PUSH_MAX_AGE_S = 5 * 60;
+
+/* A trigger message posted this long before the send time of the push still belongs to its trigger (clock skew). */
+const ALARM_POST_MARGIN_MS = 10 * 1000;
 
 /*
     When Google sent the message, in ms, or null. DataMessageStanza.sent says seconds in mcs.proto, Google sends
@@ -207,16 +211,60 @@ async function raidAlarm(client, guildId, serverKey, notification) {
     return true;
 }
 
+/*
+    Which alarm of the server a push is about. The alarm push of the game names no entity (seen live: its body has no
+    entityId, title and message are the name and the message set in game), so it is found by, in this order: the
+    entityId if a push ever carries one, the only alarm of the server, the alarm whose name is the title of the push,
+    and with recentTriggerAt (the connected server, after the socket had its time) the only alarm the socket reported
+    around that time. null when it cannot be told.
+*/
+function alarmOfPush(server, notification, recentTriggerAt = null) {
+    const alarms = (server && server.alarms) ? server.alarms : {};
+    const ids = Object.keys(alarms);
+    const entityId = notification.body ? notification.body.entityId : undefined;
+
+    if (entityId !== undefined && entityId !== null && alarms[`${entityId}`]) return `${entityId}`;
+    if (ids.length === 1) return ids[0];
+
+    const title = typeof notification.title === 'string' ? notification.title.trim() : '';
+    if (title !== '') {
+        const named = ids.filter((id) => alarms[id] && `${alarms[id].name}`.trim() === title);
+        if (named.length === 1) return named[0];
+    }
+
+    if (recentTriggerAt !== null) {
+        const recent = ids.filter((id) => {
+            const lastTrigger = Number(alarms[id] && alarms[id].lastTrigger);
+            return Number.isFinite(lastTrigger) && Math.abs(lastTrigger - recentTriggerAt) <= ALARM_SOCKET_WINDOW_S;
+        });
+        if (recent.length === 1) return recent[0];
+    }
+
+    return null;
+}
+
 async function smartAlarm(client, guildId, serverKey, notification, deps = {}) {
     const instance = client.getInstance(guildId);
-    const entityId = notification.body.entityId;
     const server = instance.serverList[serverKey];
 
-    if (!server || !server.alarms || !server.alarms[entityId]) return false;
+    if (!server || !server.alarms || Object.keys(server.alarms).length === 0) return false;
+
+    const now = deps.now || (() => Date.now());
+    const triggeredAt = alarmTime(notification, now());
+
+    /* Without the socket: only an alarm the push itself points to (entityId, the only one, the name). */
+    const knownId = alarmOfPush(server, notification);
+
+    /*
+        Its texts are taken right away: the push often arrives before the socket reports the trigger (seen live one
+        second earlier), and the socket posts the trigger with the texts the alarm has then.
+    */
+    if (knownId !== null) await takeAlarmTexts(client, guildId, serverKey, knownId, notification, triggeredAt);
 
     /*
         The socket of the connected server reports its alarms itself (rustplusEvents/message.js) - but only the
-        subscribed ones. The push is the check that it did.
+        subscribed ones. After its grace time the push tells which alarm it was (also by the trigger the socket
+        reported), takes its texts, and checks that the socket reported it.
     */
     if (isConnectedTo(client, guildId, serverKey)) {
         const schedule = deps.schedule || ((fn, ms) => {
@@ -224,22 +272,72 @@ async function smartAlarm(client, guildId, serverKey, notification, deps = {}) {
             if (timer && typeof timer.unref === 'function') timer.unref();
             return timer;
         });
-        const now = deps.now || (() => Date.now());
-        const triggeredAt = alarmTime(notification, now());
 
-        schedule(() => reportMissedAlarm(client, guildId, serverKey, `${entityId}`, triggeredAt, { now: now })
-            .catch((e) => {
-                client.log(client.intlGet(null, 'warningCap'),
-                    `Rust+ push: the alarm ${entityId} of ${guildId} could not be checked: ` +
-                    `${e && e.message ? e.message : e}`, 'warn');
-            }), ALARM_SOCKET_GRACE_MS);
+        schedule(() => (async () => {
+            /* An alarm the push did not point to may be told by the trigger the socket reported meanwhile. */
+            if (knownId === null) {
+                const current = client.getInstance(guildId).serverList[serverKey];
+                const entityId = alarmOfPush(current, notification, triggeredAt);
+
+                if (entityId === null) {
+                    client.log(client.intlGet(null, 'infoCap'),
+                        `Rust+ push: the alarm "${notification.title}" of ${guildId} matches none or several alarms ` +
+                        'of the server, its name and message are not taken.', 'debug');
+                    return;
+                }
+
+                await takeAlarmTexts(client, guildId, serverKey, entityId, notification, triggeredAt);
+            }
+
+            /* A trigger the socket reported is no proof for a missed one: only an alarm the push points to. */
+            if (knownId !== null) {
+                await reportMissedAlarm(client, guildId, serverKey, knownId, triggeredAt, { now: now });
+            }
+        })().catch((e) => {
+            client.log(client.intlGet(null, 'warningCap'),
+                `Rust+ push: the alarm "${notification.title}" of ${guildId} could not be checked: ` +
+                `${e && e.message ? e.message : e}`, 'warn');
+        }), ALARM_SOCKET_GRACE_MS);
 
         return false;
     }
 
-    const now = deps.now || (() => Date.now());
+    if (knownId === null) {
+        client.log(client.intlGet(null, 'infoCap'),
+            `Rust+ push: the alarm "${notification.title}" of another server of ${guildId} matches none or several ` +
+            'of its alarms, it is not reported.', 'debug');
+        return false;
+    }
 
-    return reportFromPush(client, guildId, serverKey, `${entityId}`, alarmTime(notification, now()), now());
+    return reportFromPush(client, guildId, serverKey, knownId, triggeredAt, now());
+}
+
+/*
+    The push names the alarm and its message as they are set in game (util/alarmTexts.js): taken into the alarm unless
+    they were set in Discord, the message of the alarm in Discord is updated. The socket of the connected server may
+    have posted the trigger with the old texts already; the next trigger has the new ones.
+*/
+async function takeAlarmTexts(client, guildId, serverKey, entityId, notification, triggeredAt = null) {
+    const instance = client.getInstance(guildId);
+    const alarm = instance.serverList[serverKey].alarms[entityId];
+    const changed = AlarmTexts.applyFromPush(alarm, notification.title, notification.message);
+
+    if (changed.length === 0) return;
+
+    client.setInstance(guildId, instance);
+    client.log(client.intlGet(null, 'infoCap'),
+        `Rust+ push: the alarm ${entityId} takes its ${changed.join(' and ')} from the game: ` +
+        `"${alarm.name}", "${alarm.message}".`);
+
+    await DiscordMessages.sendSmartAlarmMessage(guildId, serverKey, entityId).catch(() => undefined);
+
+    /*
+        The socket may have posted this trigger with the old texts a moment earlier (seen live: milliseconds) - only a
+        post of this trigger, never the one of the trigger before (ALARM_POST_MARGIN_MS for the clocks).
+    */
+    const sinceMs = Number.isFinite(triggeredAt) ? triggeredAt * 1000 - ALARM_POST_MARGIN_MS : undefined;
+    await DiscordMessages.refreshSmartAlarmTriggerMessage(guildId, serverKey, entityId, { sinceMs: sinceMs })
+        .catch(() => false);
 }
 
 /*
@@ -451,6 +549,7 @@ module.exports = {
     findServerKey: findServerKey,
     guildsOfAccount: guildsOfAccount,
     isConnectedTo: isConnectedTo,
+    alarmOfPush: alarmOfPush,
     alarmTime: alarmTime,
     reportMissedAlarm: reportMissedAlarm,
     ALARM_SOCKET_GRACE_MS: ALARM_SOCKET_GRACE_MS,

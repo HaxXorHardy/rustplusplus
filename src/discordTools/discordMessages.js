@@ -52,6 +52,9 @@ const INFORMATION_ORDER_INTERVAL_MS = 15 * 60 * 1000;
 const SEND_MESSAGE_TIMEOUT_MS = 90 * 1000;
 const TIMED_OUT = Symbol('timed out');
 
+/* `${guildId}:${serverId}:${entityId}` -> { messageId, channelId, content, atMs }: the last trigger message per alarm. */
+const recentAlarmTriggerPosts = new Map();
+
 /* Storage monitor edits in flight or due, see sendStorageMonitorMessage. */
 const storageMonitorUpdates = KeyedThrottle.createKeyedThrottle(
     () => module.exports.storageMonitorEditIntervalMs(),
@@ -523,7 +526,54 @@ module.exports = {
             content: parts.join(' ')
         }
 
-        await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+        const postedTexts = `${entity.name}\n${entity.message}`;
+        const startedMs = Date.now();
+        const message = await module.exports.sendMessage(guildId, content, null, instance.channelId.activity);
+
+        /* Kept for refreshSmartAlarmTriggerMessage: the texts of the alarm may arrive with its push a moment later. */
+        if (message && message.id) {
+            recentAlarmTriggerPosts.set(`${guildId}:${serverId}:${entityId}`, {
+                messageId: message.id, channelId: instance.channelId.activity, content: content.content,
+                atMs: startedMs
+            });
+
+            /* The push changed the texts while the message was on its way: it is edited right away. */
+            const current = Client.client.getInstance(guildId).serverList[serverId].alarms[entityId];
+            if (current && `${current.name}\n${current.message}` !== postedTexts) {
+                await module.exports.refreshSmartAlarmTriggerMessage(guildId, serverId, entityId,
+                    { sinceMs: startedMs });
+            }
+        }
+    },
+
+    /*
+        The push of an alarm brought its name and message from the game (util/alarmTexts.js) - sometimes a moment after
+        the socket had the trigger posted with the old texts. The trigger message of this alarm is edited to the new
+        texts (an edit does not mention @everyone again) - only one posted at or after options.sinceMs (the trigger of
+        the push): seen live, the post of the trigger was still on its way and the post of the trigger before was
+        edited instead. options.maxAgeMs: older posts are left alone. Returns whether one was edited.
+    */
+    refreshSmartAlarmTriggerMessage: async function (guildId, serverId, entityId, options = {}) {
+        const key = `${guildId}:${serverId}:${entityId}`;
+        const post = recentAlarmTriggerPosts.get(key);
+        const maxAgeMs = Number.isFinite(options.maxAgeMs) ? options.maxAgeMs : 60 * 1000;
+        const sinceMs = Number.isFinite(options.sinceMs) ? options.sinceMs : -Infinity;
+
+        if (!post) return false;
+        if (Date.now() - post.atMs > maxAgeMs) {
+            recentAlarmTriggerPosts.delete(key);
+            return false;
+        }
+        if (post.atMs < sinceMs) return false;
+
+        const content = {
+            embeds: [await DiscordEmbeds.getAlarmEmbed(guildId, serverId, entityId)],
+            attachments: [],
+            content: post.content
+        }
+
+        await module.exports.sendMessage(guildId, content, post.messageId, post.channelId);
+        return true;
     },
 
     sendServerChangeStateMessage: async function (guildId, serverId, state) {

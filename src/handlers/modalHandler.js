@@ -20,6 +20,7 @@
 
 const Discord = require('discord.js');
 
+const AlarmTexts = require('../util/alarmTexts.js');
 const Battlemetrics = require('../structures/Battlemetrics');
 const Config = require('../../config');
 const Constants = require('../util/constants.js');
@@ -324,6 +325,8 @@ module.exports = async (client, interaction) => {
             return;
         }
 
+        /* A text changed here is the user's own: the push of the game does not replace it (util/alarmTexts.js). */
+        AlarmTexts.markEditedInDiscord(server.alarms[ids.entityId], smartAlarmName, smartAlarmMessage);
         server.alarms[ids.entityId].name = smartAlarmName;
         server.alarms[ids.entityId].message = smartAlarmMessage;
 
