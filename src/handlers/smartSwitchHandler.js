@@ -494,16 +494,21 @@ module.exports = {
             value: active
         }));
 
-        module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, active);
+        /*
+            Awaited: a switch that did not answer already got the "no communication" message and must neither be
+            reported as switched nor get a timer that would switch it back.
+        */
+        const switched = await module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, active);
 
-        if (!switches[entityId].reachable) return true;
+        if (!switched || !switches[entityId] || !switches[entityId].reachable) return true;
 
         let str = client.intlGet(guildId, 'deviceWasTurnedOnOff', {
             device: switches[entityId].name,
             status: active ? onCap : offCap
         });
 
-        if (timeSeconds === null) {
+        /* "0s" is no timer, as for switch groups: a 0 ms timer would switch back at once. */
+        if (timeSeconds === null || timeSeconds <= 0) {
             rustplus.sendInGameMessage(str);
             return true;
         }
@@ -525,14 +530,21 @@ module.exports = {
             const rustplus = SwitchTimeouts.currentInstance(client, guildId, serverId);
             if (rustplus === null) return;
 
-            await module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, !active);
+            try {
+                const switched = await module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, !active);
+                if (!switched) return;
 
-            const str = client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
-                device: instance.serverList[serverId].switches[entityId].name,
-                status: !active ? onCap : offCap
-            });
+                const str = client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
+                    device: instance.serverList[serverId].switches[entityId].name,
+                    status: !active ? onCap : offCap
+                });
 
-            rustplus.sendInGameMessage(str);
+                rustplus.sendInGameMessage(str);
+            }
+            catch (e) {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `The timer of switch ${entityId} could not switch: ${e && e.message ? e.message : e}`, 'warn');
+            }
         });
 
         rustplus.sendInGameMessage(str);
@@ -552,7 +564,8 @@ module.exports = {
         rustplus.interactionSwitches.push(entityId);
 
         const response = await rustplus.turnSmartSwitchAsync(entityId, active);
-        if (!(await rustplus.isResponseValid(response))) {
+        const switched = await rustplus.isResponseValid(response);
+        if (!switched) {
             rustplus.sendInGameMessage(client.intlGet(guildId, 'noCommunicationSmartSwitch', {
                 name: switches[entityId].name
             }));
@@ -574,5 +587,8 @@ module.exports = {
 
         DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
         SmartSwitchGroupHandler.updateSwitchGroupIfContainSwitch(client, guildId, serverId, entityId);
+
+        /* Whether the switch answered: the caller only confirms (and starts a timer) for a switch that changed. */
+        return switched;
     },
 }
