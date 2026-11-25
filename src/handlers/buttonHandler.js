@@ -603,15 +603,19 @@ module.exports = async (client, interaction) => {
                 await DiscordTools.deleteMessageById(guildId, instance.channelId.switches, content.messageId);
                 RustPlusSync.markDeviceDeleted(instance, server, entityId);
                 delete server.switches[entityId];
+                SwitchTimeouts.cancel(guildId, ids.serverId, entityId);
 
+                /* As in SmartSwitchDelete: a group must not keep the id, its status command would read a gone switch. */
                 for (const [groupId, groupContent] of Object.entries(server.switchGroups)) {
-                    if (groupContent.switches.includes(`${entityId}`) && !groupsToUpdate.includes(groupId)) {
-                        groupsToUpdate.push(groupId);
+                    if (groupContent.switches.includes(`${entityId}`)) {
+                        groupContent.switches = groupContent.switches.filter(e => e !== `${entityId}`);
+                        if (!groupsToUpdate.includes(groupId)) groupsToUpdate.push(groupId);
                     }
                 }
             }
         }
 
+        client.setInstance(guildId, instance);
         for (const groupId of groupsToUpdate) {
             await DiscordMessages.sendSmartSwitchGroupMessage(guildId, ids.serverId, groupId);
         }

@@ -400,10 +400,11 @@ module.exports = {
             active = false;
         }
         else if (command === `${groupCommand} ${statusEn}` || command === `${groupCommand} ${statusLang}`) {
-            const switchStatus = switchGroups[groupId].switches.map(switchId => {
-                const { active, name, reachable } = instance.serverList[serverId].switches[switchId];
-                return { active, name, reachable }
-            });
+            /* A switch that was deleted but is still listed in the group is left out instead of throwing. */
+            const switchStatus = switchGroups[groupId].switches
+                .map(switchId => instance.serverList[serverId].switches[switchId])
+                .filter(entity => entity !== undefined)
+                .map(({ active, name, reachable }) => ({ active, name, reachable }));
             const statusMessage = switchStatus.map(status =>
                 `${status.name}: ${status.reachable ? (status.active ? onCap : offCap) : notFoundCap}`).join(', ');
             rustplus.sendInGameMessage(`${client.intlGet(guildId, 'status')}: ${statusMessage}`);
