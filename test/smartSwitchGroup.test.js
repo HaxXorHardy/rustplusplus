@@ -109,8 +109,22 @@ Test.describe('switch group: turning on and off', () => {
         Assert.deepStrictEqual(calls.notFound, []);
     });
 
+    Test.it('a switch that does not answer is not reported as gone and stays reachable', async (t) => {
+        const timeout = new Error('Timeout reached while waiting for response');
+        const { instance, rustplus, client, calls } = setup(t, 2, { 2: [timeout, timeout] });
+
+        const result = await SmartSwitchGroupHandler.TurnOnOffGroup(client, rustplus, 'guild', 'server', '1', true,
+            { retryDelayMs: 0 });
+
+        Assert.deepStrictEqual(result.failed, ['2']);
+        Assert.deepStrictEqual(calls.notFound, [], 'no not found message for a timeout');
+        Assert.strictEqual(instance.serverList.server.switches['2'].reachable, true);
+        Assert.strictEqual(instance.serverList.server.switches['2'].active, false, 'the old state stays');
+    });
+
     Test.it('reports the switches that stay unreachable in one message and keeps their state', async (t) => {
-        const { instance, rustplus, client, calls } = setup(t, 4, { 2: ['error', 'error'], 3: ['error', 'error'] });
+        const gone = () => ({ error: 'not_found' });
+        const { instance, rustplus, client, calls } = setup(t, 4, { 2: [gone(), gone()], 3: [gone(), gone()] });
 
         const result = await SmartSwitchGroupHandler.TurnOnOffGroup(client, rustplus, 'guild', 'server', '1', true,
             { retryDelayMs: 0 });

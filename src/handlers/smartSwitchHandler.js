@@ -48,7 +48,12 @@ module.exports = {
                 if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
 
                 const info = await rustplus.getEntityInfoAsync(entityId);
-                if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+                const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
+
+                /* No answer is no not_found: the switch is asked again on the next round. */
+                if (!answered && !UnreachableDevices.isNotFound(info)) continue;
+
+                if (!answered) {
                     UnreachableDevices.markUnreachable(rustplus, entityId);
 
                     if (instance.serverList[serverId].switches[entityId].reachable) {
@@ -85,10 +90,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchOnAsync(entityId);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -108,10 +116,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchOffAsync(entityId);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -135,10 +146,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchOffAsync(entityId);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -158,10 +172,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchOnAsync(entityId);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -187,10 +204,13 @@ module.exports = {
 
                 const response = await rustplus.turnSmartSwitchOnAsync(entityId);
                 if (!(await rustplus.isResponseValid(response))) {
-                    if (instance.serverList[serverId].switches[entityId].reachable) {
-                        await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                    /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                    if (UnreachableDevices.isNotFound(response)) {
+                        if (instance.serverList[serverId].switches[entityId].reachable) {
+                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        }
+                        instance.serverList[serverId].switches[entityId].reachable = false;
                     }
-                    instance.serverList[serverId].switches[entityId].reachable = false;
 
                     rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                 }
@@ -212,10 +232,13 @@ module.exports = {
 
                 const response = await rustplus.turnSmartSwitchOffAsync(entityId);
                 if (!(await rustplus.isResponseValid(response))) {
-                    if (instance.serverList[serverId].switches[entityId].reachable) {
-                        await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                    /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                    if (UnreachableDevices.isNotFound(response)) {
+                        if (instance.serverList[serverId].switches[entityId].reachable) {
+                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        }
+                        instance.serverList[serverId].switches[entityId].reachable = false;
                     }
-                    instance.serverList[serverId].switches[entityId].reachable = false;
 
                     rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                 }
@@ -243,10 +266,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -275,10 +301,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -305,10 +334,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -335,10 +367,13 @@ module.exports = {
 
                     const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
                     if (!(await rustplus.isResponseValid(response))) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                        if (UnreachableDevices.isNotFound(response)) {
+                            if (instance.serverList[serverId].switches[entityId].reachable) {
+                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                            }
+                            instance.serverList[serverId].switches[entityId].reachable = false;
                         }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
 
                         rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                     }
@@ -421,7 +456,8 @@ module.exports = {
         else if (command === `${entityCommand} ${statusEn}` || command === `${entityCommand} ${statusLang}`) {
             const info = await rustplus.getEntityInfoAsync(entityId);
             if (!(await rustplus.isResponseValid(info))) {
-                switches[entityId].reachable = false;
+                /* Only not_found means the switch is gone, a timeout says nothing about it. */
+                if (UnreachableDevices.isNotFound(info)) switches[entityId].reachable = false;
                 client.setInstance(guildId, instance);
                 DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
                 SmartSwitchGroupHandler.updateSwitchGroupIfContainSwitch(client, guildId, serverId, entityId);
@@ -515,10 +551,13 @@ module.exports = {
             rustplus.sendInGameMessage(client.intlGet(guildId, 'noCommunicationSmartSwitch', {
                 name: switches[entityId].name
             }));
-            if (switches[entityId].reachable) {
-                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+            /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+            if (UnreachableDevices.isNotFound(response)) {
+                if (switches[entityId].reachable) {
+                    await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                }
+                switches[entityId].reachable = false;
             }
-            switches[entityId].reachable = false;
             switches[entityId].active = prevActive;
 
             rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);

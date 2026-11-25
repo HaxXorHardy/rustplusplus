@@ -45,7 +45,12 @@ module.exports = {
                 if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
 
                 const info = await rustplus.getEntityInfoAsync(entityId);
-                if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+                const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
+
+                /* No answer is no not_found: the alarm is asked again on the next round. */
+                if (!answered && !UnreachableDevices.isNotFound(info)) continue;
+
+                if (!answered) {
                     UnreachableDevices.markUnreachable(rustplus, entityId);
 
                     if (instance.serverList[serverId].alarms[entityId].reachable) {
@@ -63,6 +68,14 @@ module.exports = {
                     if (!instance.serverList[serverId].alarms[entityId].reachable) {
                         instance.serverList[serverId].alarms[entityId].reachable = true;
                         client.setInstance(guildId, instance);
+
+                        /*
+                            The subscription of the connect skipped it while it was unreachable: without one the
+                            server does not report its triggers. subscribeAlarm logs a failure itself.
+                        */
+                        if (typeof rustplus.subscribeAlarm === 'function') {
+                            await rustplus.subscribeAlarm(entityId).catch(() => false);
+                        }
 
                         await DiscordMessages.sendSmartAlarmMessage(guildId, serverId, entityId);
                     }

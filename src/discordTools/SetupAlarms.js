@@ -38,8 +38,19 @@ module.exports = async (client, rustplus) => {
     for (const entityId in instance.serverList[serverId].alarms) {
         const entity = instance.serverList[serverId].alarms[entityId];
         const info = await rustplus.getEntityInfoAsync(entityId);
+        const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
 
-        if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+        /*
+            No answer is no not_found: the alarm keeps its state (the device round asks it again), its message is
+            posted all the same - the channel was just cleared.
+        */
+        if (!answered && !UnreachableDevices.isNotFound(info)) {
+            client.setInstance(guildId, instance);
+            await DiscordMessages.sendSmartAlarmMessage(guildId, serverId, entityId);
+            continue;
+        }
+
+        if (!answered) {
             UnreachableDevices.markUnreachable(rustplus, entityId);
 
             if (entity.reachable === true) {

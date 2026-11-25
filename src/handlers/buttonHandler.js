@@ -32,6 +32,7 @@ const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordModals = require('../discordTools/discordModals.js');
 const RustPlusSync = require('../util/rustplusSync.js');
 const GuildSettings = require('../util/guildSettings.js');
+const UnreachableDevices = require('../util/unreachableDevices.js');
 const WipeHelper = require('./wipeHelper.js');
 
 /* Notification buttons share one handler: the customId prefix selects which channel flag is toggled.
@@ -810,10 +811,13 @@ module.exports = async (client, interaction) => {
 
         const response = await rustplus.turnSmartSwitchAsync(ids.entityId, active);
         if (!(await rustplus.isResponseValid(response))) {
-            if (server.switches[ids.entityId].reachable) {
-                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, ids.serverId, ids.entityId);
+            /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+            if (UnreachableDevices.isNotFound(response)) {
+                if (server.switches[ids.entityId].reachable) {
+                    await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, ids.serverId, ids.entityId);
+                }
+                server.switches[ids.entityId].reachable = false;
             }
-            server.switches[ids.entityId].reachable = false;
             server.switches[ids.entityId].active = prevActive;
             client.setInstance(guildId, instance);
 
@@ -1041,10 +1045,13 @@ module.exports = async (client, interaction) => {
 
         const entityInfo = await rustplus.getEntityInfoAsync(ids.entityId);
         if (!(await rustplus.isResponseValid(entityInfo))) {
-            if (server.storageMonitors[ids.entityId].reachable) {
-                await DiscordMessages.sendStorageMonitorNotFoundMessage(guildId, ids.serverId, ids.entityId);
+            /* Only not_found means the monitor is gone, a timeout or a closed socket says nothing about it. */
+            if (UnreachableDevices.isNotFound(entityInfo)) {
+                if (server.storageMonitors[ids.entityId].reachable) {
+                    await DiscordMessages.sendStorageMonitorNotFoundMessage(guildId, ids.serverId, ids.entityId);
+                }
+                server.storageMonitors[ids.entityId].reachable = false;
             }
-            server.storageMonitors[ids.entityId].reachable = false;
             client.setInstance(guildId, instance);
 
             await DiscordMessages.sendStorageMonitorMessage(guildId, ids.serverId, ids.entityId);

@@ -95,7 +95,12 @@ module.exports = {
                 if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
 
                 const info = await rustplus.getEntityInfoAsync(entityId);
-                if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+                const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
+
+                /* No answer is no not_found: the monitor is asked again on the next round. */
+                if (!answered && !UnreachableDevices.isNotFound(info)) continue;
+
+                if (!answered) {
                     UnreachableDevices.markUnreachable(rustplus, entityId);
 
                     if (instance.serverList[serverId].storageMonitors[entityId].reachable) {

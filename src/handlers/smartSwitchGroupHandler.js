@@ -24,6 +24,7 @@ const SwitchGroupSchedule = require('../util/switchGroupSchedule.js');
 const SwitchGroupState = require('../util/switchGroupState.js');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const Timer = require('../util/timer');
+const UnreachableDevices = require('../util/unreachableDevices.js');
 
 /* At most this many switches of a group are switched at the same time (the requests share the token bucket). */
 const SWITCH_CONCURRENCY = 4;
@@ -294,11 +295,13 @@ module.exports = {
             entity.active = value;
             rustplus.interactionSwitches.push(entityId);
 
-            let ok = await rustplus.isResponseValid(await rustplus.turnSmartSwitchAsync(entityId, value));
+            let response = await rustplus.turnSmartSwitchAsync(entityId, value);
+            let ok = await rustplus.isResponseValid(response);
             if (!ok) {
                 /* A short hiccup of the relay is no destroyed switch. */
                 await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-                ok = await rustplus.isResponseValid(await rustplus.turnSmartSwitchAsync(entityId, value));
+                response = await rustplus.turnSmartSwitchAsync(entityId, value);
+                ok = await rustplus.isResponseValid(response);
             }
 
             if (ok) {
@@ -306,11 +309,13 @@ module.exports = {
                 switched.push(entityId);
             }
             else {
-                entity.reachable = false;
+                /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+                const gone = UnreachableDevices.isNotFound(response);
+                if (gone) entity.reachable = false;
                 entity.active = prevActive;
                 rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
                 failed.push(entityId);
-                if (wasReachable) newlyUnreachable.push(entityId);
+                if (wasReachable && gone) newlyUnreachable.push(entityId);
             }
 
             client.setInstance(guildId, instance);

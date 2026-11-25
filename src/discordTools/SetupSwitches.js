@@ -34,8 +34,19 @@ module.exports = async (client, rustplus) => {
     for (const entityId in instance.serverList[serverId].switches) {
         const entity = instance.serverList[serverId].switches[entityId];
         const info = await rustplus.getEntityInfoAsync(entityId);
+        const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
 
-        if (!(await rustplus.isResponseValid(info, { expectNotFound: true }))) {
+        /*
+            No answer is no not_found: the switch keeps its state (the device round asks it again), its message is
+            posted all the same - the channel was just cleared.
+        */
+        if (!answered && !UnreachableDevices.isNotFound(info)) {
+            client.setInstance(guildId, instance);
+            await DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
+            continue;
+        }
+
+        if (!answered) {
             UnreachableDevices.markUnreachable(rustplus, entityId);
 
             if (entity.reachable === true) {

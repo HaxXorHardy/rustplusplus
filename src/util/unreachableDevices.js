@@ -54,8 +54,22 @@ function markReachable(rustplus, entityId) {
     delete table(rustplus)[`${entityId}`];
 }
 
+/*
+    Whether a failed answer says the device is gone: only the not_found of the server does. A timeout, a closed relay
+    socket (ERELAYCLOSED), an empty token bucket (localError) or a rate limit says nothing about the device. Those used
+    to mark it unreachable as well: a "not found" message in Discord, and an alarm marked so was skipped by the
+    subscription of the next connect (RustPlus.subscribeEntities) - its triggers were not reported anymore.
+*/
+function isNotFound(response) {
+    if (!response || typeof response !== 'object' || response instanceof Error) return false;
+    if (Object.prototype.hasOwnProperty.call(response, 'localError')) return false;
+
+    return `${response.error}` === 'not_found';
+}
+
 module.exports = {
     RETRY_MS: RETRY_MS,
+    isNotFound: isNotFound,
     isUnreachable: isUnreachable,
     markUnreachable: markUnreachable,
     markReachable: markReachable,

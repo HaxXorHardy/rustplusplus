@@ -27,6 +27,8 @@
 const Assert = require('node:assert');
 const Test = require('node:test');
 
+const DiscordMessages = require('../src/discordTools/discordMessages.js');
+const SmartAlarmHandler = require('../src/handlers/smartAlarmHandler.js');
 const UnreachableDevices = require('../src/util/unreachableDevices.js');
 
 Test.describe('UnreachableDevices', () => {
@@ -83,5 +85,71 @@ Test.describe('UnreachableDevices', () => {
 
         Assert.strictEqual(UnreachableDevices.isUnreachable(first, '116582'), true);
         Assert.strictEqual(UnreachableDevices.isUnreachable(second, '116582'), false);
+    });
+
+    Test.it('takes only the not_found of the server for a device that is gone', () => {
+        Assert.strictEqual(UnreachableDevices.isNotFound({ error: 'not_found' }), true);
+
+        Assert.strictEqual(UnreachableDevices.isNotFound(new Error('Timeout reached while waiting for response')), false);
+        const closed = new Error('The relay socket closed before the server answered.');
+        closed.code = 'ERELAYCLOSED';
+        Assert.strictEqual(UnreachableDevices.isNotFound(closed), false);
+        Assert.strictEqual(UnreachableDevices.isNotFound({ error: 'Tokens', localError: 'tokensDidNotReplenish' }), false);
+        Assert.strictEqual(UnreachableDevices.isNotFound({ error: 'rate_limit' }), false);
+        Assert.strictEqual(UnreachableDevices.isNotFound(undefined), false);
+        Assert.strictEqual(UnreachableDevices.isNotFound({}), false);
+    });
+});
+
+Test.describe('smart alarm round', () => {
+    /* An alarm round (every 30 polls) with the answers of the server per alarm. */
+    function setup(t, alarms, answers) {
+        const instance = { serverList: { server: { alarms: alarms } } };
+        const rustplus = {
+            guildId: 'guild',
+            serverId: 'server',
+            smartAlarmIntervalCounter: 29,
+            subscribed: [],
+            async getEntityInfoAsync(entityId) { return answers[entityId]; },
+            async isResponseValid(response) { return Boolean(response && response.entityInfo); },
+            async subscribeAlarm(entityId) { this.subscribed.push(entityId); return true; },
+        };
+        const client = { getInstance: () => instance, setInstance: () => undefined };
+        const notFound = t.mock.method(DiscordMessages, 'sendSmartAlarmNotFoundMessage', async () => undefined);
+        t.mock.method(DiscordMessages, 'sendSmartAlarmMessage', async () => undefined);
+
+        return { instance, rustplus, client, notFound };
+    }
+
+    Test.it('leaves an alarm that did not answer as it is', async (t) => {
+        const { instance, rustplus, client, notFound } = setup(t, { 1: { reachable: true } },
+            { 1: new Error('Timeout reached while waiting for response') });
+
+        await SmartAlarmHandler.handler(rustplus, client);
+
+        Assert.strictEqual(instance.serverList.server.alarms[1].reachable, true);
+        Assert.strictEqual(notFound.mock.callCount(), 0, 'no not found message for a timeout');
+        Assert.strictEqual(UnreachableDevices.isUnreachable(rustplus, '1'), false, 'asked again on the next round');
+    });
+
+    Test.it('marks an alarm the server does not know', async (t) => {
+        const { instance, rustplus, client, notFound } = setup(t, { 1: { reachable: true } },
+            { 1: { error: 'not_found' } });
+
+        await SmartAlarmHandler.handler(rustplus, client);
+
+        Assert.strictEqual(instance.serverList.server.alarms[1].reachable, false);
+        Assert.strictEqual(notFound.mock.callCount(), 1);
+        Assert.strictEqual(UnreachableDevices.isUnreachable(rustplus, '1'), true);
+    });
+
+    Test.it('subscribes an alarm again that answers again', async (t) => {
+        const { instance, rustplus, client } = setup(t, { 1: { reachable: false }, 2: { reachable: true } },
+            { 1: { entityInfo: { payload: { value: false } } }, 2: { entityInfo: { payload: { value: false } } } });
+
+        await SmartAlarmHandler.handler(rustplus, client);
+
+        Assert.strictEqual(instance.serverList.server.alarms[1].reachable, true);
+        Assert.deepStrictEqual(rustplus.subscribed, ['1'], 'only the one that was skipped by the connect');
     });
 });
