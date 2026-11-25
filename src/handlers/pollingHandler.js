@@ -42,14 +42,26 @@ const WithTimeout = require('../util/withTimeout.js');
 async function runHandler(rustplus, client, label, handler) {
     rustplus.pollPending = rustplus.pollPending || new Object();
 
-    /* A handler that is still running is skipped instead of started twice (both wait for the same rate limit). */
-    if (rustplus.pollPending[label]) {
-        rustplus.log(client.intlGet(null, 'infoCap'),
-            `poll: ${label} is still running, it is skipped.`, 'debug');
-        return;
+    /*
+        A handler that is still running is skipped instead of started twice (both wait for the same rate limit). One
+        that has hung for HANDLER_ABANDON_MS (a Discord call that never settles) is abandoned: otherwise its flag
+        stayed set and the handler never ran again on this connection, while the poll itself kept succeeding.
+    */
+    const pending = rustplus.pollPending[label];
+    if (pending) {
+        if (Date.now() - pending.startedAt < HANDLER_ABANDON_MS) {
+            rustplus.log(client.intlGet(null, 'infoCap'),
+                `poll: ${label} is still running, it is skipped.`, 'debug');
+            return;
+        }
+
+        rustplus.log(client.intlGet(null, 'warningCap'),
+            `poll: ${label} has been running for ${Math.round((Date.now() - pending.startedAt) / 1000)} s, ` +
+            'it is abandoned and started again.', 'warn');
     }
 
-    rustplus.pollPending[label] = true;
+    const mine = { startedAt: Date.now() };
+    rustplus.pollPending[label] = mine;
     /* No log line per handler (five per cycle, every 10 s): the watchdog and the timeout name the phase that hangs. */
     rustplus.pollPhase = label;
 
@@ -62,7 +74,8 @@ async function runHandler(rustplus, client, label, handler) {
                 `The handler for ${label} failed: ${e && e.message ? e.message : e}`, 'warn');
         }
         finally {
-            delete rustplus.pollPending[label];
+            /* An abandoned run that ends late must not clear the flag of the run that replaced it. */
+            if (rustplus.pollPending[label] === mine) delete rustplus.pollPending[label];
         }
     })();
 
@@ -80,6 +93,9 @@ const MAX_FAILED_POLLS = 6;
 
 /* A handler that hangs on Discord (rate limit) must not freeze the cycle: every step gets a deadline. */
 const HANDLER_TIMEOUT_MS = 10 * 1000;
+
+/* A handler still running after this long is treated as hung and started again (see runHandler). */
+const HANDLER_ABANDON_MS = 2 * 60 * 1000;
 
 /* A cycle that runs longer than this releases the isPolling flag, so the loop recovers on its own. */
 const POLL_WATCHDOG_MS = 60 * 1000;
@@ -345,4 +361,8 @@ module.exports = {
                 `The camera watch failed: ${e && e.message ? e.message : e}`, 'warn');
         });
     },
+
+    /* For tests. */
+    runHandler: runHandler,
+    HANDLER_ABANDON_MS: HANDLER_ABANDON_MS,
 };
