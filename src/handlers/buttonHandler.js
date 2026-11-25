@@ -723,6 +723,16 @@ module.exports = async (client, interaction) => {
         /* Acknowledged first: removing the devices below can take longer than Discord's 3 s for the first answer. */
         await client.interactionDeferUpdate(interaction);
 
+        /*
+            A stale Disconnect button of another server (its message was not rewritten) must not end the connection
+            the guild has now: only the message is brought up to date, as ServerDelete does.
+        */
+        const isCurrent = ids.serverId === instance.activeServer || (rustplus && ids.serverId === rustplus.serverId);
+        if (!isCurrent) {
+            await DiscordMessages.sendServerMessage(guildId, ids.serverId, null, interaction);
+            return;
+        }
+
         instance.activeServer = null;
         client.setInstance(guildId, instance);
 
