@@ -227,9 +227,34 @@ async function smartAlarm(client, guildId, serverKey, notification, deps = {}) {
         return false;
     }
 
+    const now = deps.now || (() => Date.now());
+
+    return reportFromPush(client, guildId, serverKey, `${entityId}`, alarmTime(notification, now()), now());
+}
+
+/*
+    The alarm of a server without a socket (another server, or the connection dropped meanwhile) is reported from its
+    push alone - if Config.general.pushAlarmsOtherServers allows it and the push is not out of date. Returns whether it
+    was reported.
+*/
+async function reportFromPush(client, guildId, serverKey, entityId, triggeredAt, nowMs) {
     if (!Config.general.pushAlarmsOtherServers) return false;
 
-    server.alarms[entityId].lastTrigger = Math.floor(Date.now() / 1000);
+    const instance = client.getInstance(guildId);
+    const server = instance && instance.serverList ? instance.serverList[serverKey] : null;
+    const alarm = server && server.alarms ? server.alarms[entityId] : null;
+
+    if (!alarm) return false;
+
+    const ageSeconds = Math.floor(nowMs / 1000) - triggeredAt;
+    if (ageSeconds > ALARM_PUSH_MAX_AGE_S) {
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: the alarm "${alarm.name}" (${entityId}) fired ${Math.round(ageSeconds / 60)} min ago and ` +
+            'its push arrived only now, it is not reported.', 'warn');
+        return false;
+    }
+
+    alarm.lastTrigger = Math.floor(nowMs / 1000);
     client.setInstance(guildId, instance);
 
     await DiscordMessages.sendSmartAlarmTriggerMessage(guildId, serverKey, entityId);
@@ -280,12 +305,9 @@ async function reportMissedAlarm(client, guildId, serverKey, entityId, triggered
         return false;
     }
 
-    /* Disconnected meanwhile: reported like the alarm of another server. */
+    /* Disconnected meanwhile: reported like the alarm of another server, with the same setting. */
     if (!isConnectedTo(client, guildId, serverKey)) {
-        alarm.lastTrigger = Math.floor(Date.now() / 1000);
-        client.setInstance(guildId, instance);
-        await DiscordMessages.sendSmartAlarmTriggerMessage(guildId, serverKey, entityId);
-        return true;
+        return reportFromPush(client, guildId, serverKey, entityId, triggeredAt, now());
     }
 
     const rustplus = client.rustplusInstances[guildId];

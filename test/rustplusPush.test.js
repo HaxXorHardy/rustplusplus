@@ -24,6 +24,8 @@ const Os = require('node:os');
 const Path = require('node:path');
 const Test = require('node:test');
 
+const Config = require('../config');
+const DiscordMessages = require('../src/discordTools/discordMessages.js');
 const Message = require('../src/rustplusEvents/message.js');
 const RustPlusAuth = require('../src/util/rustplusAuth.js');
 const RustPlusPush = require('../src/util/rustplusPush.js');
@@ -458,6 +460,51 @@ Test.describe('RustPlusPushNotifications', () => {
         Assert.strictEqual(reported.mock.callCount(), 0, 'a trigger from minutes ago is not news');
         Assert.deepStrictEqual(rustplus.subscribed, ['123'], 'the next trigger comes from the server');
         Assert.ok(client.logs.some((text) => text.includes('arrived only now')));
+    });
+
+    /* Config.general.pushAlarmsOtherServers for one test. */
+    function withOtherServerAlarms(t, value) {
+        const previous = Config.general.pushAlarmsOtherServers;
+        Config.general.pushAlarmsOtherServers = value;
+        t.after(() => { Config.general.pushAlarmsOtherServers = previous; });
+    }
+
+    Test.it('reports the alarm of another server from its push, but not an out of date push', async (t) => {
+        withOtherServerAlarms(t, true);
+        const instance = serverInstance();
+        const client = fakeClient(instance);
+        const posted = t.mock.method(DiscordMessages, 'sendSmartAlarmTriggerMessage', async () => undefined);
+        const late = (T + RustPlusPushNotifications.ALARM_PUSH_MAX_AGE_S + 60) * 1000;
+
+        const old = await RustPlusPushNotifications.handle(client, STEAM_ID,
+            RustPlusPushNotifications.parse(sentAlarm(T * 1000)), { now: () => late });
+        Assert.strictEqual(old[0].handled, false);
+        Assert.strictEqual(posted.mock.callCount(), 0);
+        Assert.ok(client.logs.some((text) => text.includes('arrived only now')));
+
+        const fresh = await RustPlusPushNotifications.handle(client, STEAM_ID,
+            RustPlusPushNotifications.parse(sentAlarm(T * 1000)), { now: () => (T + 20) * 1000 });
+        Assert.strictEqual(fresh[0].handled, true);
+        Assert.strictEqual(posted.mock.callCount(), 1);
+        Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger, T + 20);
+    });
+
+    Test.it('keeps to the setting for other servers when the connection dropped during the check', async (t) => {
+        withOtherServerAlarms(t, false);
+        const instance = serverInstance();
+        const client = fakeClient(instance, { serverId: `relay-${SERVER_ID}`, isOperational: false });
+        const posted = t.mock.method(DiscordMessages, 'sendSmartAlarmTriggerMessage', async () => undefined);
+        const reported = t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async () => undefined);
+
+        Assert.strictEqual(await RustPlusPushNotifications.reportMissedAlarm(client, 'guild', `relay-${SERVER_ID}`,
+            '123', T, { now: () => (T + 5) * 1000 }), false);
+        Assert.strictEqual(posted.mock.callCount(), 0);
+        Assert.strictEqual(reported.mock.callCount(), 0);
+
+        Config.general.pushAlarmsOtherServers = true;
+        Assert.strictEqual(await RustPlusPushNotifications.reportMissedAlarm(client, 'guild', `relay-${SERVER_ID}`,
+            '123', T, { now: () => (T + 5) * 1000 }), true);
+        Assert.strictEqual(posted.mock.callCount(), 1);
     });
 
     Test.it('reports a missed alarm whose push arrived a little late', async (t) => {
