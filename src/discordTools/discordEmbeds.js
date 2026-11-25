@@ -135,7 +135,8 @@ module.exports = {
         return module.exports.getEmbed({
             title: `${server.title}`,
             color: Constants.COLOR_DEFAULT,
-            description: description,
+            /* Discord refuses an embed description over 4096 characters, which would leave the server message unsent. */
+            description: description.slice(0, 4000),
             thumbnail: `${server.img}`,
             fields: [{
                 name: Client.client.intlGet(guildId, 'connect'),
