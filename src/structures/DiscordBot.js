@@ -267,13 +267,14 @@ class DiscordBot extends Discord.Client {
     }
 
     async syncCredentialsWithUsers(guild) {
-        const credentials = InstanceUtils.readCredentialsFile(guild.id);
-
         const members = await guild.members.fetch();
-        const memberIds = [];
-        for (const member of members) {
-            memberIds.push(member[0]);
-        }
+        const memberIds = new Set(members.keys());
+
+        /*
+            Read after the member fetch, which can take seconds on a large guild: a login or a member removal during
+            the fetch is then part of what is written back instead of being overwritten by an older copy.
+        */
+        const credentials = InstanceUtils.readCredentialsFile(guild.id);
 
         const steamIdRemoveCredentials = [];
         for (const [steamId, content] of Object.entries(credentials)) {
@@ -282,12 +283,12 @@ class DiscordBot extends Discord.Client {
             /* Credential files of older versions have no owner, they cannot be matched with the members. */
             if (!content || !content.discord_user_id) {
                 this.log(this.intlGet(null, 'warningCap'),
-                    `The stored credentials of ${steamId} have no Discord user, removing them., removing them.`);
+                    `The stored credentials of ${steamId} have no Discord user, removing them.`);
                 steamIdRemoveCredentials.push(steamId);
                 continue;
             }
 
-            if (!(memberIds.includes(content.discord_user_id))) {
+            if (!memberIds.has(content.discord_user_id)) {
                 this.log(this.intlGet(null, 'warningCap'),
                     `The stored credentials of ${steamId} belong to ${content.discord_user_id}, who is not a member of ` +
                     `${guild.name} anymore - removing them.`);
