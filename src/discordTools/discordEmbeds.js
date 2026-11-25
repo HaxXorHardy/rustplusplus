@@ -99,6 +99,18 @@ module.exports = {
         });
     },
 
+    /* Rust servers write their description with escaped line breaks ("\n" as two characters):
+     * turn them into real ones and drop the spaces around them. */
+    formatServerDescription: function (text) {
+        if (typeof text !== 'string') return '';
+        return text
+            .replace(/\\r\\n|\\n|\\r/g, '\n')
+            .replace(/\\t/g, ' ')
+            .split('\n').map((line) => line.trim()).join('\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    },
+
     getServerEmbed: async function (guildId, serverId) {
         const instance = Client.client.getInstance(guildId);
         const server = instance.serverList[serverId];
@@ -118,7 +130,7 @@ module.exports = {
                     Client.client.intlGet(guildId, 'offCap')) + '\n';
             }
         }
-        description += `\n${server.description}`;
+        description += `\n${module.exports.formatServerDescription(server.description)}`;
 
         return module.exports.getEmbed({
             title: `${server.title}`,
