@@ -250,6 +250,14 @@ module.exports = {
         }
 
         await PollingHandler.pollingHandler(rustplus, client);
+
+        /*
+            The subscriptions (up to one timeout per alarm) and the first poll await the server: a socket that closed
+            meanwhile has run its 'disconnected' cleanup already. Timers started below would then belong to a retired
+            instance that nothing stops - a second poll loop and leader socket next to the live connection.
+        */
+        if (dropIfNotCurrent(client, rustplus, 'after the first poll')) return;
+
         rustplus.restorePersistentRuntimeState();
         rustplus.persistMapMarkersRuntimeState();
 
@@ -289,6 +297,9 @@ module.exports = {
         catch (e) {
             rustplus.log(client.intlGet(null, 'errorCap'), `Could not fetch the clan info: ${e}`, 'error');
         }
+
+        /* The clan request awaited the server as well: a retired instance must not open a leader socket. */
+        if (dropIfNotCurrent(client, rustplus, 'after the clan info')) return;
 
         rustplus.updateLeaderRustPlusLiteInstance();
     },
