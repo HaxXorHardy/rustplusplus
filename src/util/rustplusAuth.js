@@ -70,6 +70,17 @@ function writeAuth(steamId, auth) {
     AtomicWriteFile(getAuthFilePath(steamId), JSON.stringify(auth, null, 2), 'utf8', 0o600);
 }
 
+/* Removes the stored login of an account (its owner removed it in Discord). */
+function removeAuth(steamId) {
+    if (!steamId) return;
+    try {
+        Fs.unlinkSync(getAuthFilePath(steamId));
+    }
+    catch (e) {
+        /* Nothing stored. */
+    }
+}
+
 /*
     Every steam id with a stored login. A guild that has no server configured does not know which account it belongs
     to, these are the accounts that can be asked instead.
@@ -164,6 +175,7 @@ module.exports = {
     getAuthFilePath: getAuthFilePath,
     readAuth: readAuth,
     writeAuth: writeAuth,
+    removeAuth: removeAuth,
     listSteamIds: listSteamIds,
     resolveServerGuid: resolveServerGuid,
     getTokenSteamId: getTokenSteamId,

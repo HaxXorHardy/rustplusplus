@@ -21,6 +21,7 @@
 const Builder = require('@discordjs/builders');
 const Discord = require('discord.js');
 
+const CredentialRevocation = require('../util/credentialRevocation.js');
 const CredentialsLoginHandler = require('../handlers/credentialsLoginHandler.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
@@ -126,6 +127,9 @@ async function removeCredentials(client, interaction, verifyId) {
 
     delete credentials[steamId];
     InstanceUtils.writeCredentialsFile(guildId, credentials);
+
+    /* Without a guild that lists the account, its stored login must not keep being renewed. */
+    CredentialRevocation.revokeIfUnregistered(steamId);
 
     client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'slashCommandValueChange', {
         id: `${verifyId}`,

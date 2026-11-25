@@ -18,6 +18,7 @@
 
 */
 
+const CredentialRevocation = require('../util/credentialRevocation.js');
 const InstanceUtils = require('../util/instanceUtils.js');
 
 module.exports = {
@@ -36,5 +37,7 @@ module.exports = {
 
         delete credentials[steamId];
         InstanceUtils.writeCredentialsFile(guildId, credentials);
+
+        CredentialRevocation.revokeIfUnregistered(steamId);
     },
 }
