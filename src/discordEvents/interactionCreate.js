@@ -24,21 +24,31 @@ const DiscordEmbeds = require('../discordTools/discordEmbeds');
 
 module.exports = {
     name: 'interactionCreate',
-    async execute(client, interaction) {
-        const instance = client.getInstance(interaction.guildId);
 
-        /* Check so that the interaction comes from valid channels */
-        if (!Object.values(instance.channelId).includes(interaction.channelId) && !interaction.isCommand) {
-            client.log(client.intlGet(null, 'warningCap'), client.intlGet(null, 'interactionInvalidChannel'))
-            if (interaction.isButton()) {
-                try {
-                    interaction.deferUpdate();
-                }
-                catch (e) {
-                    client.log(client.intlGet(null, 'errorCap'),
-                        client.intlGet(null, 'couldNotDeferInteraction'), 'error');
-                }
-            }
+    /*
+        Message components (buttons, menus) only count from the bot channels. Ephemeral replies are exempt: the login
+        chooser and the remove-devices question answer a slash command, which can be used in any channel. Slash
+        commands and modal submits are not message components and have their own permission checks.
+    */
+    isFromForeignChannel(instance, interaction) {
+        if (!interaction.isMessageComponent()) return false;
+        if (interaction.message && interaction.message.flags &&
+            interaction.message.flags.has(Discord.MessageFlags.Ephemeral)) return false;
+        return !Object.values(instance.channelId).includes(interaction.channelId);
+    },
+
+    async execute(client, interaction) {
+        /* Only guild interactions carry an instance; a DM holds nothing but link buttons (credentials expiry). */
+        const instance = interaction.guildId ? client.getInstance(interaction.guildId) : undefined;
+        if (!instance) return;
+
+        /* A button or menu on a message outside the bot channels (a stale message) must not act on the guild. */
+        if (module.exports.isFromForeignChannel(instance, interaction)) {
+            client.log(client.intlGet(null, 'warningCap'), client.intlGet(null, 'interactionInvalidChannel'));
+            await interaction.deferUpdate().catch(() => {
+                client.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'couldNotDeferInteraction'), 'error');
+            });
+            return;
         }
 
         if (interaction.isButton()) {
