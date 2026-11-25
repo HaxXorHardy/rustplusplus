@@ -354,7 +354,7 @@ Test.describe('RustPlusPushNotifications', () => {
         instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger = 1000;
 
         Assert.strictEqual(await RustPlusPushNotifications.reportMissedAlarm(client, 'guild', `relay-${SERVER_ID}`,
-            '123', 1002), false);
+            '123', 1002, { now: () => 1007 * 1000 }), false);
         Assert.strictEqual(reported.mock.callCount(), 0);
         Assert.deepStrictEqual(rustplus.subscribed, []);
     });
@@ -372,7 +372,7 @@ Test.describe('RustPlusPushNotifications', () => {
         instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger = 100;
 
         Assert.strictEqual(await RustPlusPushNotifications.reportMissedAlarm(client, 'guild', `relay-${SERVER_ID}`,
-            '123', 1000), true);
+            '123', 1000, { now: () => 1005 * 1000 }), true);
         Assert.deepStrictEqual(values, [['123', true], ['123', false]], 'the trigger, then the state read afterwards');
         Assert.deepStrictEqual(rustplus.subscribed, ['123']);
         Assert.ok(client.logs.some((text) => text.includes('did not report it')));
@@ -394,6 +394,85 @@ Test.describe('RustPlusPushNotifications', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         Assert.strictEqual(reported.mock.callCount(), 1, 'only the trigger, the alarm is still on');
+        Assert.deepStrictEqual(rustplus.subscribed, ['123']);
+    });
+
+    /* An alarm push with the send time of Google (DataMessageStanza.sent, in ms), and a real time in seconds. */
+    const T = 1764000000;
+    function sentAlarm(sentMs) {
+        return Object.assign(notification('alarm', 'Base', 'raid', { type: 'alarm', id: SERVER_ID, entityId: 123 }),
+            { sent: `${sentMs}` });
+    }
+
+    Test.it('reads when Google sent the push, in ms or seconds', () => {
+        Assert.strictEqual(RustPlusPushNotifications.parse(sentAlarm(1764000000123)).sentAtMs, 1764000000123);
+        Assert.strictEqual(RustPlusPushNotifications.parse(sentAlarm(1764000000)).sentAtMs, 1764000000000);
+        Assert.strictEqual(RustPlusPushNotifications.parse(sentAlarm('x')).sentAtMs, null);
+        Assert.strictEqual(RustPlusPushNotifications.parse(sentAlarm(0)).sentAtMs, null);
+        Assert.strictEqual(RustPlusPushNotifications.parse(notification('alarm', 'Base', 'raid', {})).sentAtMs, null);
+    });
+
+    Test.it('dates the alarm by the send time, by the arrival without one or for one ahead of the clock', () => {
+        const now = 2000 * 1000;
+        const at = (sentAtMs) => RustPlusPushNotifications.alarmTime({ sentAtMs: sentAtMs }, now);
+
+        Assert.strictEqual(at(1820 * 1000), 1820);
+        Assert.strictEqual(at(null), 2000);
+        Assert.strictEqual(at(2030 * 1000), 2030, 'a little clock skew is kept');
+        Assert.strictEqual(at(2600 * 1000), 2000, 'a send time far ahead is not believed');
+    });
+
+    Test.it('does not report again an alarm the socket reported when its push arrives minutes late', async (t) => {
+        const instance = serverInstance();
+        const rustplus = connectedRustplus(false);
+        const client = fakeClient(instance, rustplus);
+        const reported = t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async () => undefined);
+        const scheduled = [];
+
+        /* The socket reported the trigger at T, FCM delivered the push sent then 3 min later after a reconnect. */
+        instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger = T;
+
+        await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(sentAlarm(T * 1000)),
+            { schedule: (fn) => scheduled.push(fn), now: () => (T + 180) * 1000 });
+        await scheduled[0]();
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.strictEqual(reported.mock.callCount(), 0, 'no second raid alarm');
+        Assert.deepStrictEqual(rustplus.subscribed, []);
+    });
+
+    Test.it('only subscribes an alarm whose push the socket missed when the push is long out of date', async (t) => {
+        const instance = serverInstance();
+        const rustplus = connectedRustplus(false);
+        const client = fakeClient(instance, rustplus);
+        const reported = t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async () => undefined);
+        const scheduled = [];
+        const sentAt = T;
+        const arrival = sentAt + RustPlusPushNotifications.ALARM_PUSH_MAX_AGE_S + 60;
+
+        await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(sentAlarm(sentAt * 1000)),
+            { schedule: (fn) => scheduled.push(fn), now: () => arrival * 1000 });
+        await scheduled[0]();
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.strictEqual(reported.mock.callCount(), 0, 'a trigger from minutes ago is not news');
+        Assert.deepStrictEqual(rustplus.subscribed, ['123'], 'the next trigger comes from the server');
+        Assert.ok(client.logs.some((text) => text.includes('arrived only now')));
+    });
+
+    Test.it('reports a missed alarm whose push arrived a little late', async (t) => {
+        const instance = serverInstance();
+        const rustplus = connectedRustplus(true);
+        const client = fakeClient(instance, rustplus);
+        const reported = t.mock.method(Message, 'messageBroadcastEntityChangedSmartAlarm', async () => undefined);
+        const scheduled = [];
+
+        await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(sentAlarm(T * 1000)),
+            { schedule: (fn) => scheduled.push(fn), now: () => (T + 90) * 1000 });
+        await scheduled[0]();
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.strictEqual(reported.mock.callCount(), 1);
         Assert.deepStrictEqual(rustplus.subscribed, ['123']);
     });
 

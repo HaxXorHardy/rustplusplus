@@ -52,10 +52,28 @@ const PAIRING_REFRESH_DELAY_MS = 3000;
 */
 const ALARM_SOCKET_GRACE_MS = 5000;
 
-/* A trigger the socket reported this long before the push is the one the push is about. */
+/* A trigger the socket reported this long before the alarm was pushed is the one the push is about. */
 const ALARM_SOCKET_WINDOW_S = 60;
 
-/* { persistentId, channelId, title, message, body } of an FCM data message (src/util/fcm), or null. */
+/*
+    A push that Google sent longer ago than this is not reported as a new trigger: FCM delivers what it queued after a
+    reconnect, minutes or hours late, and the raid would long be over. The alarm is still subscribed.
+*/
+const ALARM_PUSH_MAX_AGE_S = 5 * 60;
+
+/*
+    When Google sent the message, in ms, or null. DataMessageStanza.sent says seconds in mcs.proto, Google sends
+    milliseconds: both are accepted.
+*/
+function sentAtMs(sent) {
+    const value = Number(sent);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    if (value >= 1e12) return Math.floor(value);
+    if (value >= 1e9) return Math.floor(value * 1000);
+    return null;
+}
+
+/* { persistentId, sentAtMs, channelId, title, message, body } of an FCM data message (src/util/fcm), or null. */
 function parse(data) {
     if (!data || !Array.isArray(data.appData)) return null;
 
@@ -81,6 +99,7 @@ function parse(data) {
 
     return {
         persistentId: typeof data.persistentId === 'string' ? data.persistentId : null,
+        sentAtMs: sentAtMs(data.sent),
         channelId: `${channelId}`,
         title: value('title') || '',
         message: value('message') || '',
@@ -196,13 +215,14 @@ async function smartAlarm(client, guildId, serverKey, notification, deps = {}) {
             return timer;
         });
         const now = deps.now || (() => Date.now());
-        const pushedAt = Math.floor(now() / 1000);
+        const triggeredAt = alarmTime(notification, now());
 
-        schedule(() => reportMissedAlarm(client, guildId, serverKey, `${entityId}`, pushedAt).catch((e) => {
-            client.log(client.intlGet(null, 'warningCap'),
-                `Rust+ push: the alarm ${entityId} of ${guildId} could not be checked: ${e && e.message ? e.message : e}`,
-                'warn');
-        }), ALARM_SOCKET_GRACE_MS);
+        schedule(() => reportMissedAlarm(client, guildId, serverKey, `${entityId}`, triggeredAt, { now: now })
+            .catch((e) => {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `Rust+ push: the alarm ${entityId} of ${guildId} could not be checked: ` +
+                    `${e && e.message ? e.message : e}`, 'warn');
+            }), ALARM_SOCKET_GRACE_MS);
 
         return false;
     }
@@ -218,12 +238,25 @@ async function smartAlarm(client, guildId, serverKey, notification, deps = {}) {
 }
 
 /*
+    When the alarm fired, in seconds: when Google sent its push, not when the push arrived - a push queued during an
+    FCM reconnect arrives minutes after the socket reported the trigger. Arrival time without a usable sent time, and
+    for a sent time ahead of the clock of the host.
+*/
+function alarmTime(notification, nowMs) {
+    const sent = notification ? notification.sentAtMs : null;
+    const ms = (typeof sent === 'number' && sent <= nowMs + ALARM_SOCKET_WINDOW_S * 1000) ? sent : nowMs;
+
+    return Math.floor(ms / 1000);
+}
+
+/*
     The socket did not report an alarm whose push arrived: the alarm is not subscribed (paired while connected, or the
     subscription failed). The trigger is reported through the path of the socket (raid mode, switch groups, in-game
     message), then the alarm is subscribed and its state read, so the next trigger and the reset come from the server.
-    Returns whether the push reported the trigger.
+    triggeredAt is when the alarm fired (alarmTime), in seconds. Returns whether the push reported the trigger.
 */
-async function reportMissedAlarm(client, guildId, serverKey, entityId, pushedAt) {
+async function reportMissedAlarm(client, guildId, serverKey, entityId, triggeredAt, deps = {}) {
+    const now = deps.now || (() => Date.now());
     const instance = client.getInstance(guildId);
     const server = instance && instance.serverList ? instance.serverList[serverKey] : null;
     const alarm = server && server.alarms ? server.alarms[entityId] : null;
@@ -232,7 +265,18 @@ async function reportMissedAlarm(client, guildId, serverKey, entityId, pushedAt)
 
     const lastTrigger = Number(alarm.lastTrigger);
     if (alarm.lastTrigger !== null && alarm.lastTrigger !== undefined && Number.isFinite(lastTrigger) &&
-        lastTrigger >= pushedAt - ALARM_SOCKET_WINDOW_S) {
+        lastTrigger >= triggeredAt - ALARM_SOCKET_WINDOW_S) {
+        return false;
+    }
+
+    /* An old push that arrived late: the trigger is not news anymore, only the subscription is made up for. */
+    const ageSeconds = Math.floor(now() / 1000) - triggeredAt;
+    if (ageSeconds > ALARM_PUSH_MAX_AGE_S) {
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: the alarm "${alarm.name}" (${entityId}) fired ${Math.round(ageSeconds / 60)} min ago and ` +
+            'its push arrived only now, it is not reported again.', 'warn');
+
+        if (isConnectedTo(client, guildId, serverKey)) await client.rustplusInstances[guildId].subscribeAlarm(entityId);
         return false;
     }
 
@@ -375,7 +419,9 @@ module.exports = {
     findServerKey: findServerKey,
     guildsOfAccount: guildsOfAccount,
     isConnectedTo: isConnectedTo,
+    alarmTime: alarmTime,
     reportMissedAlarm: reportMissedAlarm,
     ALARM_SOCKET_GRACE_MS: ALARM_SOCKET_GRACE_MS,
+    ALARM_PUSH_MAX_AGE_S: ALARM_PUSH_MAX_AGE_S,
     handle: handle,
 };
