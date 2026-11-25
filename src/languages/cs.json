@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Každá spouštěcí událost odešle zprávu.",
     "raidModeSetting": "Režim RAID",
     "raidModeNote": "Pokud je spuštěn alarm a nikdo z týmu není online, je registrovaným uživatelům odeslána přímá zpráva; jakmile alarmy utichnou, následuje zpráva o raidu.",
+    "alarmEscalationSetting": "Eskalace alarmu",
+    "alarmEscalationNote": "Druhé spuštění stejného chytrého alarmu do 5 minut zmíní @everyone, i když je tlačítko @everyone u alarmu vypnuté.",
     "upkeepWarningSetting": "Včasné varování o údržbě",
     "upkeepWarningNote": "Upozornit, když u skříňky na nářadí s monitorem skladových zásob dojde v tomto časovém období k vypršení lhůty pro údržbu.",
     "upkeepWarningOption": "Upozornit {hours} h před vypršením platnosti údržby.",

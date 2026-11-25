@@ -46,15 +46,18 @@ Test.describe('settings per guild (Discord) before the environment', () => {
 
         Assert.strictEqual(GuildSettings.alarmCooldownSeconds('guild'), Config.general.alarmCooldownSeconds);
         Assert.strictEqual(GuildSettings.raidModeEnabled('guild'), Config.general.raidModeEnabled);
+        Assert.strictEqual(GuildSettings.alarmEscalationEnabled('guild'), Config.general.alarmEscalationEnabled);
         Assert.strictEqual(GuildSettings.upkeepWarningHours('guild'), Config.general.upkeepWarningHours);
         Assert.strictEqual(GuildSettings.timeZone('guild'), 'UTC');
     });
 
     Test.it('uses what the guild chose in Discord, 0 included', (t) => {
-        withGuild(t, { alarmCooldownSeconds: 0, raidModeEnabled: false, upkeepWarningHours: 12, timeZone: 'Europe/Berlin' });
+        withGuild(t, { alarmCooldownSeconds: 0, raidModeEnabled: false, alarmEscalationEnabled: false,
+            upkeepWarningHours: 12, timeZone: 'Europe/Berlin' });
 
         Assert.strictEqual(GuildSettings.alarmCooldownSeconds('guild'), 0);
         Assert.strictEqual(GuildSettings.raidModeEnabled('guild'), false);
+        Assert.strictEqual(GuildSettings.alarmEscalationEnabled('guild'), false);
         Assert.strictEqual(GuildSettings.upkeepWarningHours('guild'), 12);
         Assert.strictEqual(GuildSettings.timeZone('guild'), 'Europe/Berlin');
     });
@@ -72,6 +75,14 @@ Test.describe('settings per guild (Discord) before the environment', () => {
         const second = RaidHandler.onAlarm(rustplus, 7, 1001);
         Assert.strictEqual(second.post, true, 'cooldown 0: every trigger');
         Assert.strictEqual(second.raidStarted, false, 'raid mode off');
+    });
+
+    Test.it('the escalation follows the guild setting', (t) => {
+        withGuild(t, { alarmCooldownSeconds: 0, alarmEscalationEnabled: false });
+        const rustplus = { guildId: 'guild', serverId: 'server', team: { allOffline: false } };
+
+        RaidHandler.onAlarm(rustplus, 7, 1000);
+        Assert.strictEqual(RaidHandler.onAlarm(rustplus, 7, 2000).everyone, false, 'escalation off');
     });
 
     Test.it('the dropdowns and the button are valid Discord components', (t) => {

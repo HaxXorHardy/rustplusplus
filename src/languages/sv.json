@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Varje utlösare skickar ett meddelande.",
     "raidModeSetting": "Raid-läge",
     "raidModeNote": "Ett larm när ingen i laget är online skickar ett direktmeddelande till de registrerade användarna; en raidrapport följer när larmen har tystnat.",
+    "alarmEscalationSetting": "Larmeskalering",
+    "alarmEscalationNote": "Den andra utlösningen av samma smarta larm inom 5 minuter nämner @everyone, även när larmets @everyone-knapp är av.",
     "upkeepWarningSetting": "Tidig varning om underhåll",
     "upkeepWarningNote": "Varna när ett verktygsskåp med en lagringsmonitor har slut på underhåll inom denna tid.",
     "upkeepWarningOption": "Varna {hours} h innan underhållet löper ut.",

@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Cada gatilho envia uma mensagem.",
     "raidModeSetting": "Modo RAID",
     "raidModeNote": "Um alarme, quando nenhum membro da equipa estiver online, envia uma mensagem direta aos utilizadores registados; segue-se um relatório da incursão quando os alarmes cessarem.",
+    "alarmEscalationSetting": "Escalonamento de alarmes",
+    "alarmEscalationNote": "O segundo disparo do mesmo alarme inteligente em 5 minutos menciona @everyone, mesmo quando o botão @everyone do alarme está desligado.",
     "upkeepWarningSetting": "Aviso antecipado de manutenção",
     "upkeepWarningNote": "Avisar quando um armário de ferramentas com um monitor de armazenamento ficar sem manutenção dentro deste período.",
     "upkeepWarningOption": "Avisar {hours} h antes de o período de manutenção terminar.",

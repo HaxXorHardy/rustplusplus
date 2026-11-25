@@ -98,7 +98,7 @@ By clicking the `@everyone` button you decide if the @everyone tag should be use
 What happens when an alarm of the connected server fires:
 
 * **Cooldown** - an alarm that fires again within the cooldown (default 60 s) posts no new message; the next message says how many triggers were left out.
-* **Escalation** - the second trigger of the same alarm within 5 minutes mentions `@everyone`, also when the `@everyone` button of the alarm is off.
+* **Escalation** (default on) - the second trigger of the same alarm within 5 minutes mentions `@everyone`, also when the `@everyone` button of the alarm is off. It can be turned off with `Alarm escalation` in the settings channel (or `RPP_ALARM_ESCALATION=false`).
 * **Raid mode** (default on) - when nobody of the team is online, the Discord users registered with `/credentials login` get a direct message (once per raid). Teammates that come online are noted, and after 10 minutes without an alarm a **raid report** goes to the activity channel: which alarms fired how often, who came online. A restart forgets a running raid.
 * **Switch groups** - groups that have the alarm as trigger are turned on (see above).
 

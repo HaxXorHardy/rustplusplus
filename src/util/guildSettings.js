@@ -20,8 +20,8 @@
 
 /*
     Settings of the alarms, the upkeep warning and the time zone, set per guild in the settings channel. A guild that
-    never chose a value uses the environment (RPP_ALARM_COOLDOWN, RPP_RAID_MODE, RPP_UPKEEP_WARNING_HOURS,
-    RPP_TIMEZONE) - the values are not in the settings template on purpose, a template value would hide them.
+    never chose a value uses the environment (RPP_ALARM_COOLDOWN, RPP_RAID_MODE, RPP_ALARM_ESCALATION,
+    RPP_UPKEEP_WARNING_HOURS, RPP_TIMEZONE) - the values are not in the settings template on purpose, a template value would hide them.
 */
 
 const Config = require('../../config');
@@ -68,6 +68,11 @@ function raidModeEnabled(guildId) {
     return typeof value === 'boolean' ? value : Config.general.raidModeEnabled !== false;
 }
 
+function alarmEscalationEnabled(guildId) {
+    const value = settingsOf(guildId).alarmEscalationEnabled;
+    return typeof value === 'boolean' ? value : Config.general.alarmEscalationEnabled !== false;
+}
+
 function upkeepWarningHours(guildId) {
     return numberOr(settingsOf(guildId).upkeepWarningHours, numberOr(Config.general.upkeepWarningHours, 6));
 }
@@ -87,6 +92,7 @@ module.exports = {
     isValidTimeZone: isValidTimeZone,
     alarmCooldownSeconds: alarmCooldownSeconds,
     raidModeEnabled: raidModeEnabled,
+    alarmEscalationEnabled: alarmEscalationEnabled,
     upkeepWarningHours: upkeepWarningHours,
     timeZone: timeZone,
 };

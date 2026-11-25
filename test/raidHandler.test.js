@@ -73,6 +73,20 @@ Test.describe('raid handler', () => {
         Assert.strictEqual(RaidHandler.onAlarm(rp, 7, t0 + 20 * 60 * 1000).everyone, false, 'a single one much later');
     });
 
+    Test.it('does not mention everyone when the escalation is turned off', (t) => {
+        const previous = Config.general.alarmEscalationEnabled;
+        Config.general.alarmEscalationEnabled = false;
+        t.after(() => { Config.general.alarmEscalationEnabled = previous; });
+
+        const rp = rustplus(false);
+        const t0 = 1000000;
+
+        RaidHandler.onAlarm(rp, 7, t0);
+        const second = RaidHandler.onAlarm(rp, 7, t0 + 2 * 60 * 1000);
+        Assert.strictEqual(second.post, true);
+        Assert.strictEqual(second.everyone, false);
+    });
+
     Test.it('starts a raid when nobody is online: one direct message, a report after the quiet time', () => {
         const rp = rustplus(true);
         const t0 = 1000000;

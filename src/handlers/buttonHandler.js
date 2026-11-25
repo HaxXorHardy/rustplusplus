@@ -413,6 +413,19 @@ module.exports = async (client, interaction) => {
             components: [DiscordButtons.getRaidModeButton(guildId, instance.generalSettings.raidModeEnabled)]
         });
     }
+    else if (interaction.customId === 'AlarmEscalation') {
+        instance.generalSettings.alarmEscalationEnabled = !GuildSettings.alarmEscalationEnabled(guildId);
+        client.setInstance(guildId, instance);
+
+        client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'buttonValueChange', {
+            id: `${verifyId}`,
+            value: `${instance.generalSettings.alarmEscalationEnabled}`
+        }));
+
+        await client.interactionUpdate(interaction, {
+            components: [DiscordButtons.getAlarmEscalationButton(guildId, instance.generalSettings.alarmEscalationEnabled)]
+        });
+    }
     else if (interaction.customId === 'CameraWatchReportTeam') {
         instance.generalSettings.cameraWatchReportTeam = !instance.generalSettings.cameraWatchReportTeam;
         client.setInstance(guildId, instance);

@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Ogni trigger invia un messaggio.",
     "raidModeSetting": "Modalità raid",
     "raidModeNote": "Se scatta un allarme mentre nessun membro della squadra è online, viene inviato un messaggio diretto agli utenti registrati; quando gli allarmi si placano, segue un resoconto del raid.",
+    "alarmEscalationSetting": "Escalation degli allarmi",
+    "alarmEscalationNote": "La seconda attivazione dello stesso allarme intelligente entro 5 minuti menziona @everyone, anche se il pulsante @everyone dell'allarme è disattivato.",
     "upkeepWarningSetting": "Avviso preventivo di manutenzione",
     "upkeepWarningNote": "Avvisa quando un armadietto degli attrezzi dotato di monitor di stoccaggio esaurisce la manutenzione entro questo periodo.",
     "upkeepWarningOption": "Avvisa {hours} h prima che scada la manutenzione.",

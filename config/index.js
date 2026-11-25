@@ -92,6 +92,8 @@ module.exports = {
             and when no alarm came for a while a raid report is posted.
         */
         raidModeEnabled: envBool('RPP_RAID_MODE', true),
+        /* Escalation: the second trigger of the same alarm within 5 minutes mentions @everyone. */
+        alarmEscalationEnabled: envBool('RPP_ALARM_ESCALATION', true),
         /*
             Map events (cargo ship, patrol helicopter, chinook, oil rigs, vending machines, deep sea, traveling vendor).
             Facepunch's Rust+ API stopped sending these markers (2026-11-18), so the code that uses them does not run

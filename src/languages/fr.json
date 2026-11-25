@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Chaque déclencheur envoie un message.",
     "raidModeSetting": "Mode raid",
     "raidModeNote": "Une alerte, lorsque aucun membre de l'équipe n'est en ligne, envoie un message privé aux utilisateurs enregistrés ; un rapport de raid est publié une fois les alertes désactivées.",
+    "alarmEscalationSetting": "Escalade des alarmes",
+    "alarmEscalationNote": "Le deuxième déclenchement de la même alarme intelligente en 5 minutes mentionne @everyone, même si le bouton @everyone de l'alarme est désactivé.",
     "upkeepWarningSetting": "Avertissement précoce d'entretien",
     "upkeepWarningNote": "Avertir lorsqu'une armoire à outils équipée d'un moniteur de stockage arrive en fin de maintenance dans ce délai.",
     "upkeepWarningOption": "Avertir {hours} h avant l'expiration de l'entretien.",

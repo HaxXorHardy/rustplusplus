@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Każdy wyzwalacz wysyła komunikat.",
     "raidModeSetting": "Tryb RAID",
     "raidModeNote": "Alarm wysyłany, gdy nikt z drużyny nie jest online, powoduje wysłanie bezpośredniej wiadomości do zarejestrowanych użytkowników; po ustaniu alarmów następuje raport z rajdu.",
+    "alarmEscalationSetting": "Eskalacja alarmu",
+    "alarmEscalationNote": "Drugie uruchomienie tego samego inteligentnego alarmu w ciągu 5 minut wspomina @everyone, nawet gdy przycisk @everyone alarmu jest wyłączony.",
     "upkeepWarningSetting": "Wczesne ostrzeżenie o konserwacji",
     "upkeepWarningNote": "Wyświetl ostrzeżenie, gdy w szafce narzędziowej z monitorem magazynowym wygaśnie okres konserwacji w tym czasie.",
     "upkeepWarningOption": "Ostrzeż {hours} h przed wygaśnięciem okresu konserwacji.",

@@ -693,6 +693,11 @@ async function ensureAlarmAndTimeSettings(client, guild, channel) {
             getComponent: () => DiscordButtons.getRaidModeButton(guild.id, GuildSettings.raidModeEnabled(guild.id))
         },
         {
+            customId: 'AlarmEscalation', titleId: 'alarmEscalationSetting', noteId: 'alarmEscalationNote',
+            getComponent: () => DiscordButtons.getAlarmEscalationButton(guild.id,
+                GuildSettings.alarmEscalationEnabled(guild.id))
+        },
+        {
             customId: 'UpkeepWarning', titleId: 'upkeepWarningSetting', noteId: 'upkeepWarningNote',
             getComponent: () => DiscordSelectMenus.getUpkeepWarningSelectMenu(guild.id,
                 GuildSettings.upkeepWarningHours(guild.id))

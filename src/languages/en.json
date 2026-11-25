@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Every trigger posts a message.",
     "raidModeSetting": "Raid mode",
     "raidModeNote": "An alarm while nobody of the team is online sends a direct message to the registered users; a raid report follows when the alarms are quiet.",
+    "alarmEscalationSetting": "Alarm escalation",
+    "alarmEscalationNote": "The second trigger of the same smart alarm within 5 minutes mentions @everyone, also when the @everyone button of the alarm is off.",
     "upkeepWarningSetting": "Upkeep early warning",
     "upkeepWarningNote": "Warn when a tool cupboard with a storage monitor runs out of upkeep within this time.",
     "upkeepWarningOption": "Warn {hours} h before the upkeep runs out.",

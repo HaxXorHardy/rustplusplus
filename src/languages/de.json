@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Jede Auslösung schickt eine Nachricht.",
     "raidModeSetting": "Raid-Modus",
     "raidModeNote": "Ein Alarm, während niemand aus dem Team online ist, schickt den registrierten Nutzern eine Direktnachricht; ein Raid-Bericht folgt, wenn die Alarme ruhig sind.",
+    "alarmEscalationSetting": "Alarm-Eskalation",
+    "alarmEscalationNote": "Die zweite Auslösung desselben Smart Alarms innerhalb von 5 Minuten erwähnt @everyone, auch wenn der @everyone-Button des Alarms aus ist.",
     "upkeepWarningSetting": "Unterhalts-Vorwarnung",
     "upkeepWarningNote": "Warnt, wenn der Unterhalt eines Werkzeugschranks mit Storage Monitor innerhalb dieser Zeit ausgeht.",
     "upkeepWarningOption": "{hours} h vorher warnen.",

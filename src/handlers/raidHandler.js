@@ -82,7 +82,10 @@ function onAlarm(rustplus, alarmId, now = Date.now()) {
         alarm.lastPostedMs = now;
     }
 
-    if (alarm.times.length >= ESCALATE_AFTER) decision.everyone = true;
+    /* The escalation can be turned off per guild (settings channel, RPP_ALARM_ESCALATION). */
+    if (alarm.times.length >= ESCALATE_AFTER && GuildSettings.alarmEscalationEnabled(rustplus.guildId)) {
+        decision.everyone = true;
+    }
 
     const teamOffline = Boolean(rustplus.team && rustplus.team.allOffline);
     if (GuildSettings.raidModeEnabled(rustplus.guildId) && (teamOffline || state.raid !== null)) {

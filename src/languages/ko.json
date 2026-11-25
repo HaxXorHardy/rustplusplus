@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "모든 트리거는 메시지를 게시합니다.",
     "raidModeSetting": "레이드 모드",
     "raidModeNote": "팀원 중 아무도 온라인 상태가 아닐 때 알람이 발생하면 등록된 사용자에게 직접 메시지가 전송되며, 알람이 멈춘 후에는 레이드 보고서가 이어집니다.",
+    "alarmEscalationSetting": "알람 에스컬레이션",
+    "alarmEscalationNote": "같은 스마트 알람이 5분 안에 두 번째로 울리면 알람의 @everyone 버튼이 꺼져 있어도 @everyone을 멘션합니다.",
     "upkeepWarningSetting": "유지 관리 조기 경고",
     "upkeepWarningNote": "저장 모니터링 기능이 있는 도구 수납장의 유지 관리 기간이 이 시간 내에 만료될 때 경고합니다.",
     "upkeepWarningOption": "유지 관리 시간이 만료되기 {hours} 시간 전에 경고합니다.",

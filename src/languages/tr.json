@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Her tetikleyici bir mesaj gönderir.",
     "raidModeSetting": "Raid modu",
     "raidModeNote": "Takımdan hiç kimse çevrimiçi değilken çalan bir alarm, kayıtlı kullanıcılara doğrudan mesaj gönderir; alarmlar durduğunda bir raid raporu gönderilir.",
+    "alarmEscalationSetting": "Alarm yükseltme",
+    "alarmEscalationNote": "Aynı akıllı alarmın 5 dakika içinde ikinci kez tetiklenmesi, alarmın @everyone düğmesi kapalı olsa bile @everyone'dan bahseder.",
     "upkeepWarningSetting": "Bakım erken uyarısı",
     "upkeepWarningNote": "Depolama monitörü bulunan bir alet dolabının bakım süresi bu süre içinde dolduğunda uyarı ver.",
     "upkeepWarningOption": "Bakım süresi dolmadan {hours} saat önce uyarı ver.",

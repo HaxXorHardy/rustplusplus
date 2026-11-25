@@ -72,12 +72,13 @@ There are a few buttons for each server. The `CONNECT` button lets you start a c
 
 > The Settings Channel contain a bunch of different settings for rustplusplus. There are settings for language, voice gender, command prefix, trademark visibility, allow in-game commands, mute in-game, in-game teammate notifications, command delay, Smart Alarm notifications, enable leader command, battlemetrics notifications, wipe detection, vending machine subscription (no vending machine data at the moment). The event notification settings are gone: the API reports no events anymore (removed in 1.50.1 and 1.50.3, their messages are removed from an existing settings channel on start).
 
-Four settings decide how alarms, the upkeep and the clock work (they are added to an existing settings channel on start, `/reset settings` is not needed):
+Five settings decide how alarms, the upkeep and the clock work (they are added to an existing settings channel on start, `/reset settings` is not needed):
 
 | Setting | Choices | Default |
 | --- | --- | --- |
 | `Smart alarm cooldown` | off, 30 s, 60 s, 2 min, 5 min, 10 min | `RPP_ALARM_COOLDOWN` (60 s) |
 | `Raid mode` | enabled / disabled | `RPP_RAID_MODE` (enabled) |
+| `Alarm escalation` | enabled / disabled | `RPP_ALARM_ESCALATION` (enabled) |
 | `Upkeep early warning` | off, 1, 2, 4, 6, 12, 24 h | `RPP_UPKEEP_WARNING_HOURS` (6 h) |
 | `Time zone` | 18 common zones (each shows the time there) | `RPP_TIMEZONE` (UTC) |
 

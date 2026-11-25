@@ -1024,6 +1024,8 @@
     "alarmCooldownOptionOff": "Cada activador envía un mensaje.",
     "raidModeSetting": "Modo Raid",
     "raidModeNote": "Si se activa una alarma cuando ningún miembro del equipo está conectado, se envía un mensaje directo a los usuarios registrados; una vez que las alarmas se han silenciado, se envía un informe de incursión.",
+    "alarmEscalationSetting": "Escalada de alarmas",
+    "alarmEscalationNote": "La segunda activación de la misma alarma inteligente en 5 minutos menciona a @everyone, aunque el botón @everyone de la alarma esté desactivado.",
     "upkeepWarningSetting": "Aviso temprano de mantenimiento",
     "upkeepWarningNote": "Avisar cuando un armario de herramientas con monitor de almacenamiento se quede sin mantenimiento dentro de este plazo.",
     "upkeepWarningOption": "Avisar {hours} h antes de que se agote el mantenimiento.",
