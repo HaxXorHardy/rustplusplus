@@ -489,6 +489,29 @@ Test.describe('RustPlusPushNotifications', () => {
         Assert.strictEqual(instance.serverList[`relay-${SERVER_ID}`].alarms[123].lastTrigger, T + 20);
     });
 
+    Test.it('reports the alarm of another server that is paired with another account', async (t) => {
+        withOtherServerAlarms(t, true);
+        const OTHER_ID = '7a1b2c3d-0000-4000-8000-000000000001';
+        const OTHER_STEAM_ID = '76561198000000401';
+        const instance = serverInstance();
+        instance.serverList[`relay-${OTHER_ID}`] = {
+            title: 'Other', guid: OTHER_ID, steamId: OTHER_STEAM_ID,
+            alarms: { 555: { name: 'Shop', message: 'raid', lastTrigger: null } },
+        };
+        const client = fakeClient(instance);
+        const posted = t.mock.method(DiscordMessages, 'sendSmartAlarmTriggerMessage', async () => undefined);
+
+        Assert.deepStrictEqual(RustPlusPushNotifications.guildsOfAccount(client, OTHER_STEAM_ID), ['guild']);
+
+        const result = await RustPlusPushNotifications.handle(client, OTHER_STEAM_ID, RustPlusPushNotifications.parse(
+            notification('alarm', 'Shop', 'raid', { type: 'alarm', id: OTHER_ID, entityId: 555 })));
+
+        Assert.strictEqual(result[0].handled, true);
+        Assert.deepStrictEqual(posted.mock.calls[0].arguments.slice(0, 3), ['guild', `relay-${OTHER_ID}`, '555']);
+        Assert.deepStrictEqual(RustPlusPushNotifications.guildsOfAccount(client, '76561198000000999'), [],
+            'an account without a server of the guild');
+    });
+
     Test.it('keeps to the setting for other servers when the connection dropped during the check', async (t) => {
         withOtherServerAlarms(t, false);
         const instance = serverInstance();

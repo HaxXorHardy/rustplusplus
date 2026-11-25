@@ -158,7 +158,17 @@ function guildsOfAccount(client, steamId) {
             continue;
         }
 
-        if (instance && RustPlusHistory.steamIdsOfGuild(instance).includes(`${steamId}`)) guildIds.push(guildId);
+        if (!instance) continue;
+
+        /*
+            The account of the active server, and the account of every other server of the guild: a server paired with
+            another account (a guild can have several) sends its alarms and logins to that account, and its pushes were
+            dropped before (steamIdsOfGuild only names the account of the active server).
+        */
+        const ofServer = Object.values(instance.serverList || {})
+            .some((server) => server && server.steamId && `${server.steamId}` === `${steamId}`);
+
+        if (ofServer || RustPlusHistory.steamIdsOfGuild(instance).includes(`${steamId}`)) guildIds.push(guildId);
     }
 
     return guildIds;
