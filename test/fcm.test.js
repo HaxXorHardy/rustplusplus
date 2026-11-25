@@ -252,6 +252,11 @@ Test.describe('fcm/mcsClient', () => {
 
         await client.connect();
         sockets[0].emit('secureConnect');
+        /* TLS alone is not a connection: 'connect' waits for the accepted login. */
+        Assert.deepStrictEqual(events, []);
+
+        const login = sockets[0].written[0];
+        sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
 
         Assert.deepStrictEqual(checkIns, [[ANDROID_ID, SECURITY_TOKEN]]);
         Assert.deepStrictEqual(sockets[0].options, { host: 'mtalk.google.com', port: 5228,
@@ -260,7 +265,6 @@ Test.describe('fcm/mcsClient', () => {
         Assert.strictEqual(client._socket, sockets[0]);
         Assert.deepStrictEqual(events, ['connect']);
 
-        const login = sockets[0].written[0];
         Assert.deepStrictEqual([...login.subarray(0, 2)], [MCS_VERSION, TAGS.loginRequest]);
         const request = lookupType('LoginRequest').decodeDelimited(login.subarray(2));
         Assert.strictEqual(request.deviceId, `android-${BigInt(ANDROID_ID).toString(16)}`);
@@ -307,6 +311,57 @@ Test.describe('fcm/mcsClient', () => {
         t.mock.timers.tick(60000);
         await new Promise((resolve) => setImmediate(resolve));
         Assert.strictEqual(sockets.length, 2);
+    });
+
+    Test.it('backs off after a rejected login instead of retrying every second', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        const { client, sockets } = clientWithFakes(t);
+        const events = [];
+        client.on('connect', () => events.push('connect'));
+        client.on('disconnect', () => events.push('disconnect'));
+        const rejected = () => Buffer.concat([Buffer.from([MCS_VERSION]),
+            frame(TAGS.loginResponse, 'LoginResponse', { id: 'x', error: { code: 401 } })]);
+
+        await client.connect();
+        sockets[0].emit('secureConnect');
+        sockets[0].emit('data', rejected());
+        Assert.deepStrictEqual(events, ['disconnect']);
+        Assert.strictEqual(client._heartbeatTimer, null);
+        /* The ids were not delivered by a rejected login. */
+        Assert.deepStrictEqual(client._persistentIds, ['0:old']);
+
+        t.mock.timers.tick(1000);
+        await new Promise((resolve) => setImmediate(resolve));
+        Assert.strictEqual(sockets.length, 2);
+        sockets[1].emit('secureConnect');
+        sockets[1].emit('data', rejected());
+
+        /* The second retry waits 2 s: TLS did not reset the backoff. */
+        t.mock.timers.tick(1000);
+        await new Promise((resolve) => setImmediate(resolve));
+        Assert.strictEqual(sockets.length, 2);
+        t.mock.timers.tick(1000);
+        await new Promise((resolve) => setImmediate(resolve));
+        Assert.strictEqual(sockets.length, 3);
+
+        sockets[2].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
+        Assert.deepStrictEqual(events, ['disconnect', 'disconnect', 'connect']);
+        Assert.strictEqual(client._retryCount, 0);
+        client.destroy();
+    });
+
+    Test.it('drops the connection on a stream error from the server', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        const { client, sockets } = clientWithFakes(t);
+        const events = [];
+        client.on('disconnect', () => events.push('disconnect'));
+
+        await client.connect();
+        sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse(),
+            frame(TAGS.close, 'Close', {})]));
+        Assert.deepStrictEqual(events, ['disconnect']);
+        Assert.strictEqual(sockets[0].destroyed, true);
+        client.destroy();
     });
 
     Test.it('rejects the first connect when the check-in fails', async (t) => {

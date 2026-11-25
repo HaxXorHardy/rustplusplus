@@ -90,11 +90,10 @@ class McsClient extends EventEmitter {
 
         if (typeof socket.setKeepAlive === 'function') socket.setKeepAlive(true);
 
-        socket.on('secureConnect', () => {
-            if (this._socket !== socket) return;
-            this._retryCount = 0;
-            this.emit('connect');
-        });
+        /*
+            'connect' and the reset of the backoff wait for an accepted login (see _onMessage): Google accepts TLS and
+            then rejects a stale security token, and a reset here would retry such a login every second forever.
+        */
         socket.on('data', (chunk) => this._onData(socket, chunk));
         socket.on('close', () => {
             if (this._socket !== socket) return;
@@ -139,11 +138,24 @@ class McsClient extends EventEmitter {
 
     _onMessage({ tag, object }) {
         if (tag === TAGS.loginResponse) {
-            /* The ids went to the server with the login; it does not send these messages again. */
-            this._persistentIds = [];
             clearTimeout(this._loginTimer);
             this._loginTimer = null;
+
+            /* "Null if login was ok" (mcs.proto): a rejected login keeps the ids and backs off like any drop. */
+            if (object && object.error) {
+                this._drop();
+                return;
+            }
+
+            /* The ids went to the server with the login; it does not send these messages again. */
+            this._persistentIds = [];
+            this._retryCount = 0;
             this._startHeartbeat();
+            this.emit('connect');
+        }
+        else if (tag === TAGS.close || tag === TAGS.streamErrorStanza) {
+            /* The server ends the stream; waiting for the socket close would only delay the reconnect. */
+            this._drop();
         }
         else if (tag === TAGS.heartbeatPing) {
             this._send(TAGS.heartbeatAck, 'HeartbeatAck', {});
