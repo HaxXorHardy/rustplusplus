@@ -1,3 +1,30 @@
+# Runtime state and secrets: they live in the volumes (see Dockerfile), a local `docker build` must never bake them
+# into an image layer.
+credentials/
+instances/
+runtime/
+logs/
+maps/
+temp/
+.env
+.env.*
+!.env.example
+data/runtimeData.sqlite*
+data/staticData.sqlite-shm
+data/staticData.sqlite-wal
+
+# Local-only tooling and notes
+.agents/
+.claude/
+.desloppify/
+.cache/
+.git/
+.github/
+scripts/quality-review.ps1
+scripts/review.cmd
+*.log
+
+# Not needed in the image
 docs/
 node_modules/
-.env
+test/

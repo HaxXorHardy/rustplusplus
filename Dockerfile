@@ -17,8 +17,9 @@ COPY package-lock.json /app/package-lock.json
 # Local stand-in packages referenced by package.json (file:stubs/...), needed by npm install.
 COPY stubs /app/stubs
 
-# Runtime dependencies only: the bot runs with plain node (index.js); the TypeScript toolchain is a dev dependency.
-RUN npm install --omit=dev
+# Runtime dependencies only, exactly as locked: the bot runs with plain node (index.js); the TypeScript toolchain is a
+# dev dependency.
+RUN npm ci --omit=dev
 COPY . /app
 
 VOLUME [ "/app/credentials" ]

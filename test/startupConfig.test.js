@@ -55,7 +55,7 @@ Test.describe('startup configuration', () => {
     Test.it('installs the runtime dependencies only in the image', () => {
         const dockerfile = Fs.readFileSync(Path.join(ROOT, 'Dockerfile'), 'utf8');
 
-        Assert.match(dockerfile, /npm install --omit=dev/);
+        Assert.match(dockerfile, /npm ci --omit=dev/);
         Assert.doesNotMatch(dockerfile, /ts-node/);
     });
 });
