@@ -82,24 +82,44 @@ function schedule(guildId, serverId, key, delayMs, record, fire) {
     /* The replaced timer only stops here: the record below overwrites its entry (one write instead of two). */
     stop(guildId, serverId, key);
 
+    const delay = Math.max(0, Number(delayMs) || 0);
+    const endsAtMs = Date.now() + delay;
+
+    ends.set(`${guildId}:${serverId}:${key}`, { handle: null, endsAtMs: endsAtMs, value: record.value });
+    arm(guildId, serverId, key, delay, fire);
+    persist(guildId, serverId, key, Object.assign({}, record, { endsAtMs: endsAtMs }));
+
+    return endsAtMs;
+}
+
+/*
+    setTimeout takes at most 2^31-1 ms (about 24.8 days) and fires a longer delay after 1 ms instead: "!lamp on 25d"
+    switched back at once. A longer timer runs in steps of that size, each step replacing the handle.
+*/
+const MAX_TIMEOUT_MS = 2147483647;
+
+function arm(guildId, serverId, key, remainingMs, fire) {
     const timeouts = of(guildId, serverId);
-    const endsAtMs = Date.now() + Math.max(0, delayMs);
+    const step = Math.min(remainingMs, MAX_TIMEOUT_MS);
 
     const handle = setTimeout(async () => {
         if (timeouts[key] !== handle) return;
+
+        if (remainingMs > MAX_TIMEOUT_MS) {
+            arm(guildId, serverId, key, remainingMs - MAX_TIMEOUT_MS, fire);
+            return;
+        }
 
         delete timeouts[key];
         ends.delete(`${guildId}:${serverId}:${key}`);
         persist(guildId, serverId, key, null);
 
         await fire();
-    }, Math.max(0, delayMs));
+    }, step);
 
     timeouts[key] = handle;
-    ends.set(`${guildId}:${serverId}:${key}`, { handle: handle, endsAtMs: endsAtMs, value: record.value });
-    persist(guildId, serverId, key, Object.assign({}, record, { endsAtMs: endsAtMs }));
-
-    return endsAtMs;
+    const end = ends.get(`${guildId}:${serverId}:${key}`);
+    if (end) end.handle = handle;
 }
 
 /* Stop a running timer in memory only. */
@@ -154,4 +174,5 @@ module.exports = {
     groupKey: groupKey,
     getEnd: getEnd,
     reset: reset,
+    MAX_TIMEOUT_MS: MAX_TIMEOUT_MS,
 };
