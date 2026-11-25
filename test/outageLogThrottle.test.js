@@ -97,6 +97,37 @@ Test.describe('outageLogThrottle', () => {
         Assert.strictEqual(Throttle.isActive(), true);
     });
 
+    Test.it('keeps the outage of one log out of the others and reports it into that log', () => {
+        const { clock, summaries } = setup();
+        const guildSummaries = [];
+        const writeGuild = (text) => guildSummaries.push(text);
+
+        /* One guild cannot reach its service: its own log has an outage, the bot log and other guilds do not. */
+        for (let i = 0; i < Throttle.FAILURES_TO_START; i++) {
+            Throttle.shouldWrite('guild:1', 'WARNING', DNS, 'warn', writeGuild);
+            clock.ms += 1000;
+        }
+
+        Assert.strictEqual(Throttle.isActive('guild:1'), true);
+        Assert.strictEqual(Throttle.isActive('guild:2'), false);
+        Assert.strictEqual(Throttle.isActive('default'), false);
+
+        Assert.strictEqual(Throttle.shouldWrite('guild:1', 'ERROR', 'Switch 1 failed.', 'error', writeGuild), true);
+        Assert.strictEqual(Throttle.shouldWrite('guild:1', 'ERROR', 'Switch 2 failed.', 'error', writeGuild), false);
+        Assert.strictEqual(Throttle.shouldWrite('guild:2', 'ERROR', 'Switch 1 failed.', 'error'), true);
+        Assert.strictEqual(Throttle.shouldWrite('guild:2', 'ERROR', 'Switch 2 failed.', 'error'), true);
+        Assert.strictEqual(Throttle.shouldWrite('default', 'ERROR', 'Message 1 not deleted.', 'error'), true);
+        Assert.strictEqual(Throttle.shouldWrite('default', 'ERROR', 'Message 2 not deleted.', 'error'), true);
+
+        clock.ms += Throttle.QUIET_MS;
+        Throttle.check();
+
+        Assert.strictEqual(Throttle.isActive(), false);
+        Assert.strictEqual(guildSummaries.length, 1, 'the summary goes into the log that left the lines out');
+        Assert.match(guildSummaries[0], /1x "ERROR: Switch 1 failed\."/);
+        Assert.deepStrictEqual(summaries, [], 'the bot log has nothing to report');
+    });
+
     Test.it('takes the stack and the ids out of the kind', () => {
         const a = Throttle.kindOf('default', 'ERROR', "[\n  'Message send failed: ',\n  '    at onConnectTimeout (/app/x.js:1:2)'\n]");
         const b = Throttle.kindOf('default', 'ERROR', "[\n  'Message send failed: ',\n  '    at other (/app/y.js:9:9)'\n]");

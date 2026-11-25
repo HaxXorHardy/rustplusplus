@@ -43,8 +43,9 @@ class Logger {
         this.guildId = null;
         this.serverName = null;
 
-        /* The bot log tells when an outage is over and what it left out. */
-        if (type === 'default') OutageLogThrottle.setWriter((summary) => this.log('INFO', summary, 'info'));
+        /* Each log tells when its outage is over and what it left out; the bot log for a scope without a logger. */
+        this.writeOutageSummary = (summary) => this.log('INFO', summary, 'info');
+        if (type === 'default') OutageLogThrottle.setWriter(this.writeOutageSummary);
     }
 
     setGuildId(guildId) {
@@ -80,9 +81,12 @@ class Logger {
         let time = this.getTime();
         const formatted = this.formatError(text, level === 'error' && Config.general.showCallStackError);
 
-        /* During a network outage each kind of warning and error is written once (util/outageLogThrottle.js). */
+        /*
+            During a network outage of this log each kind of warning and error is written once, the summary of what was
+            left out comes into this log as well (util/outageLogThrottle.js).
+        */
         const scope = this.type === 'guild' ? `guild:${this.guildId}` : this.type;
-        if (!OutageLogThrottle.shouldWrite(scope, title, formatted, level)) return;
+        if (!OutageLogThrottle.shouldWrite(scope, title, formatted, level, this.writeOutageSummary)) return;
 
         const lines = formatted.split(/\r?\n/);
         lines[0] = `${title}: ${lines[0]}`;

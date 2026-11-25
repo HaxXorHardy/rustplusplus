@@ -31,6 +31,10 @@
       outage that goes on writes that line every REPORT_EVERY_MS as well, then the kinds are written once again.
 
     Outside an outage nothing is held back, and debug and info lines are never held back.
+
+    Each log (scope: the bot log and every guild log) has its own outage: one unreachable service of one guild, or a
+    BattleMetrics endpoint that keeps timing out, must not quiet the repeated errors of every other guild. A real
+    outage of the host reaches every log anyway. The summary goes to the log that left the lines out.
 */
 
 const QUIET_MS = 5 * 60 * 1000;
@@ -46,9 +50,11 @@ const NETWORK_FAILURE = new RegExp([
     'socket hang up', 'timeout of \\d+ms exceeded', 'Connect Timeout Error', 'network socket disconnected',
 ].join('|'));
 
-let state = null;           /* { startMs, lastFailureMs, lastReportMs, kinds: Map(kind -> { text, suppressed }) } */
-let recentFailures = [];    /* times of the network failures before an outage started */
-let writer = null;          /* (text) => void, writes the summary line */
+/* scope -> { startMs, lastFailureMs, lastReportMs, kinds: Map(kind -> { text, suppressed }) } */
+const states = new Map();
+const recentFailures = new Map();   /* scope -> times of the network failures before an outage started */
+const writers = new Map();          /* scope -> (text) => void, writes the summary line into that log */
+let defaultWriter = null;           /* the bot log, for a scope without a writer of its own */
 let timer = null;
 let now = () => Date.now();
 
@@ -76,7 +82,7 @@ function minutes(ms) {
     return Math.max(1, Math.round(ms / 60000));
 }
 
-function summary(ended) {
+function summary(state, ended) {
     const kinds = [...state.kinds.values()].filter((kind) => kind.suppressed > 0)
         .sort((a, b) => b.suppressed - a.suppressed);
     const total = kinds.reduce((sum, kind) => sum + kind.suppressed, 0);
@@ -96,7 +102,8 @@ function summary(ended) {
     return `${text}.`;
 }
 
-function report(text) {
+function report(scope, text) {
+    const writer = writers.get(scope) || defaultWriter;
     if (typeof writer !== 'function') return;
 
     try {
@@ -107,25 +114,30 @@ function report(text) {
     }
 }
 
-/* Ends a quiet outage and reports a long one. Called by the timer and before each line. */
-function check() {
-    if (state === null) return;
-
+/* Ends a quiet outage and reports a long one, of one scope or of all. Called by the timer and before each line. */
+function check(scope) {
+    const scopes = scope === undefined ? [...states.keys()] : [scope];
     const time = now();
 
-    if (time - state.lastFailureMs >= QUIET_MS) {
-        const text = summary(true);
-        state = null;
-        stopTimer();
-        report(text);
-        return;
+    for (const key of scopes) {
+        const state = states.get(key);
+        if (!state) continue;
+
+        if (time - state.lastFailureMs >= QUIET_MS) {
+            const text = summary(state, true);
+            states.delete(key);
+            report(key, text);
+            continue;
+        }
+
+        if (time - state.lastReportMs >= REPORT_EVERY_MS) {
+            report(key, summary(state, false));
+            state.lastReportMs = time;
+            state.kinds.clear();
+        }
     }
 
-    if (time - state.lastReportMs >= REPORT_EVERY_MS) {
-        report(summary(false));
-        state.lastReportMs = time;
-        state.kinds.clear();
-    }
+    if (states.size === 0) stopTimer();
 }
 
 function startTimer() {
@@ -144,13 +156,17 @@ function stopTimer() {
 
 /*
     True when the line is written, false when it is a repeat during an outage. scope tells loggers apart (the bot log
-    and each guild log), text is the formatted line with all its lines.
+    and each guild log), text is the formatted line with all its lines. write, if given, writes the summary of this
+    scope into its own log.
 */
-function shouldWrite(scope, title, text, level) {
+function shouldWrite(scope, title, text, level, write) {
     if (level !== 'warn' && level !== 'error') return true;
 
-    check();
+    if (typeof write === 'function') writers.set(scope, write);
 
+    check(scope);
+
+    let state = states.get(scope) || null;
     const failure = isNetworkFailure(`${title} ${text}`);
 
     if (failure) {
@@ -158,13 +174,17 @@ function shouldWrite(scope, title, text, level) {
 
         if (state === null) {
             /* One failed request is no outage: it takes FAILURES_TO_START within START_WINDOW_MS. */
-            recentFailures = recentFailures.filter((ms) => time - ms < START_WINDOW_MS);
-            recentFailures.push(time);
+            const recent = (recentFailures.get(scope) || []).filter((ms) => time - ms < START_WINDOW_MS);
+            recent.push(time);
 
-            if (recentFailures.length >= FAILURES_TO_START) {
-                state = { startMs: recentFailures[0], lastFailureMs: time, lastReportMs: time, kinds: new Map() };
-                recentFailures = [];
+            if (recent.length >= FAILURES_TO_START) {
+                state = { startMs: recent[0], lastFailureMs: time, lastReportMs: time, kinds: new Map() };
+                states.set(scope, state);
+                recentFailures.delete(scope);
                 startTimer();
+            }
+            else {
+                recentFailures.set(scope, recent);
             }
         }
         else {
@@ -186,21 +206,23 @@ function shouldWrite(scope, title, text, level) {
     return false;
 }
 
-/* The summary goes to the bot log (set by the Logger of type 'default'). */
+/* The bot log (set by the Logger of type 'default'): summaries of a scope that gave no writer of its own. */
 function setWriter(fn) {
-    writer = fn;
+    defaultWriter = fn;
 }
 
-function isActive() {
-    return state !== null;
+/* Whether an outage is on, in one scope or in any. */
+function isActive(scope) {
+    return scope === undefined ? states.size > 0 : states.has(scope);
 }
 
 /* Tests: a fake clock and a clean state. */
 function reset(options = {}) {
     stopTimer();
-    state = null;
-    recentFailures = [];
-    writer = null;
+    states.clear();
+    recentFailures.clear();
+    writers.clear();
+    defaultWriter = null;
     now = options.now || (() => Date.now());
 }
 
