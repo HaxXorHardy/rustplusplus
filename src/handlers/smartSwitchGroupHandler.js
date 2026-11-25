@@ -359,7 +359,9 @@ module.exports = {
         return { switched: switched, failed: failed };
     },
 
-    smartSwitchGroupCommandHandler: async function (rustplus, client, command) {
+    smartSwitchGroupCommandHandler: async function (rustplus, client, chatCommand) {
+        /* Without regard to case, like the switch commands ("!lights OFF" used to be swallowed without a reply). */
+        const command = `${chatCommand}`.toLowerCase();
         const guildId = rustplus.guildId;
         const serverId = rustplus.serverId;
         const instance = client.getInstance(guildId);
@@ -370,20 +372,20 @@ module.exports = {
         const offCap = client.intlGet(rustplus.guildId, 'offCap');
         const notFoundCap = client.intlGet(rustplus.guildId, 'notFoundCap');
 
-        const onEn = client.intlGet('en', 'commandSyntaxOn');
-        const onLang = client.intlGet(guildId, 'commandSyntaxOn');
-        const offEn = client.intlGet('en', 'commandSyntaxOff');
-        const offLang = client.intlGet(guildId, 'commandSyntaxOff');
-        const statusEn = client.intlGet('en', 'commandSyntaxStatus');
-        const statusLang = client.intlGet(guildId, 'commandSyntaxStatus');
+        const onEn = client.intlGet('en', 'commandSyntaxOn').toLowerCase();
+        const onLang = client.intlGet(guildId, 'commandSyntaxOn').toLowerCase();
+        const offEn = client.intlGet('en', 'commandSyntaxOff').toLowerCase();
+        const offLang = client.intlGet(guildId, 'commandSyntaxOff').toLowerCase();
+        const statusEn = client.intlGet('en', 'commandSyntaxStatus').toLowerCase();
+        const statusLang = client.intlGet(guildId, 'commandSyntaxStatus').toLowerCase();
 
+        const groupCommandOf = (e) => `${prefix}${switchGroups[e].command}`.toLowerCase();
         const groupId = Object.keys(switchGroups).find(e =>
-            command === `${prefix}${switchGroups[e].command}` ||
-            command.startsWith(`${prefix}${switchGroups[e].command} `));
+            command === groupCommandOf(e) || command.startsWith(`${groupCommandOf(e)} `));
 
         if (!groupId) return false;
 
-        const groupCommand = `${prefix}${switchGroups[groupId].command}`;
+        const groupCommand = groupCommandOf(groupId);
         let rest = command.replace(`${groupCommand} ${onEn}`, '');
         rest = rest.replace(`${groupCommand} ${onLang}`, '');
         rest = rest.replace(`${groupCommand} ${offEn}`, '');

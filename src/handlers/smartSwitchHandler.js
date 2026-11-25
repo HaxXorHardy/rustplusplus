@@ -396,7 +396,12 @@ module.exports = {
         }
     },
 
-    smartSwitchCommandHandler: async function (rustplus, client, command) {
+    smartSwitchCommandHandler: async function (rustplus, client, chatCommand) {
+        /*
+            In-game commands match without regard to case, like the built-in ones: "!lamp OFF" used to miss "off" and
+            fall through to the toggle, which turned an OFF lamp ON.
+        */
+        const command = `${chatCommand}`.toLowerCase();
         const guildId = rustplus.guildId;
         const serverId = rustplus.serverId;
         const instance = client.getInstance(guildId);
@@ -406,20 +411,20 @@ module.exports = {
         const onCap = client.intlGet(guildId, 'onCap');
         const offCap = client.intlGet(guildId, 'offCap');
 
-        const onEn = client.intlGet('en', 'commandSyntaxOn');
-        const onLang = client.intlGet(guildId, 'commandSyntaxOn');
-        const offEn = client.intlGet('en', 'commandSyntaxOff');
-        const offLang = client.intlGet(guildId, 'commandSyntaxOff');
-        const statusEn = client.intlGet('en', 'commandSyntaxStatus');
-        const statusLang = client.intlGet(guildId, 'commandSyntaxStatus');
+        const onEn = client.intlGet('en', 'commandSyntaxOn').toLowerCase();
+        const onLang = client.intlGet(guildId, 'commandSyntaxOn').toLowerCase();
+        const offEn = client.intlGet('en', 'commandSyntaxOff').toLowerCase();
+        const offLang = client.intlGet(guildId, 'commandSyntaxOff').toLowerCase();
+        const statusEn = client.intlGet('en', 'commandSyntaxStatus').toLowerCase();
+        const statusLang = client.intlGet(guildId, 'commandSyntaxStatus').toLowerCase();
 
+        const entityCommandOf = (e) => `${prefix}${switches[e].command}`.toLowerCase();
         const entityId = Object.keys(switches).find(e =>
-            command === `${prefix}${switches[e].command}` ||
-            command.startsWith(`${prefix}${switches[e].command} `));
+            command === entityCommandOf(e) || command.startsWith(`${entityCommandOf(e)} `));
 
         if (!entityId) return false;
 
-        const entityCommand = `${prefix}${switches[entityId].command}`;
+        const entityCommand = entityCommandOf(entityId);
         let rest = command.replace(`${entityCommand} ${onEn}`, '');
         rest = rest.replace(`${entityCommand} ${onLang}`, '');
         rest = rest.replace(`${entityCommand} ${offEn}`, '');
