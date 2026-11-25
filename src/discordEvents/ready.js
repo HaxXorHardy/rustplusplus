@@ -179,9 +179,17 @@ module.exports = {
                     else if (device.entityType === RustPlusSync.ENTITY_TYPES.ALARM) {
                         await DiscordMessages.sendSmartAlarmMessage(device.guildId, device.serverKey, device.entityId);
 
-                        /* The socket subscribes its alarms when it connects, an alarm paired later is subscribed here. */
+                        /*
+                            The socket subscribes its alarms when it connects, an alarm paired later is subscribed here.
+                            Not awaited: the request may wait for tokens and its timeout, the other devices of the
+                            pairing do not wait for it. subscribeAlarm logs a failure itself.
+                        */
                         if (RustPlusPushNotifications.isConnectedTo(client, device.guildId, device.serverKey)) {
-                            await client.rustplusInstances[device.guildId].subscribeAlarm(device.entityId);
+                            client.rustplusInstances[device.guildId].subscribeAlarm(device.entityId).catch((e) => {
+                                client.log(client.intlGet(null, 'warningCap'),
+                                    `The alarm ${device.entityId} could not be subscribed: ${e && e.message ? e.message : e}`,
+                                    'warn');
+                            });
                         }
                     }
                     else if (device.entityType === RustPlusSync.ENTITY_TYPES.STORAGE_MONITOR) {

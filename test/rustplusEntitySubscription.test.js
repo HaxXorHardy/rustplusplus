@@ -105,4 +105,36 @@ Test.describe('RustPlus.subscribeAlarm', () => {
             Client.client = previousClient;
         }
     });
+
+    Test.it('marks an alarm the server does not know like subscribeEntities, and again reachable when it works',
+        async () => {
+            const previousClient = Client.client;
+            const alarm = { name: 'Base' };
+            const instance = fakeInstance({ alarms: { '7854530': alarm } });
+            let saved = 0;
+            Client.client = { intlGet: () => 'INFO', getInstance: () => instance, setInstance: () => { saved += 1; } };
+
+            try {
+                const gone = fakeRustplus();
+                gone.setSubscriptionAsync = async () => ({ error: 'not_found' });
+
+                Assert.strictEqual(await RustPlus.prototype.subscribeAlarm.call(gone, '7854530'), false);
+                Assert.strictEqual(alarm.reachable, false);
+                Assert.strictEqual(saved, 1);
+
+                Assert.strictEqual(await RustPlus.prototype.subscribeAlarm.call(fakeRustplus(), '7854530'), true);
+                Assert.strictEqual(alarm.reachable, true);
+                Assert.strictEqual(saved, 2);
+
+                /* A timeout says nothing about the entity. */
+                const slow = fakeRustplus();
+                slow.setSubscriptionAsync = async () => new Error('Timeout reached while waiting for response');
+                Assert.strictEqual(await RustPlus.prototype.subscribeAlarm.call(slow, '7854530'), false);
+                Assert.strictEqual(alarm.reachable, true);
+                Assert.strictEqual(saved, 2);
+            }
+            finally {
+                Client.client = previousClient;
+            }
+        });
 });

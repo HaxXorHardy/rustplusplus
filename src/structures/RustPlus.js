@@ -65,6 +65,29 @@ const TOKENS_WAIT_TIMEOUT_MS = 30 * 1000;
 */
 const CONNECTION_REBUILD_MIN_MS = 60 * 1000;
 
+/*
+    Subscribe one alarm: { ok, gone, reason }. gone when the server does not know the entity anymore (not_found:
+    destroyed in game, or paired with another server). setSubscriptionAsync resolves with the error instead of throwing
+    it, a throw is caught all the same. Shared by subscribeEntities and subscribeAlarm.
+*/
+async function subscribeAlarmEntity(rustplus, id) {
+    let response;
+
+    try {
+        response = await rustplus.setSubscriptionAsync(`${id}`, true);
+    }
+    catch (e) {
+        return { ok: false, gone: false, reason: e && e.message ? e.message : `${e}` };
+    }
+
+    if (response instanceof Error) return { ok: false, gone: false, reason: response.message };
+    if (response && response.error) {
+        return { ok: false, gone: `${response.error}`.includes('not_found'), reason: `${response.error}` };
+    }
+
+    return { ok: true, gone: false, reason: null };
+}
+
 class RustPlus extends RustPlusLib {
     /* The auto ON/OFF timers of switches and groups: per guild and server, they outlive a reconnect. */
     get currentSwitchTimeouts() { return SwitchTimeouts.of(this.guildId, this.serverId); }
@@ -820,29 +843,21 @@ class RustPlus extends RustPlusLib {
             /* A device that the server does not know anymore is not asked again on every reconnect. */
             if (alarm && alarm.reachable === false) continue;
 
-            try {
-                const response = await this.setSubscriptionAsync(id, true);
+            const result = await subscribeAlarmEntity(this, id);
 
-                /* setSubscriptionAsync resolves with the error instead of throwing it. */
-                if (response instanceof Error || (response && response.error)) {
-                    this.log(Client.client.intlGet(null, 'warningCap'),
-                        `Could not subscribe to alarm ${id}.`, 'debug');
+            if (!result.ok) {
+                this.log(Client.client.intlGet(null, 'warningCap'),
+                    `Could not subscribe to alarm ${id}: ${result.reason}`, 'debug');
 
-                    /* not_found means the entity is gone (destroyed in game, or paired with another server). */
-                    if (alarm && response && `${response.error}`.includes('not_found')) {
-                        alarm.reachable = false;
-                        changed = true;
-                    }
-
-                    continue;
+                if (alarm && result.gone) {
+                    alarm.reachable = false;
+                    changed = true;
                 }
 
-                subscribed++;
+                continue;
             }
-            catch (e) {
-                this.log(Client.client.intlGet(null, 'warningCap'),
-                    `Could not subscribe to alarm ${id}: ${e && e.message ? e.message : e}`, 'debug');
-            }
+
+            subscribed++;
         }
 
         if (changed) Client.client.setInstance(this.guildId, instance);
@@ -855,13 +870,21 @@ class RustPlus extends RustPlusLib {
         the socket connects, without a subscription the server never reports the triggers of the alarm.
     */
     async subscribeAlarm(entityId) {
-        const response = await this.setSubscriptionAsync(`${entityId}`, true);
-        const failed = response instanceof Error || Boolean(response && response.error);
+        const result = await subscribeAlarmEntity(this, entityId);
 
-        if (failed) {
-            const reason = response instanceof Error ? response.message : response.error;
+        /* Like subscribeEntities: an entity the server does not know is not asked again on every reconnect. */
+        const instance = typeof Client.client.getInstance === 'function' ? Client.client.getInstance(this.guildId) : null;
+        const server = instance && instance.serverList ? instance.serverList[this.serverId] : null;
+        const alarm = server && server.alarms ? server.alarms[`${entityId}`] : null;
+
+        if (alarm && (result.gone || (result.ok && alarm.reachable === false))) {
+            alarm.reachable = !result.gone;
+            Client.client.setInstance(this.guildId, instance);
+        }
+
+        if (!result.ok) {
             this.log(Client.client.intlGet(null, 'warningCap'),
-                `Could not subscribe to the alarm ${entityId}: ${reason}`, 'warn');
+                `Could not subscribe to the alarm ${entityId}: ${result.reason}`, 'warn');
             return false;
         }
 
