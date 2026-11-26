@@ -1,6 +1,8 @@
 # Commands Documentation
 
-> Commands can be executed via Discord or In-Game Chat. To be able to run Slash Commands in Discord, you need to be part of the designated Discord Role for the bot. If no role is set for the bot then everyone should be able to use the Slash Commands by default. To be able to run In-Game Commands, you need to be in the same In-Game Team (or Clan) as the hoster. In-Game Commands can only be run from the In-Game Team Chat or Clan Chat, not global chat. Which of the two is used by the bot is configured with the `In-Game Chat Channel` setting in the `settings` Channel (see [Discord Text Channels](discord_text_channels.md#clanchat-channel)). You can also run In-Game commands from the Discord Text-Channel `commands`.
+> Commands can be executed via Discord or In-Game Chat. To be able to run Slash Commands in Discord, you need to be part of the designated Discord Role for the bot. If no role is set for the bot then everyone should be able to use the Slash Commands by default. To be able to run In-Game Commands, you need to be in the same In-Game Team (or Clan) as the hoster. In-Game Commands can only be run from the In-Game Team Chat or Clan Chat, not global chat. Which of the two is used by the bot is configured with the `In-Game Chat Channel` setting in the `settings` Channel (see [Discord Text Channels](discord_text_channels.md#clanchat-channel)). You can also run In-Game commands from the Discord Text-Channel `commands`. In-Game commands start with the prefix set in the `settings` Channel, `!` by default (the examples below use `!`).
+
+> **Administrator-only commands:** `/whitelist`, `/blacklist`, `/ingameaccess` and `/role` always need the Discord **Administrator** permission, whatever `RPP_NEED_ADMIN_PRIVILEGES` is set to. `/reset`, `/credentials set_hoster`, `/credentials remove` for a credential of another user and `/removedevices` need the Administrator permission while `RPP_NEED_ADMIN_PRIVILEGES` is `true` (default); with `false` everyone with the bot role may run them. Blacklisted Discord users cannot run any command unless they are administrators.
 
 - [Discord Slash Commands](commands.md#discord-slash-commands)
 - [In-Game Commands](commands.md#in-game-commands)
@@ -68,12 +70,17 @@ Subcommand | Options | Description | Required
 &nbsp; | `index` | The index of the alias to remove. | `True`
 `show` | &nbsp; | Show all registered aliases. | &nbsp;
 
+`add` and `remove` need the Administrator permission, `show` is open to everyone with the bot role.
+
 ![Discord Slash Command alias Image](images/slash_commands/alias.png)
 
 
 ## **/blacklist**
 
-> **Blacklist a user from using the bot.**
+> **Blacklist a user from using the bot.** Administrator only. `add` and `remove` take a Discord user, a Steam ID or both; at least one of the two is required.
+>
+> - A blacklisted **Discord user** loses the view and write access to the rustplusplus channels and cannot run slash commands, buttons, select menus or modals of the bot (administrators are exempt).
+> - A blacklisted **Steam ID** is ignored in the in-game chat: its in-game commands get no answer while `/ingameaccess` is in `blacklist` mode (default). In `whitelist` mode the blacklist does not matter, only whitelisted Steam IDs are answered.
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -90,12 +97,12 @@ Subcommand | Options | Description | Required
 
 ## **/ingameaccess**
 
-> **Set in-game command access mode.**
+> **Set in-game command access mode.** Administrator only. `blacklist` (default): everyone in the team may run in-game commands except the Steam IDs on the `/blacklist`. `whitelist`: only the Steam IDs on the `/whitelist` may run them.
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
 `mode` | &nbsp; | Set access mode for in-game commands. | &nbsp;
-&nbsp; | `mode` | Select blacklist or whitelist mode. | `True`
+&nbsp; | `mode` | `blacklist` or `whitelist`. | `True`
 `show` | &nbsp; | Show current in-game command access mode. | &nbsp;
 
 
@@ -146,10 +153,10 @@ Subcommand | Options | Description | Required
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
 `login` | &nbsp; | Log in and fetch the Rust+ token and the server ids: QR code of the Steam app, pasted account token or the password form, see [Credentials](credentials.md). | &nbsp;
-`remove` | &nbsp; | Remove Credentials. | &nbsp;
+`remove` | &nbsp; | Remove Credentials. Without `steam_id` your own credential is removed; removing the credential of another user needs admin rights (`RPP_NEED_ADMIN_PRIVILEGES`). | &nbsp;
 &nbsp; | `steam_id` | Steam ID. | `False`
 `show` | &nbsp; | Show all registered Credentials. | &nbsp;
-`set_hoster` | &nbsp; | Set the hoster. | &nbsp;
+`set_hoster` | &nbsp; | Set the hoster. Without `steam_id` your own credential becomes the hoster. Needs admin rights (`RPP_NEED_ADMIN_PRIVILEGES`). | &nbsp;
 &nbsp; | `steam_id` | Steam ID. | `False`
 
 
@@ -160,7 +167,7 @@ Subcommand | Options | Description | Required
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
 &nbsp; | `player` | Only the deaths of this player (part of the name). | `False`
-&nbsp; | `hours` | Only the deaths of the last hours. | `False`
+&nbsp; | `hours` | Only the deaths of the last hours (at least 1). | `False`
 
 
 ## **/decay**
@@ -207,7 +214,7 @@ Subcommand | Options | Description | Required
 
 ## **/leader**
 
-> **Give or take the leadership from/to a team member.**
+> **Give or take the leadership from/to a team member.** Needs a connected server, the `leader` command switched on in the `settings` Channel (on by default) and a current team leader whose account is paired with the bot. With the setting that limits it to paired players, the new leader has to be paired with the bot as well.
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -281,6 +288,7 @@ Subcommand | Options | Description | Required
 &nbsp; | `name` | The name of the item to recycle. | `False`
 &nbsp; | `id` | The id of the item to recycle. | `False`
 &nbsp; | `quantity` | The quantity of items to recycle. | `False`
+&nbsp; | `recycler-type` | `recycler`, `shredder` or `safe-zone-recycler`. | `False`
 
 ![Discord Slash Command recycle Image](images/slash_commands/recycle.png)
 
@@ -304,7 +312,7 @@ Subcommand | Options | Description | Required
 
 ## **/reset**
 
-> **Reset Discord channels.**
+> **Reset Discord channels.** Needs admin rights with `RPP_NEED_ADMIN_PRIVILEGES` (default).
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -322,7 +330,7 @@ Subcommand | Options | Description | Required
 
 ## **/role**
 
-> **Set/Clear a specific role that will be able to see the rustplusplus category content.**
+> **Set/Clear a specific role that will be able to see the rustplusplus category content.** Administrator only.
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -404,7 +412,7 @@ Subcommand | Options | Description | Required
 
 ## **/whitelist**
 
-> **Whitelist a user for in-game bot commands.**
+> **Whitelist a user for in-game bot commands.** Administrator only. The whitelist is only used while `/ingameaccess` is in `whitelist` mode.
 
 Subcommand | Options | Description | Required
 ---------- | ------- | ----------- | --------
@@ -586,12 +594,12 @@ In-Game Command | Description
 
 ## **leader**
 
-> **Give/Take the Team Leadership.** Calling the leader command alone will give the caller leadership. You can also give the leadership to a team member by writing the name or part of the name after the command.
-<br>`This command only works if the current leader is the person that setup the bot.`
+> **Give/Take the Team Leadership.** Calling the leader command alone will give the caller leadership. You can also give the leadership to a team member by writing the exact name of the team member after the command. Sent from the Discord `commands` channel, the command needs the Administrator permission.
+<br>`This command only works if the leader command is switched on in the settings channel and the current leader is an account paired with the bot.`
 
 Subcommand | Description | Required
 ---------- | ----------- | --------
-`<team_member_name>` | The name or part of the name of a team member (`!leader <name>`). | `False`
+`<team_member_name>` | The exact name of a team member (`!leader <name>`). | `False`
 
 ![In-Game Command leader Image](images/ingame_commands/leader_ingame.png)
 
