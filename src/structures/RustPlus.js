@@ -137,7 +137,6 @@ class RustPlus extends RustPlusLib {
         this.storageMonitors = new Object();        /* Contain content information of paired storage monitors. */
         this.passedFirstSunriseOrSunset = false;    /* Becomes true when first sunrise/sunset. */
         this.startTimeObject = new Object();        /* Stores in-game time points before first sunrise/sunset. */
-        this.informationIntervalCounter = 0;        /* Counter to decide when information should be updated. */
         this.storageMonitorIntervalCounter = null;  /* Counter to decide when storage monitors should be updated */
         this.smartSwitchIntervalCounter = 10;       /* Counter to decide when smart switches should be updated */
         this.smartAlarmIntervalCounter = 20;        /* Counter to decide when smart alarms should be updated */

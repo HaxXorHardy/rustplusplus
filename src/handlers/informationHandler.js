@@ -44,51 +44,67 @@ async function warmTeamTimePlayed(rustplus) {
 }
 
 module.exports = {
+    /*
+        Called after every poll (10 s), as the original bot did: the team message used to follow only the information
+        cycle, so a member who came online or died kept the old status for minutes. sendInformationMessage edits only
+        when the embed changed, the poll does not wait for the edit and a refresh still running is not doubled.
+    */
+    refreshTeam: function (rustplus) {
+        const instance = Client.client.getInstance(rustplus.guildId);
+        /* No team message yet: the information cycle creates it, in its place in the channel. */
+        if (!instance || !instance.informationMessageId || !instance.informationMessageId.team) return;
+        if (!rustplus.team || rustplus.teamRefreshPending) return;
+
+        rustplus.teamRefreshPending = true;
+        DiscordMessages.sendUpdateTeamInformationMessage(rustplus)
+            .catch((e) => {
+                rustplus.log(Client.client.intlGet(null, 'warningCap'),
+                    `The team message could not be refreshed: ${e && e.message ? e.message : e}`, 'warn');
+            })
+            .finally(() => { rustplus.teamRefreshPending = false; });
+    },
+
     handler: async function (rustplus) {
-        if (rustplus.informationIntervalCounter === 0) {
-            const instance = Client.client.getInstance(rustplus.guildId);
+        /*
+            Every background cycle (60 s, handlers/backgroundHandler.js). The counter of the old 10 s poll was kept
+            when this moved there, which made it one update in six minutes. Unchanged messages are not edited
+            (sendInformationMessage) and the order check has its own interval.
+        */
+        const instance = Client.client.getInstance(rustplus.guildId);
 
-            phase(rustplus, 'server');
-            await DiscordMessages.sendUpdateServerInformationMessage(rustplus);
+        phase(rustplus, 'server');
+        await DiscordMessages.sendUpdateServerInformationMessage(rustplus);
 
-            phase(rustplus, 'monuments');
-            if (instance.generalSettings.displayInformationMonumentInformation) {
-                await DiscordMessages.sendUpdateMonumentInformationMessage(rustplus);
-            }
-            else {
-                await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'monument');
-            }
-
-            phase(rustplus, 'events');
-            /* No event section while the API sends no event markers (util/mapEvents.js). */
-            if (instance.generalSettings.displayInformationEventInformation && MapEvents.enabled()) {
-                await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
-            }
-            else {
-                await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'event');
-            }
-
-            phase(rustplus, 'time played');
-            try {
-                await WithTimeout.withTimeout(warmTeamTimePlayed(rustplus), WARM_TIME_PLAYED_TIMEOUT_MS,
-                    'warming the time played');
-            }
-            catch (e) {
-                rustplus.log(Client.client.intlGet(null, 'infoCap'),
-                    `The team message goes on without it: ${e && e.message ? e.message : e}`, 'debug');
-            }
-
-            phase(rustplus, 'team');
-            await DiscordMessages.sendUpdateTeamInformationMessage(rustplus);
-            phase(rustplus, 'order');
-            await DiscordMessages.ensureInformationMessageOrder(rustplus);
-        }
-
-        if (rustplus.informationIntervalCounter === 5) {
-            rustplus.informationIntervalCounter = 0;
+        phase(rustplus, 'monuments');
+        if (instance.generalSettings.displayInformationMonumentInformation) {
+            await DiscordMessages.sendUpdateMonumentInformationMessage(rustplus);
         }
         else {
-            rustplus.informationIntervalCounter += 1;
+            await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'monument');
         }
+
+        phase(rustplus, 'events');
+        /* No event section while the API sends no event markers (util/mapEvents.js). */
+        if (instance.generalSettings.displayInformationEventInformation && MapEvents.enabled()) {
+            await DiscordMessages.sendUpdateEventInformationMessage(rustplus);
+        }
+        else {
+            await DiscordMessages.deleteInformationMessage(rustplus.guildId, 'event');
+        }
+
+        phase(rustplus, 'time played');
+        try {
+            await WithTimeout.withTimeout(warmTeamTimePlayed(rustplus), WARM_TIME_PLAYED_TIMEOUT_MS,
+                'warming the time played');
+        }
+        catch (e) {
+            rustplus.log(Client.client.intlGet(null, 'infoCap'),
+                `The team message goes on without it: ${e && e.message ? e.message : e}`, 'debug');
+        }
+
+        phase(rustplus, 'team');
+        await DiscordMessages.sendUpdateTeamInformationMessage(rustplus);
+        phase(rustplus, 'order');
+        await DiscordMessages.ensureInformationMessageOrder(rustplus);
     },
 }

@@ -19,6 +19,7 @@
 */
 
 const Info = require('../structures/Info');
+const InformationHandler = require('../handlers/informationHandler.js');
 const CameraWatchHandler = require('../handlers/cameraWatchHandler.js');
 const MapMarkers = require('../structures/MapMarkers.js');
 const MapEvents = require('../util/mapEvents.js');
@@ -319,6 +320,7 @@ module.exports = {
     handlers: async function (rustplus, client, info, mapMarkers, teamInfo, time) {
         await runHandler(rustplus, client, 'the team', () => TeamHandler.handler(rustplus, client, teamInfo.teamInfo));
         rustplus.team.updateTeam(teamInfo.teamInfo);
+        await runHandler(rustplus, client, 'the team message', () => InformationHandler.refreshTeam(rustplus));
 
         /* Online time of the week; when the week changed the finished one is reported. */
         await runHandler(rustplus, client, 'the team stats', async () => {
