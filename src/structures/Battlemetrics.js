@@ -344,8 +344,10 @@ class Battlemetrics {
         const parsed = new Object();
         parsed['players'] = [];
 
+        if (!data || !Array.isArray(data.data)) return parsed;
+
         for (const entity of data.data) {
-            if (entity.type !== 'leaderboardPlayer') continue;
+            if (!entity || entity.type !== 'leaderboardPlayer' || !entity.attributes) continue;
 
             const player = new Object();
             player['id'] = entity.id;
@@ -357,7 +359,7 @@ class Battlemetrics {
             parsed['players'].push(player);
         }
 
-        if (data.hasOwnProperty('links') && data['links'].hasOwnProperty('next')) {
+        if (data.links && data.links.hasOwnProperty('next')) {
             parsed['next'] = data.links.next;
         }
 
@@ -445,7 +447,11 @@ class Battlemetrics {
 
         let isDifferent = false;
         if (Array.isArray(value1) || Array.isArray(value2)) {
-            if (value1.length != value2.length || !value1.every(function (u, i) { return u === value2[i] })) {
+            /* map_monuments is null while Battlemetrics has no rust_maps data: null against an array is a change. */
+            if (!Array.isArray(value1) || !Array.isArray(value2)) {
+                isDifferent = true;
+            }
+            else if (value1.length != value2.length || !value1.every(function (u, i) { return u === value2[i] })) {
                 isDifferent = true;
             }
         }
@@ -524,7 +530,7 @@ class Battlemetrics {
             if (!this.id) return;
         }
 
-        this.updateStreamerMode();
+        await this.updateStreamerMode();
 
         this.lastUpdateSuccessful = true;
         await this.evaluation(null, true);
@@ -652,7 +658,7 @@ class Battlemetrics {
             data = await this.request(this.GET_SERVER_DATA_API_CALL(this.id));
         }
 
-        if (!data) {
+        if (!data || !data.data || !data.data.attributes) {
             this.lastUpdateSuccessful = false;
             Client.client.log(Client.client.intlGet(null, 'errorCap'),
                 Client.client.intlGet(null, 'battlemetricsFailedToUpdate', { server: this.id }), 'error');
@@ -685,7 +691,7 @@ class Battlemetrics {
         this.#evaluateServerParameter('server_country', this.server_country, attributes.country, firstTime);
         this.#evaluateServerParameter('server_queryStatus', this.server_queryStatus, attributes.queryStatus, firstTime);
 
-        const details = attributes.details;
+        const details = attributes.details || {};
         this.#evaluateServerParameter('server_official', this.server_official, details.official, firstTime);
         this.#evaluateServerParameter('server_rust_type', this.server_rust_type, details.rust_type, firstTime);
         this.#evaluateServerParameter('server_map', this.server_map, details.map, firstTime);
@@ -745,9 +751,10 @@ class Battlemetrics {
         this.onlinePlayers = [];
         this.offlinePlayers = [];
 
-        const included = data.included;
+        const included = Array.isArray(data.included) ? data.included : [];
         for (const entity of included) {
-            if (entity.type !== 'player') continue;
+            if (!entity || entity.type !== 'player' || !entity.attributes) continue;
+            const metadata = (entity.meta && Array.isArray(entity.meta.metadata)) ? entity.meta.metadata : [];
 
             const name = Utils.removeInvisibleCharacters(entity.attributes.name);
 
@@ -778,7 +785,7 @@ class Battlemetrics {
                 this.players[entity.id]['positiveMatch'] = entity.attributes.positiveMatch;
                 this.players[entity.id]['createdAt'] = entity.attributes.createdAt;
                 this.players[entity.id]['updatedAt'] = entity.attributes.updatedAt;
-                const firstTimeVar = entity.meta.metadata.find(e => e.key === 'firstTime');
+                const firstTimeVar = metadata.find(e => e && e.key === 'firstTime');
                 if (firstTimeVar) this.players[entity.id]['firstTime'] = firstTimeVar.value;
 
                 /* Other */
@@ -815,7 +822,7 @@ class Battlemetrics {
                 this.players[entity.id]['positiveMatch'] = entity.attributes.positiveMatch;
                 this.players[entity.id]['createdAt'] = entity.attributes.createdAt;
                 this.players[entity.id]['updatedAt'] = entity.attributes.updatedAt;
-                const firstTime = entity.meta.metadata.find(e => e.key === 'firstTime');
+                const firstTime = metadata.find(e => e && e.key === 'firstTime');
                 if (firstTime) this.players[entity.id]['firstTime'] = firstTime.value;
 
                 /* Other */
@@ -882,7 +889,7 @@ class Battlemetrics {
         this.server_country = attributes.country;
         this.server_queryStatus = attributes.queryStatus;
 
-        const details = attributes.details;
+        const details = attributes.details || {};
         this.server_official = details.official;
         this.server_rust_type = details.rust_type;
         this.server_map = details.map;
