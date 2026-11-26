@@ -124,4 +124,54 @@ module.exports = {
         const path = Path.join(__dirname, '..', '..', 'credentials', `${guildId}.json`);
         AtomicWriteFile(path, JSON.stringify(credentials, null, 2));
     },
+
+    /**
+     * Move a JSON file that cannot be parsed aside as <file>.corrupt-<timestamp>, so the caller can create a fresh
+     * one with the defaults instead of failing on every start. The broken file is kept for a manual repair.
+     * @param {string} path The JSON file.
+     * @param {Date} [now]
+     * @returns {(string|null)} The path the file was moved to, null when it is missing or valid.
+     */
+    quarantineCorruptJsonFile: function (path, now = new Date()) {
+        if (!Fs.existsSync(path)) return null;
+
+        try {
+            JSON.parse(Fs.readFileSync(path, 'utf8'));
+            return null;
+        }
+        catch (e) {
+            if (!(e instanceof SyntaxError)) throw e;
+        }
+
+        const target = `${path}.corrupt-${now.toISOString().replace(/[:.]/g, '-')}`;
+        Fs.renameSync(path, target);
+
+        return target;
+    },
+
+    /**
+     * Check the instance and credentials file of a guild before they are read on startup or when the bot joins.
+     * A corrupt file is moved aside (see quarantineCorruptJsonFile) and reported loudly; the caller recreates it
+     * with the defaults.
+     * @param {string} guildId
+     * @param {function(string): void} report Receives the error text for every file that was moved aside.
+     * @returns {string[]} The paths the corrupt files were moved to.
+     */
+    quarantineCorruptGuildFiles: function (guildId, report) {
+        const moved = [];
+
+        for (const directory of ['instances', 'credentials']) {
+            const path = Path.join(__dirname, '..', '..', directory, `${guildId}.json`);
+            const target = module.exports.quarantineCorruptJsonFile(path);
+
+            if (target !== null) {
+                moved.push(target);
+                report(`${directory}/${guildId}.json is not valid JSON. It was moved to ${Path.basename(target)} ` +
+                    'and recreated with the defaults: the settings of this guild are reset' +
+                    (directory === 'credentials' ? ' and its Rust+ credentials have to be added again.' : '.'));
+            }
+        }
+
+        return moved;
+    },
 }

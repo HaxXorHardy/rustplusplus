@@ -25,6 +25,7 @@ const BattlemetricsHandler = require('../handlers/battlemetricsHandler.js');
 const Config = require('../../config');
 const CredentialsExpiryHandler = require('../handlers/credentialsExpiryHandler.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
+const InstanceUtils = require('../util/instanceUtils.js');
 const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusHistory = require('../util/rustplusHistory.js');
 const RustPlusPushListener = require('../util/rustplusPushListener.js');
@@ -55,13 +56,32 @@ async function refreshStorageMonitors(client, device) {
     return true;
 }
 
+/* The startup of one guild failed: say which one and why, the startup goes on with the next guild. */
+function logGuildFailure(client, guild, what, error) {
+    const name = guild.name ? ` (${guild.name})` : '';
+
+    client.log(client.intlGet(null, 'errorCap'),
+        `Guild ${guild.id}${name} ${what}, it is skipped: ${client.logger.formatError(error, true)}`, 'error');
+}
+
 module.exports = {
     name: 'clientReady',
     once: true,
     async execute(client) {
+        /*
+            Every guild on its own: one broken guild (corrupt file, missing permissions, a member fetch that times out)
+            must not stop the others, nor the timers and connections that are started below.
+        */
         for (const guild of client.guilds.cache) {
-            require('../util/createInstanceFile')(client, guild[1]);
-            require('../util/createCredentialsFile')(client, guild[1]);
+            try {
+                InstanceUtils.quarantineCorruptGuildFiles(guild[1].id,
+                    (text) => client.log(client.intlGet(null, 'errorCap'), text, 'error'));
+                require('../util/createInstanceFile')(client, guild[1]);
+                require('../util/createCredentialsFile')(client, guild[1]);
+            }
+            catch (e) {
+                logGuildFailure(client, guild[1], 'could not be loaded', e);
+            }
         }
 
         client.loadGuildsIntl();
@@ -93,18 +113,33 @@ module.exports = {
         for (let guildArray of client.guilds.cache) {
             const guild = guildArray[1];
 
+            /* A guild whose files could not be loaded has no instance, setting it up would only fail again. */
+            if (!client.getInstance(guild.id)) continue;
+
             try {
                 await guild.members.me.setNickname(Config.discord.username);
             }
             catch (e) {
                 client.log(client.intlGet(null, 'warningCap'), client.intlGet(null, 'ignoreSetNickname'));
             }
-            await client.syncCredentialsWithUsers(guild);
-            await client.setupGuild(guild);
+
+            try {
+                await client.syncCredentialsWithUsers(guild);
+                await client.setupGuild(guild);
+            }
+            catch (e) {
+                logGuildFailure(client, guild, 'could not be set up', e);
+            }
         }
 
         if (Config.battlemetrics.enabled) {
-            await client.updateBattlemetricsInstances();
+            try {
+                await client.updateBattlemetricsInstances();
+            }
+            catch (e) {
+                client.log(client.intlGet(null, 'warningCap'),
+                    `The Battlemetrics servers could not be loaded: ${e && e.message ? e.message : e}`, 'warn');
+            }
             /* A failed round is logged and the next one tries again, it must not end as an Unhandled Rejection. */
             const runBattlemetrics = (firstTime) => BattlemetricsHandler.handler(client, firstTime).catch((e) => {
                 client.log(client.intlGet(null, 'warningCap'),
@@ -124,7 +159,13 @@ module.exports = {
         }
 
         /* Notify users when their stored Rust+ credentials are about to expire or have expired. */
-        await CredentialsExpiryHandler.handler(client, true);
+        try {
+            await CredentialsExpiryHandler.handler(client, true);
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `The expiry check of the credentials failed: ${e && e.message ? e.message : e}`, 'warn');
+        }
         client.credentialsExpiryIntervalId = setInterval(CredentialsExpiryHandler.handler,
             Config.general.credentialsExpiryCheckIntervalMs, client, false);
 
@@ -330,7 +371,12 @@ module.exports = {
             if (repaired) client.setInstance(guildId, instance);
 
             /* Every server of the instance has to be listed, also one that was adopted while the bot was down. */
-            await SetupServerList.postMissingServerMessages(client, guildId);
+            try {
+                await SetupServerList.postMissingServerMessages(client, guildId);
+            }
+            catch (e) {
+                logGuildFailure(client, { id: guildId, name: '' }, 'could not post its server messages', e);
+            }
 
             /* Activate the only server of the guild, createRustplusInstancesFromConfig() connects it then. */
             if (instance.activeServer === null && serverIds.length === 1) {

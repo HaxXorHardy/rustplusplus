@@ -18,9 +18,13 @@
 
 */
 
+const InstanceUtils = require('../util/instanceUtils.js');
+
 module.exports = {
     name: 'guildCreate',
     async execute(client, guild) {
+        InstanceUtils.quarantineCorruptGuildFiles(guild.id,
+            (text) => client.log(client.intlGet(null, 'errorCap'), text, 'error'));
         require('../util/createInstanceFile')(client, guild);
         require('../util/createCredentialsFile')(client, guild);
 

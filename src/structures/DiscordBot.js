@@ -159,7 +159,15 @@ class DiscordBot extends Discord.Client {
 
     loadGuildsIntl() {
         for (const guild of this.guilds.cache) {
-            this.loadGuildIntl(guild[0]);
+            /* One guild with a broken file must not stop the startup of the others, it uses the bot language. */
+            try {
+                this.loadGuildIntl(guild[0]);
+            }
+            catch (e) {
+                this.guildIntl[guild[0]] = this.botIntl;
+                this.log(this.intlGet(null, 'errorCap'),
+                    `The language of guild ${guild[0]} could not be loaded: ${this.logger.formatError(e)}`, 'error');
+            }
         }
     }
 
