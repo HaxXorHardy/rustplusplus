@@ -149,11 +149,6 @@ module.exports = {
             if (elapsedMs < SNAPSHOT_MS) await camera.collect(SNAPSHOT_MS - elapsedMs);
             const rendered = camera.frameCount === 0 ? null : await camera.render();
 
-            for (const stranger of fresh) {
-                CameraWatch.markAlert(state, CameraWatch.alertKey(code, stranger), nowMs);
-            }
-            rustplus.cameraAlertState = state;
-
             await DiscordMessages.sendCameraAlertMessage(rustplus, {
                 code: code,
                 name: cameraSettings.name || null,
@@ -161,6 +156,12 @@ module.exports = {
                 png: rendered === null ? null : rendered.buffer,
                 coverage: rendered === null ? 0 : rendered.coverage,
             });
+
+            /* Only a sent alert starts the cooldown: a failed send is tried again next round, not hidden 10 minutes. */
+            for (const stranger of fresh) {
+                CameraWatch.markAlert(state, CameraWatch.alertKey(code, stranger), nowMs);
+            }
+            rustplus.cameraAlertState = state;
 
             return result;
         }

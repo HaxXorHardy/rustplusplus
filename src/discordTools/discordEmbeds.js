@@ -1504,13 +1504,29 @@ module.exports = {
             return (stranger.distance === null) ? `- ${name}` : `- ${name} (${stranger.distance} m)`;
         });
 
+        /* An embed description holds 4096 characters: a crowd in front of the camera must not make the alert fail. */
+        const DESCRIPTION_LIMIT = 4000;
+        const shown = [];
+        let length = 0;
+        for (let i = 0; i < lines.length; i++) {
+            const rest = lines.length - i - 1;
+            const more = rest > 0 ? `\n${Client.client.intlGet(guildId, 'andMorePlayers', { number: rest })}` : '';
+            const added = (shown.length === 0 ? 0 : 1) + lines[i].length;
+            if (length + added + more.length > DESCRIPTION_LIMIT) {
+                shown.push(Client.client.intlGet(guildId, 'andMorePlayers', { number: lines.length - i }));
+                break;
+            }
+            shown.push(lines[i]);
+            length += added;
+        }
+
         const options = {
             color: Constants.COLOR_DEFAULT,
             timestamp: true,
             title: Client.client.intlGet(guildId, 'cameraAlertTitle', {
                 camera: cameraName === null ? cameraCode : `${cameraName} (${cameraCode})`
             }),
-            description: lines.length === 0 ? Client.client.intlGet(guildId, 'cameraAlertNoPlayers') : lines.join('\n')
+            description: shown.length === 0 ? Client.client.intlGet(guildId, 'cameraAlertNoPlayers') : shown.join('\n')
         };
 
         if (imageName) options.image = `attachment://${imageName}`;
