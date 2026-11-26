@@ -141,6 +141,29 @@ Test.describe('RustServerList.getAddress', () => {
 
         Assert.strictEqual(calls.count, 2);
     });
+
+    for (const [label, result] of [['an empty list', []], ['no list', null]]) {
+        Test.it(`keeps the old addresses and asks again soon after ${label}`, async (t) => {
+            const base = 1794000000000;
+            const original = Date.now;
+            Date.now = () => base;
+            t.after(() => {
+                Date.now = original;
+            });
+
+            await RustServerList.getAddress('Rustpc.uk | Casual | Gifts', { fetch: stubFetch(SERVERS).fetch });
+
+            const { calls, fetch } = stubFetch(result);
+            Date.now = () => base + RustServerList.SERVER_LIST_TTL_MS + 1000;
+            Assert.strictEqual(await RustServerList.getAddress('Rustpc.uk | Casual | Gifts', { fetch }),
+                '195.140.215.31:28025');
+            Assert.strictEqual(calls.count, 1);
+
+            Date.now = () => base + RustServerList.SERVER_LIST_TTL_MS + RustServerList.SERVER_LIST_RETRY_MS + 2000;
+            await RustServerList.getAddress('Rustpc.uk | Casual | Gifts', { fetch });
+            Assert.strictEqual(calls.count, 2, 'retried after the retry window, not after a whole TTL');
+        });
+    }
 });
 
 Test.describe('RustServerList.getConnectCommand', () => {

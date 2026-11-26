@@ -115,7 +115,11 @@ async function ensureAddresses(fetchList) {
             addresses = null;
         }
 
-        if (addresses !== null) {
+        /*
+            buildAddressMap() turns a list that could not be read (null) into an empty map. The game lists more than
+            10000 servers, so an empty map is a failure as well: keep the old one and ask again soon.
+        */
+        if (addresses !== null && addresses.size > 0) {
             cache.addresses = addresses;
             cache.at = Date.now();
         }
