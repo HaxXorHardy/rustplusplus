@@ -353,6 +353,16 @@ class DiscordBot extends Discord.Client {
             this.rustplusInstances[guildId].deleteThisRustplusInstance();
         }
 
+        /*
+            A reconnect that is still pending belongs to the connection this one replaces. When it fires later (after
+            the history activated another server, a login, a renewed pairing) it would kill this healthy instance and
+            switch the guild back to the old server.
+        */
+        if (this.rustplusReconnectTimers[guildId]) {
+            clearTimeout(this.rustplusReconnectTimers[guildId]);
+            this.rustplusReconnectTimers[guildId] = null;
+        }
+
         let rustplus = new RustPlus(guildId, serverIp, appPort, steamId, playerToken, useFacepunchProxy);
 
         /* Add rustplus instance to Object */
