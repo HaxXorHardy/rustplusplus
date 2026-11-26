@@ -95,6 +95,25 @@ Test.describe('fcm/mcsParser', () => {
         Assert.strictEqual(messages[1].object.appData[0].value, longValue);
     });
 
+    Test.it('joins the chunks of a large message only once it is complete', (t) => {
+        const longValue = 'y'.repeat(3000);
+        const stream = Buffer.concat([Buffer.from([MCS_VERSION]), dataMessage('0:4', [{ key: 'body', value: longValue }]),
+            Buffer.from([TAGS.heartbeatPing])]);
+        const parser = new McsParser();
+        const concat = t.mock.method(Buffer, 'concat');
+        const messages = [];
+
+        for (let i = 0; i < stream.length; i += 100) messages.push(...parser.push(stream.subarray(i, i + 100)));
+
+        Assert.strictEqual(messages.length, 1);
+        Assert.strictEqual(messages[0].object.appData[0].value, longValue);
+        Assert.ok(concat.mock.callCount() <= 3, `Buffer.concat ran ${concat.mock.callCount()} times`);
+
+        /* The started heartbeat waits for its size byte. */
+        Assert.strictEqual(parser.length, 1);
+        Assert.deepStrictEqual(parser.push(Buffer.from([0])), [{ tag: TAGS.heartbeatPing, object: {} }]);
+    });
+
     Test.it('rejects an old version, an unknown tag and an oversized message', () => {
         Assert.throws(() => new McsParser().push(Buffer.from([30, TAGS.loginResponse, 0])), /version 30/);
         Assert.throws(() => new McsParser().push(Buffer.from([MCS_VERSION, 99, 0])), /Unknown MCS tag 99/);

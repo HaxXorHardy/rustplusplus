@@ -99,11 +99,26 @@ class McsParser {
     constructor() {
         this.buffer = Buffer.alloc(0);
         this.versionRead = false;
+
+        /* Received bytes not joined yet, and how many bytes the next message needs at least. */
+        this.chunks = [];
+        this.length = 0;
+        this.needed = 1;
     }
 
-    /* Adds received bytes and returns the complete messages [{ tag, object }]. Throws on a broken stream. */
+    /*
+        Adds received bytes and returns the complete messages [{ tag, object }]. Throws on a broken stream. The chunks
+        are only joined once they can complete a message: a large message in many small chunks is not copied again
+        with each one.
+    */
     push(chunk) {
-        this.buffer = this.buffer.length === 0 ? Buffer.from(chunk) : Buffer.concat([this.buffer, chunk]);
+        this.chunks.push(chunk);
+        this.length += chunk.length;
+        if (this.length < this.needed) return [];
+
+        this.buffer = this.chunks.length === 1 ? this.chunks[0] : Buffer.concat(this.chunks, this.length);
+        this.chunks = [];
+        this.length = 0;
 
         const messages = [];
         let message = this.next();
@@ -112,14 +127,26 @@ class McsParser {
             message = this.next();
         }
 
+        /* The rest waits for the next chunk. */
+        if (this.buffer.length > 0) {
+            this.chunks.push(this.buffer);
+            this.length = this.buffer.length;
+        }
+        this.buffer = Buffer.alloc(0);
+
         return messages;
     }
 
+    /* The next complete message of this.buffer, or null - then this.needed is the length that may complete it. */
     next() {
         let offset = 0;
+        const incomplete = (needed) => {
+            this.needed = needed;
+            return null;
+        };
 
         if (!this.versionRead) {
-            if (this.buffer.length < 1) return null;
+            if (this.buffer.length < 1) return incomplete(1);
 
             const version = this.buffer[0];
             if (version < MCS_VERSION && version !== MCS_VERSION_OLD) {
@@ -128,16 +155,16 @@ class McsParser {
             offset = 1;
         }
 
-        if (this.buffer.length < offset + 1) return null;
+        if (this.buffer.length < offset + 1) return incomplete(offset + 1);
         const tag = this.buffer[offset];
         offset += 1;
 
         const size = readVarint32(this.buffer, offset);
-        if (size === null) return null;
+        if (size === null) return incomplete(this.buffer.length + 1);
         if (size.value > MAX_MESSAGE_SIZE) throw new Error(`MCS message of ${size.value} bytes is too large.`);
         offset += size.length;
 
-        if (this.buffer.length < offset + size.value) return null;
+        if (this.buffer.length < offset + size.value) return incomplete(offset + size.value);
 
         const name = TYPE_NAMES[tag];
         if (!name) throw new Error(`Unknown MCS tag ${tag}.`);
