@@ -164,6 +164,45 @@ Test.describe('Rust+ authenticated socket', () => {
         Assert.deepStrictEqual(eventNames(rustplus), ['connecting', 'error', 'disconnected']);
     });
 
+    /* Without a socket no 'close' ever came, the instance stayed connecting and never retried. */
+    Test.it('reports a disconnect when the socket cannot be built', async () => {
+        const rustplus = fakeRustplus();
+
+        class ThrowingWebSocket {
+            constructor() { throw new Error('Invalid URL'); }
+        }
+
+        RustPlusSocket.connectAuthenticatedSocket(rustplus, 'server-guid', 'auth-token',
+            { WebSocketImpl: ThrowingWebSocket });
+
+        for (let i = 0; i < 200 && !eventNames(rustplus).includes('disconnected'); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+
+        Assert.deepStrictEqual(eventNames(rustplus), ['connecting', 'error', 'disconnected']);
+        Assert.strictEqual(errors(rustplus)[0].message, 'Invalid URL');
+    });
+
+    Test.it('leaves the disconnect to the replaced socket when the new one cannot be built', async () => {
+        const rustplus = fakeRustplus();
+        rustplus.websocket = {};
+
+        class ThrowingWebSocket {
+            constructor() { throw new Error('Invalid URL'); }
+        }
+
+        RustPlusSocket.connectAuthenticatedSocket(rustplus, 'server-guid', 'auth-token',
+            { WebSocketImpl: ThrowingWebSocket });
+
+        for (let i = 0; i < 200 && !eventNames(rustplus).includes('error'); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        /* The 'close' of the replaced socket emits 'disconnected', a second one would schedule two reconnects. */
+        Assert.deepStrictEqual(eventNames(rustplus), ['connecting', 'error']);
+    });
+
     Test.it('keeps a socket that completes the handshake', async () => {
         const rustplus = fakeRustplus();
         const socket = await connect(rustplus, 20);

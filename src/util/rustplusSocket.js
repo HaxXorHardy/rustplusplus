@@ -175,6 +175,9 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
 
     const WebSocketImpl = settings.WebSocketImpl;
 
+    /* Set when a running socket was replaced: its own 'close' reports the disconnect then, see the catch below. */
+    let replacedSocket = false;
+
     loadProtoRoot().then((root) => {
         /*
             The proto file loads asynchronously: an instance that was retired meanwhile (its 'disconnected' event
@@ -196,6 +199,7 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
             stopHeartbeat(rustplus);
             failPendingRequests(rustplus);
 
+            replacedSocket = true;
             rustplus.disconnect();
         }
 
@@ -341,7 +345,17 @@ function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
 
             rustplus.emit('disconnected');
         });
-    }).catch((e) => rustplus.emit('error', e));
+    }).catch((e) => {
+        rustplus.emit('error', e);
+
+        /*
+            The proto could not be loaded, or the socket could not be built (new WebSocket throws on a bad URL). Only
+            'disconnected' starts the reconnect, and without a socket no 'close' ever emits it: the instance stayed
+            connecting forever. A socket that is still running, or one that was just replaced (its 'close' reports
+            the disconnect), needs nothing here.
+        */
+        if (!rustplus.isDeleted && !rustplus.websocket && !replacedSocket) rustplus.emit('disconnected');
+    });
 }
 
 module.exports = {
