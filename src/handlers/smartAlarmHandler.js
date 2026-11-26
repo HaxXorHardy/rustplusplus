@@ -41,11 +41,19 @@ module.exports = {
             for (const entityId in instance.serverList[serverId].alarms) {
                 instance = client.getInstance(guildId);
 
+                /* The alarm may be deleted while a request or a Discord call is awaited. */
+                const gone = () => {
+                    instance = client.getInstance(guildId);
+                    const server = instance.serverList[serverId];
+                    return !server || !server.alarms || !server.alarms[entityId];
+                };
+
                 /* A device the server does not know anymore is asked once an hour instead of on every round. */
                 if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
 
                 const info = await rustplus.getEntityInfoAsync(entityId);
                 const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
+                if (gone()) continue;
 
                 /* No answer is no not_found: the alarm is asked again on the next round. */
                 if (!answered && !UnreachableDevices.isNotFound(info)) continue;
@@ -55,6 +63,7 @@ module.exports = {
 
                     if (instance.serverList[serverId].alarms[entityId].reachable) {
                         await DiscordMessages.sendSmartAlarmNotFoundMessage(guildId, serverId, entityId);
+                        if (gone()) continue;
 
                         instance.serverList[serverId].alarms[entityId].reachable = false;
                         client.setInstance(guildId, instance);
@@ -75,6 +84,7 @@ module.exports = {
                         */
                         if (typeof rustplus.subscribeAlarm === 'function') {
                             await rustplus.subscribeAlarm(entityId).catch(() => false);
+                            if (gone()) continue;
                         }
 
                         await DiscordMessages.sendSmartAlarmMessage(guildId, serverId, entityId);

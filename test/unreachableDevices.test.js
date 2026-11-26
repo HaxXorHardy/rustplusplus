@@ -152,4 +152,46 @@ Test.describe('smart alarm round', () => {
         Assert.strictEqual(instance.serverList.server.alarms[1].reachable, true);
         Assert.deepStrictEqual(rustplus.subscribed, ['1'], 'only the one that was skipped by the connect');
     });
+
+    Test.it('skips an alarm that was deleted while it was asked and goes on with the next', async (t) => {
+        const { instance, rustplus, client } = setup(t, { 1: { reachable: true }, 2: { reachable: false } },
+            { 1: { error: 'not_found' }, 2: { entityInfo: { payload: { value: false } } } });
+        const ask = rustplus.getEntityInfoAsync;
+        rustplus.getEntityInfoAsync = async function (entityId) {
+            if (entityId === '1') delete instance.serverList.server.alarms[1];
+            return ask.call(this, entityId);
+        };
+
+        await Assert.doesNotReject(SmartAlarmHandler.handler(rustplus, client));
+
+        Assert.strictEqual(instance.serverList.server.alarms[1], undefined);
+        Assert.strictEqual(instance.serverList.server.alarms[2].reachable, true, 'the next alarm is still handled');
+    });
+});
+
+Test.describe('storage monitor round', () => {
+    const StorageMonitorHandler = require('../src/handlers/storageMonitorHandler.js');
+
+    Test.it('skips a monitor that was deleted while it was asked and goes on with the next', async (t) => {
+        const instance = { serverList: { server: { storageMonitors: {
+            1: { reachable: true, name: 'A' }, 2: { reachable: true, name: 'B' } } } } };
+        const rustplus = {
+            guildId: 'guild',
+            serverId: 'server',
+            storageMonitorIntervalCounter: null,
+            storageMonitors: {},
+            async getEntityInfoAsync(entityId) {
+                if (entityId === '1') delete instance.serverList.server.storageMonitors[1];
+                return { entityInfo: { payload: { items: [], capacity: 30, protectionExpiry: 0 } } };
+            },
+            async isResponseValid(response) { return Boolean(response && response.entityInfo); },
+        };
+        const client = { getInstance: () => instance, setInstance: () => undefined };
+        const messages = t.mock.method(DiscordMessages, 'sendStorageMonitorMessage', async () => undefined);
+
+        await Assert.doesNotReject(StorageMonitorHandler.handler(rustplus, client));
+
+        Assert.deepStrictEqual(messages.mock.calls.map((c) => c.arguments[2]), ['2']);
+        Assert.strictEqual(rustplus.storageMonitors[1], undefined);
+    });
 });

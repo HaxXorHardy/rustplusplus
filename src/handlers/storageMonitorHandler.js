@@ -91,11 +91,19 @@ module.exports = {
             for (const entityId in instance.serverList[serverId].storageMonitors) {
                 instance = client.getInstance(guildId);
 
+                /* The monitor may be deleted while a request or a Discord call is awaited. */
+                const gone = () => {
+                    instance = client.getInstance(guildId);
+                    const server = instance.serverList[serverId];
+                    return !server || !server.storageMonitors || !server.storageMonitors[entityId];
+                };
+
                 /* A device the server does not know anymore is asked once an hour instead of on every round. */
                 if (UnreachableDevices.isUnreachable(rustplus, entityId)) continue;
 
                 const info = await rustplus.getEntityInfoAsync(entityId);
                 const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
+                if (gone()) continue;
 
                 /* No answer is no not_found: the monitor is asked again on the next round. */
                 if (!answered && !UnreachableDevices.isNotFound(info)) continue;
@@ -105,6 +113,7 @@ module.exports = {
 
                     if (instance.serverList[serverId].storageMonitors[entityId].reachable) {
                         await DiscordMessages.sendStorageMonitorNotFoundMessage(guildId, serverId, entityId);
+                        if (gone()) continue;
                     }
                     instance.serverList[serverId].storageMonitors[entityId].reachable = false;
                 }
@@ -121,6 +130,7 @@ module.exports = {
                             info.entityInfo.payload.capacity === 0)) {
                         await DiscordMessages.sendStorageMonitorDisconnectNotificationMessage(
                             guildId, serverId, entityId);
+                        if (gone()) continue;
                     }
 
                     rustplus.storageMonitors[entityId] = {
@@ -139,6 +149,7 @@ module.exports = {
 
                                 await DiscordMessages.sendDecayingNotificationMessage(
                                     guildId, serverId, entityId);
+                                if (gone()) continue;
 
                                 if (instance.serverList[serverId].storageMonitors[entityId].inGame) {
                                     rustplus.sendInGameMessage(client.intlGet(rustplus.guildId, 'isDecaying', {
@@ -169,6 +180,7 @@ module.exports = {
                 }
 
                 await DiscordMessages.sendStorageMonitorMessage(guildId, serverId, entityId);
+                if (gone()) continue;
                 await StorageAlerts.check(client, rustplus, entityId);
             }
         }
