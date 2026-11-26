@@ -73,6 +73,34 @@ Test.describe('storage alerts', () => {
         const result = StorageAlerts.evaluate(entity, storage);
         Assert.deepStrictEqual(result.fired.map((f) => f.quantity), [1500, 0]);
     });
+
+    Test.it('does not check a disconnected or unpowered monitor (capacity 0)', async (t) => {
+        const DiscordMessages = require('../src/discordTools/discordMessages.js');
+        const sent = [];
+        t.mock.method(DiscordMessages, 'sendStorageAlertMessage', async (g, s, id, text) => { sent.push(text); });
+
+        const entity = { name: 'Box', reachable: true, inGame: false,
+            alerts: StorageAlerts.parse(items, 'sulfur < 100').rules };
+        const instance = { serverList: { server: { storageMonitors: { 5: entity } } } };
+        const client = {
+            items: items,
+            getInstance: () => instance,
+            setInstance: () => undefined,
+            intlGet: (guildId, key) => key,
+        };
+        const rustplus = {
+            guildId: 'guild', serverId: 'server', log: () => undefined, sendInGameMessage: () => undefined,
+            storageMonitors: { 5: { capacity: 0, items: [] } },
+        };
+
+        await StorageAlerts.check(client, rustplus, '5');
+        Assert.deepStrictEqual(sent, [], 'no "Sulfur < 100" for an unpowered box');
+        Assert.ok(!entity.alerts[0].triggered);
+
+        rustplus.storageMonitors[5] = { capacity: 30, items: [] };
+        await StorageAlerts.check(client, rustplus, '5');
+        Assert.strictEqual(sent.length, 1, 'a powered empty box is checked');
+    });
 });
 
 /* The real item list of the game: names carry calibres and prefixes nobody types. */

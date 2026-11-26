@@ -183,6 +183,8 @@ async function check(client, rustplus, entityId) {
     const storage = rustplus.storageMonitors ? rustplus.storageMonitors[entityId] : null;
     /* An unreachable monitor keeps its last contents: checking them would report a state that is gone. */
     if (!entity || !storage || entity.reachable === false) return;
+    /* Capacity 0: the monitor is disconnected or has no power, its empty item list says nothing about the box. */
+    if (storage.capacity === 0) return;
 
     const result = evaluate(entity, storage.items);
     if (result.changed) client.setInstance(rustplus.guildId, instance);
