@@ -299,6 +299,19 @@ Test.describe('fcm/mcsClient', () => {
         Assert.deepStrictEqual(received[0].appData, [{ key: 'title', value: 'Raid' }]);
     });
 
+    Test.it('keeps only the newest persistent ids of a long connection', async (t) => {
+        const { client, sockets } = clientWithFakes(t);
+        const max = McsClient.MAX_PERSISTENT_IDS;
+
+        await startConnect(client);
+        sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
+        for (let i = 0; i < max + 10; i++) sockets[0].emit('data', dataMessage(`0:${i}`));
+
+        Assert.strictEqual(client._persistentIds.size, max);
+        Assert.ok(!client._persistentIds.has('0:0'));
+        Assert.ok(client._persistentIds.has(`0:${max + 9}`));
+    });
+
     Test.it('reconnects after a drop and after a broken stream, and stops on destroy', async (t) => {
         t.mock.timers.enable({ apis: ['setTimeout'] });
         const { client, sockets, checkIns } = clientWithFakes(t);
@@ -340,7 +353,7 @@ Test.describe('fcm/mcsClient', () => {
         Assert.deepStrictEqual(events, ['disconnect']);
         Assert.strictEqual(client._heartbeatTimer, null);
         /* The ids were not delivered by a rejected login. */
-        Assert.deepStrictEqual(client._persistentIds, ['0:old']);
+        Assert.deepStrictEqual([...client._persistentIds], ['0:old']);
 
         t.mock.timers.tick(1000);
         await new Promise((resolve) => setImmediate(resolve));

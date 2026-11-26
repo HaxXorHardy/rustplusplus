@@ -45,6 +45,8 @@ const PORT = 5228;
 const MAX_RETRY_SECONDS = 15;
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 const LOGIN_TIMEOUT_MS = 30 * 1000;
+/* The ids of the data messages since the last login: duplicates are not emitted, the login acknowledges them. */
+const MAX_PERSISTENT_IDS = 500;
 
 class McsClient extends EventEmitter {
     /* deps: { checkIn, connectSocket } for tests. */
@@ -52,7 +54,7 @@ class McsClient extends EventEmitter {
         super();
         this._androidId = `${androidId}`;
         this._securityToken = `${securityToken}`;
-        this._persistentIds = Array.isArray(persistentIds) ? [...persistentIds] : [];
+        this._persistentIds = new Set(Array.isArray(persistentIds) ? persistentIds.slice(-MAX_PERSISTENT_IDS) : []);
         this._checkIn = deps.checkIn || AndroidFcm.checkIn;
         this._connectSocket = deps.connectSocket || ((options) => Tls.connect(options));
         this._retryCount = 0;
@@ -174,7 +176,7 @@ class McsClient extends EventEmitter {
             }
 
             /* The ids went to the server with the login; it does not send these messages again. */
-            this._persistentIds = [];
+            this._persistentIds = new Set();
             this._retryCount = 0;
             this._startHeartbeat();
             this.emit('connect');
@@ -188,8 +190,15 @@ class McsClient extends EventEmitter {
             this._send(TAGS.heartbeatAck, 'HeartbeatAck', {});
         }
         else if (tag === TAGS.dataMessageStanza) {
-            if (object.persistentId && this._persistentIds.includes(object.persistentId)) return;
-            if (object.persistentId) this._persistentIds.push(object.persistentId);
+            if (object.persistentId) {
+                if (this._persistentIds.has(object.persistentId)) return;
+
+                /* Kept to the newest MAX_PERSISTENT_IDS: a connection that lasts for weeks must not grow without end. */
+                this._persistentIds.add(object.persistentId);
+                if (this._persistentIds.size > MAX_PERSISTENT_IDS) {
+                    this._persistentIds.delete(this._persistentIds.values().next().value);
+                }
+            }
             this.emit('ON_DATA_RECEIVED', object);
         }
     }
@@ -210,7 +219,7 @@ class McsClient extends EventEmitter {
             useRmq2: true,
             setting: [{ name: 'new_vc', value: '1' }],
             clientEvent: [],
-            receivedPersistentId: this._persistentIds,
+            receivedPersistentId: [...this._persistentIds],
         };
 
         const error = LoginRequest.verify(request);
@@ -296,5 +305,6 @@ class McsClient extends EventEmitter {
 
 McsClient.HEARTBEAT_INTERVAL_MS = HEARTBEAT_INTERVAL_MS;
 McsClient.LOGIN_TIMEOUT_MS = LOGIN_TIMEOUT_MS;
+McsClient.MAX_PERSISTENT_IDS = MAX_PERSISTENT_IDS;
 
 module.exports = McsClient;
