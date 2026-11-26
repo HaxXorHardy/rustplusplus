@@ -99,33 +99,38 @@ is gone as well - its settings were removed in 1.50.3, so no event notification 
 <a name="rustplus-connection-problems"></a>
 ## The bot cannot connect to the server (reconnect loop, `ECONNRESET` / `socket hang up`)
 
-The bot reaches the Rust+ websocket of the server in one of two ways:
+The bot reaches the Rust+ websocket of the server through **Facepunch's authenticated relay**, the same way the
+Rust+ app does it (see [the transport the Rust+ app uses](#the-transport-the-rust-app-uses-verified-2026-11-07)):
 
 | Transport | Endpoint | When it is used |
 |---|---|---|
-| direct | `ws://<server-ip>:<app-port>` | default, fastest |
-| Facepunch proxy | `wss://companion-rust.facepunch.com/game/<server-ip>/<app-port>` | when the app port is not reachable from the outside or direct connections do not work |
+| authenticated relay | `wss://companion-rust.facepunch.com/socket/<pairing-id>?v=<build>` | normal path: whenever an account token (`/credentials login`) and the pairing id of the server are known |
+| direct | `ws://<server-ip>:<app-port>` | legacy fallback without a login - **removed by Facepunch**, it does not work anymore |
+| Facepunch proxy | `wss://companion-rust.facepunch.com/game/<server-ip>/<app-port>` | legacy fallback without a login - disabled by Facepunch as well |
+
+So a reconnect loop almost always means the login is missing, expired or does not list the server: run
+`/credentials login` in Discord again (see [Credentials](docs/credentials.md)). The log says which case it is
+(`No Rust+ account token stored ...`, `The stored Rust+ account token has expired ...`, `The server id of ... is
+unknown ...`).
 
 `ERROR: Error [code=ECONNRESET]: socket hang up` directly after `CONNECTING` means the TCP connection is accepted
-and dropped again. Typical causes:
+and dropped again. With the relay that typically means the server is offline or restarting (for example during a
+wipe). On the legacy fallback it is what every server answers now, since the Rust server code removed the direct
+connections (see the commit `rustplus_remove_direct` / `#168162`).
 
-* the server is offline or restarting (for example during a wipe),
-* the **app port** changed after a wipe/restart - check the app port and add the server again,
-* the hosting provider does not expose the app port to the internet (NAT, proxy, DDoS protection),
-* direct connections to the Rust+ websocket are not accepted by the server anymore (the Rust server code removed
-  support for them, see the commit `rustplus_remove_direct` / `#168162`).
-
-The transport is configured with `RPP_RUSTPLUS_TRANSPORT` in the `.env` file:
+`RPP_RUSTPLUS_TRANSPORT` in the `.env` file only chooses between the two legacy fallbacks, it is not used while the
+relay is usable:
 
 | Value | Behaviour |
 |---|---|
 | `auto` (default) | direct first, after 3 failed attempts in a row the Facepunch proxy is used |
 | `direct` | only direct connections (`ws://...`) |
-| `proxy` | only the Facepunch proxy (`wss://companion-rust.facepunch.com/...`) |
+| `proxy` | only the Facepunch proxy (`wss://companion-rust.facepunch.com/game/...`) |
 
 The `CONNECTING` line in the log shows which endpoint is used:
 
 ```
+CONNECTING: CONNECTING TO SERVER... (authenticated wss://companion-rust.facepunch.com/socket/<pairing-id>?v=1792502454122)
 CONNECTING: CONNECTING TO SERVER... (direct ws://1.2.3.4:28082)
 CONNECTING: CONNECTING TO SERVER... (Facepunch proxy companion-rust.facepunch.com/game/1.2.3.4/28082, 3 direct attempt(s) failed)
 ```
@@ -145,13 +150,14 @@ The probe only opens (and immediately closes) the websocket, so no player token 
   proxy   wss://companion-rust.facepunch.com/game/1.2.3.4/28018  HTTP 418 I'm a teapot          1457 ms
 ```
 
-Facepunch's relay answers `HTTP 418` for **every** target - also for a nonsense target and for a plain HTTPS `GET`
-without any websocket upgrade - which means the relay endpoint is currently disabled, not that the server is
+Facepunch's legacy proxy path (`/game/...`) answers `HTTP 418` for **every** target - also for a nonsense target and for a plain HTTPS `GET`
+without any websocket upgrade - which means that proxy endpoint is disabled, not that the server is
 offline. Combined with `ECONNRESET` on the direct connection this matches the removal of direct connections in the
-Rust server code: **as of 2026-11-07 the Rust+ websocket is not reachable for third party clients at all.**
+Rust server code: **as of 2026-11-07 neither legacy endpoint is reachable for third party clients.** The
+authenticated relay (next section) is what the Rust+ app and the bot use instead.
 
-That is nothing the bot can work around: it keeps retrying and automatically uses whichever transport works again
-once Facepunch provides one. Use the probe script to check the state from time to time.
+Without a login the bot keeps retrying these legacy endpoints; with `/credentials login` it uses the relay and does
+not depend on them.
 
 ### The transport the Rust+ app uses (verified 2026-11-07)
 
@@ -171,7 +177,7 @@ getSubProtocols() {
 | host | `companion-rust.facepunch.com` (staging build: `rust-companion-app-staging.azurewebsites.net`) |
 | `serverId` | the **pairing id (UUID)** of the server - not `ip:port` |
 | `v` | build timestamp of the web app: `2026-10-20T13:20:54.122Z` -> `1792502454122` |
-| auth token | the player token, sent as the **second websocket subprotocol** (base64url encoded) |
+| auth token | the Rust+ **account token** of the Steam login (not the per-server player token), sent as the **second websocket subprotocol** (base64url encoded) |
 
 That explains the observations: `ws://ip:appPort` is reset (direct connections removed), the old
 `/game/<ip>/<port>` relay always answers `418`, and `/socket/<id>` answers `404` for an id that Facepunch does not

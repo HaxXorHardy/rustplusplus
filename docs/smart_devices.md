@@ -87,7 +87,7 @@ Group timers survive reconnects and restarts like the timers of single switches.
 
 
 ## Smart Alarms
-> Paired Smart Alarms can be located in the `alarms` Text-Channel on Discord. All Smart Alarms from all servers will be shown in the channel.
+> Paired Smart Alarms can be located in the `alarms` Text-Channel on Discord. Only the Smart Alarms of the server the bot is currently connected to are shown; the channel is rebuilt on a server switch. Alarms of other servers can still arrive as [push notifications](credentials.md#push-notifications-fcm) (`RPP_PUSH_ALARMS_OTHER_SERVERS`).
 
 ![Image of a Smart Alarm](images/smart_devices/smart_alarm.png)
 

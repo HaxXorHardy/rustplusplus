@@ -31,7 +31,7 @@
 
 ![Setup Discord Bot bot token Image](images/bot_setup/bot_token_bot_setup.png)
 
-9. Scroll down to `Privileged Gateway Intents` and enable them all.
+9. Scroll down to `Privileged Gateway Intents` and enable `Server Members Intent` and `Message Content Intent` (the bot requests these two; `Presence Intent` is not used).
 
 ![Setup Discord Bot Privileged Gateway Intents Image](images/bot_setup/privileged_gateway_intents_bot_setup.png)
 
@@ -43,7 +43,7 @@
 
 ![Setup Discord Bot scopes Image](images/bot_setup/scopes_bot_setup.png)
 
-12. Under `BOT PERMISSIONS` select `Administrator`.
+12. Under `BOT PERMISSIONS` select `Administrator`. That is the simplest choice. Without it, the bot needs at least `Manage Channels` and `Manage Roles` (it creates its category and channels and sets their permission overwrites), `View Channels`, `Send Messages`, `Embed Links`, `Attach Files`, `Read Message History`, `Manage Messages` (it clears and rebuilds its channels), `Mention Everyone` (alarm escalation), `Change Nickname`, and `Connect` + `Speak` for the voice feature. A missing one shows up as `Missing Permissions` in the log.
 
 ![Setup Discord Bot bot permissions Image](images/bot_setup/bot_permissions_bot_setup.png)
 

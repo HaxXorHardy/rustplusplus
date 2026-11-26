@@ -51,7 +51,7 @@ A NodeJS Discord Bot that uses the [rustplus.js](https://github.com/liamcottle/r
 
 ## **Credentials**
 
-> The bot does not use FCM credentials and no credential application anymore. Sign in once with `/credentials login` in Discord: the QR code of the Steam app (nothing secret goes through Discord), the account token copied out of your own browser, or the password form as fallback. All three create the Rust+ account token in `credentials/rustplusAuth/<steamId>.json` and adopt the servers and paired devices of the account. Headless: `npm run rustplus:login`.
+> You no longer need FCM credentials or a credential application: the bot registers its own push (FCM) device from the same Steam login. Sign in once with `/credentials login` in Discord: the QR code of the Steam app (nothing secret goes through Discord), the account token copied out of your own browser, or the password form as fallback. All three create the Rust+ account token in `credentials/rustplusAuth/<steamId>.json` and adopt the servers and paired devices of the account. Headless: `npm run rustplus:login`.
 >
 > The ways are described in [docs/credentials.md](docs/credentials.md), the details (token renewal, DM reminder, diagnosing a login) in [FAQ.md](FAQ.md#logging-in-with-steam).
 
