@@ -59,3 +59,48 @@ Test.describe('startup configuration', () => {
         Assert.doesNotMatch(dockerfile, /ts-node/);
     });
 });
+
+Test.describe('integer environment variables', () => {
+    const Config = require('../config');
+
+    const parse = (raw, fallback = 10000, min = 1000) => {
+        const warnings = [];
+        const value = Config.envInt('RPP_TEST', fallback, min, { RPP_TEST: raw }, (text) => warnings.push(text));
+        return { value, warnings };
+    };
+
+    Test.it('accepts a plain integer', () => {
+        Assert.deepStrictEqual(parse('15000'), { value: 15000, warnings: [] });
+        Assert.deepStrictEqual(parse(' 2000 '), { value: 2000, warnings: [] });
+    });
+
+    Test.it('uses the default without a warning when the variable is unset or empty', () => {
+        Assert.deepStrictEqual(parse(undefined), { value: 10000, warnings: [] });
+        Assert.deepStrictEqual(parse('  '), { value: 10000, warnings: [] });
+    });
+
+    /* parseInt read `10s` as 10: a 10 ms polling interval. */
+    Test.it('rejects values with a unit or a fraction', () => {
+        for (const raw of ['10s', '1.5e3x', '2500.5', 'abc']) {
+            const result = parse(raw);
+            Assert.strictEqual(result.value, 10000, raw);
+            Assert.strictEqual(result.warnings.length, 1, raw);
+        }
+    });
+
+    Test.it('rejects values below the minimum of the field', () => {
+        for (const raw of ['0', '-5', '999']) {
+            const result = parse(raw);
+            Assert.strictEqual(result.value, 10000, raw);
+            Assert.match(result.warnings[0], /RPP_TEST/);
+        }
+
+        Assert.deepStrictEqual(parse('0', 60, 0), { value: 0, warnings: [] });
+    });
+
+    Test.it('keeps every interval of the configuration at one second or more', () => {
+        for (const [key, value] of Object.entries(Config.general)) {
+            if (/IntervalMs$|IntervalMaxMs$/.test(key)) Assert.ok(value >= 1000, `${key} = ${value}`);
+        }
+    });
+});

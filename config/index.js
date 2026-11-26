@@ -35,27 +35,44 @@ function envBool(name, fallback) {
     return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 }
 
-/* Parse an integer environment variable, falling back to the default if it is not a number. */
-function envInt(name, fallback) {
-    const value = Number.parseInt(process.env[name], 10);
-    return Number.isNaN(value) ? fallback : value;
+/* Smallest accepted timer interval: a shorter one (or 0) makes setInterval spin and floods the APIs. */
+const MIN_INTERVAL_MS = 1000;
+
+/*
+    Parse an integer environment variable. The whole value has to be an integer: parseInt accepted `10s` as 10 (a
+    10 ms polling interval) and 0 or negative values started tight timers. An empty value is the default, anything
+    else that is not an integer of at least `min` is the default as well, with a warning that says so.
+*/
+function envInt(name, fallback, min = 0, env = process.env, warn = console.warn) {
+    const raw = env[name];
+    if (raw === undefined || raw.trim() === '') return fallback;
+
+    const value = Number(raw.trim());
+    if (!Number.isInteger(value) || value < min) {
+        warn(`${name}=${JSON.stringify(raw)} is not an integer >= ${min}, the default ${fallback} is used.`);
+        return fallback;
+    }
+
+    return value;
 }
 
 /* Global debug mode, enabled with RPP_DEBUG=true (in the .env file or real environment). */
 const debug = envBool('RPP_DEBUG', false);
 
 module.exports = {
+    /* Exported for the tests. */
+    envInt: envInt,
     general: {
         language: process.env.RPP_LANGUAGE || 'en',
-        pollingIntervalMs: envInt('RPP_POLLING_INTERVAL', 10000),
-        reconnectIntervalMs: envInt('RPP_RECONNECT_INTERVAL', 15000),
+        pollingIntervalMs: envInt('RPP_POLLING_INTERVAL', 10000, MIN_INTERVAL_MS),
+        reconnectIntervalMs: envInt('RPP_RECONNECT_INTERVAL', 15000, MIN_INTERVAL_MS),
         /* Upper limit of the reconnect backoff, a server that stays offline is not asked every 15 seconds. */
-        reconnectIntervalMaxMs: envInt('RPP_RECONNECT_INTERVAL_MAX', 5 * 60 * 1000),
+        reconnectIntervalMaxMs: envInt('RPP_RECONNECT_INTERVAL_MAX', 5 * 60 * 1000, MIN_INTERVAL_MS),
         /* Debug mode enables verbose (debug level) logging and call stacks in the logs. */
         debug: debug,
         showCallStackError: debug || envBool('RPP_LOG_CALL_STACK', false),
         /* Warn users when their stored Rust+ credentials are about to expire or have expired. */
-        credentialsExpiryCheckIntervalMs: envInt('RPP_CREDENTIALS_EXPIRY_CHECK_INTERVAL', 3600000), /* 1 hour */
+        credentialsExpiryCheckIntervalMs: envInt('RPP_CREDENTIALS_EXPIRY_CHECK_INTERVAL', 3600000, MIN_INTERVAL_MS), /* 1 hour */
         credentialsExpiryWarningSeconds: envInt('RPP_CREDENTIALS_EXPIRY_WARNING', 3 * 24 * 3600), /* 3 days */
         /*
             How the Rust+ websocket is reached: 'auto' uses the authenticated socket of the Rust+ app and falls back
@@ -67,13 +84,13 @@ module.exports = {
         /* Renew the Rust+ account token this many seconds before it expires (default 3 days). */
         rustplusTokenRenewBeforeSeconds: envInt('RPP_RUSTPLUS_TOKEN_RENEW_BEFORE', 3 * 24 * 3600),
         /* How often the notification history is read to adopt servers/devices that were paired in-game. */
-        rustplusHistoryIntervalMs: envInt('RPP_RUSTPLUS_HISTORY_INTERVAL', 5 * 60 * 1000), /* 5 min */
+        rustplusHistoryIntervalMs: envInt('RPP_RUSTPLUS_HISTORY_INTERVAL', 5 * 60 * 1000, MIN_INTERVAL_MS), /* 5 min */
         /*
             How often the account state (the server list of the app) is read. The history is the source of truth for
             new pairings and is read on every refresh, so a short history interval (a few seconds) stays cheap: this
             slower snapshot is cached in between (see util/rustplusHistory.js).
         */
-        rustplusSyncDataIntervalMs: envInt('RPP_RUSTPLUS_SYNCDATA_INTERVAL', 5 * 60 * 1000), /* 5 min */
+        rustplusSyncDataIntervalMs: envInt('RPP_RUSTPLUS_SYNCDATA_INTERVAL', 5 * 60 * 1000, MIN_INTERVAL_MS), /* 5 min */
         /*
             Push notifications (FCM) of the Rust+ app: raid alarms, team logins, smart alarms of other servers and new
             pairings in real time. The bot registers itself as a device of the account (util/rustplusPush.js). The
