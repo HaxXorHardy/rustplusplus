@@ -47,6 +47,9 @@ class Map {
 
         this._font = null;
 
+        /* Renders share the marker images and the files of the guild: one at a time per instance. */
+        this._renderChain = Promise.resolve();
+
         this._mapMarkerImageMeta = {
             map: {
                 image: Path.join(__dirname, '..', '..', `maps/${this.rustplus.guildId}_map_clean.png`),
@@ -285,7 +288,7 @@ class Map {
             }
         }
 
-        this.resetImageAndMeta();
+        this.#enqueueRender(() => this.#resetImageAndMetaLogged());
     }
 
     /* Getters and Setters */
@@ -323,7 +326,25 @@ class Map {
         this.monuments = map.monuments;
         this.background = map.background;
 
-        this.resetImageAndMeta();
+        return this.#enqueueRender(() => this.#resetImageAndMetaLogged());
+    }
+
+    /* Runs `task` after every render queued before it; a failed render does not stop the ones after it. */
+    #enqueueRender(task) {
+        const run = this._renderChain.then(task, task);
+        this._renderChain = run.catch(() => null);
+        return run;
+    }
+
+    /* For the callers that can not await the reset (constructor, updateMap): a failure is logged, not unhandled. */
+    async #resetImageAndMetaLogged() {
+        try {
+            await this.resetImageAndMeta();
+        }
+        catch (e) {
+            this.rustplus.log(Client.client.intlGet(null, 'warningCap'),
+                `Could not prepare the map images: ${e && e.message ? e.message : e}`, 'warn');
+        }
     }
 
     async resetImageAndMeta() {
@@ -333,7 +354,8 @@ class Map {
     }
 
     async writeMapClean() {
-        await Fs.writeFileSync(this.mapMarkerImageMeta.map.image, Client.client.rustplusMaps[this.rustplus.guildId]);
+        Fs.mkdirSync(Path.dirname(this.mapMarkerImageMeta.map.image), { recursive: true });
+        Fs.writeFileSync(this.mapMarkerImageMeta.map.image, Client.client.rustplusMaps[this.rustplus.guildId]);
     }
 
     async setupFont() {
@@ -433,12 +455,11 @@ class Map {
                 let markerImageMeta = this.getMarkerImageMetaByType(marker.type);
                 let size = this.mapMarkerImageMeta[markerImageMeta].size;
 
-                /* Rotate */
-                this.mapMarkerImageMeta[markerImageMeta].jimp.rotate(marker.rotation);
+                /* Rotate a copy: the sprite is shared by every marker of its type, rotating it would add up. */
+                const sprite = this.mapMarkerImageMeta[markerImageMeta].jimp.clone();
+                sprite.rotate(marker.rotation);
 
-                this.mapMarkerImageMeta.map.jimp.composite(
-                    this.mapMarkerImageMeta[markerImageMeta].jimp, x - (size / 2), y - (size / 2)
-                );
+                this.mapMarkerImageMeta.map.jimp.composite(sprite, x - (size / 2), y - (size / 2));
             }
             catch (e) {
                 /* A single bad marker must not abort the whole map render. */
@@ -462,8 +483,10 @@ class Map {
     }
 
     async writeMap(markers, monuments) {
-        await this.writeMapPng(markers, monuments);
-        await this.writeUploadImage();
+        return this.#enqueueRender(async () => {
+            await this.writeMapPng(markers, monuments);
+            await this.writeUploadImage();
+        });
     }
 
     /* Writes the JPEG that is uploaded to Discord. A failure keeps the previous JPEG, the PNG is written anyway. */
