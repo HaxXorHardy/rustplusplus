@@ -74,6 +74,12 @@ class RuntimeDataStorage {
         }
 
         this.db = new DatabaseSync(this.databasePath);
+        /*
+            A reader next to the bot (backup, sqlite3 shell) made every write fail with SQLITE_BUSY at once: wait up to
+            five seconds for the lock, and let readers work beside the writer (WAL).
+        */
+        this.db.exec('PRAGMA busy_timeout = 5000;');
+        this.db.exec('PRAGMA journal_mode = WAL;');
         this.prepareDatabase();
         this.prepareStatements();
     }
