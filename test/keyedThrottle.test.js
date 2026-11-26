@@ -139,4 +139,36 @@ Test.describe('KeyedThrottle', () => {
         await throttle.request('k', async () => runs.push('after'));
         Assert.deepStrictEqual(runs, ['first', 'after']);
     });
+
+    Test.it('forgets an idle key after its pause, but keeps the pause until then', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+        throttle = KeyedThrottle.createKeyedThrottle(() => 1000);
+        const runs = [];
+
+        await throttle.request('k', async () => runs.push('first'));
+        Assert.strictEqual(throttle.size(), 1);
+
+        t.mock.timers.tick(500);
+        await throttle.request('k', async () => runs.push('in the pause'));
+        Assert.deepStrictEqual(runs, ['first'], 'the pause still holds');
+
+        t.mock.timers.tick(500);
+        await tick();
+        Assert.deepStrictEqual(runs, ['first', 'in the pause']);
+        Assert.strictEqual(throttle.size(), 1, 'kept for the pause after the run');
+
+        t.mock.timers.tick(1000);
+        Assert.strictEqual(throttle.size(), 0, 'forgotten when idle');
+        Assert.strictEqual(throttle.isPending('k'), false);
+
+        await throttle.request('k', async () => runs.push('later'));
+        Assert.deepStrictEqual(runs, ['first', 'in the pause', 'later']);
+    });
+
+    Test.it('with an interval of 0 an idle key is forgotten at once', async () => {
+        throttle = KeyedThrottle.createKeyedThrottle(() => 0);
+
+        await throttle.request('k', async () => undefined);
+        Assert.strictEqual(throttle.size(), 0);
+    });
 });

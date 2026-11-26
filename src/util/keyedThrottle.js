@@ -60,7 +60,14 @@ function createKeyedThrottle(getIntervalMs, onError = () => undefined) {
         clearTimer(state);
         state.timer = setTimeout(() => {
             state.timer = null;
-            if (!state.dirty || state.running) return;
+            if (state.running) return;
+
+            /* The pause of an idle key is over: it is forgotten (the keys are messages and devices that come and go). */
+            if (!state.dirty) {
+                if (states.get(key) === state) states.delete(key);
+                return;
+            }
+
             detached(key, state);
         }, Math.max(0, waitMs));
         /* A pending update does not keep the process alive. */
@@ -93,6 +100,13 @@ function createKeyedThrottle(getIntervalMs, onError = () => undefined) {
                     schedule(key, state, remainingPauseMs(state));
                 }
             }
+            else if (intervalMs() === 0) {
+                if (states.get(key) === state) states.delete(key);
+            }
+            else {
+                /* Kept for the pause (lastRunAt), then forgotten unless another request came. */
+                schedule(key, state, remainingPauseMs(state));
+            }
         }
     }
 
@@ -118,8 +132,8 @@ function createKeyedThrottle(getIntervalMs, onError = () => undefined) {
 
             if (options.immediate) return execute(key, state);
 
-            if (state.timer) {
-                state.dirty = true;
+            /* A run is due: it takes the newest job. (A timer of a clean key only forgets it, see schedule.) */
+            if (state.timer && state.dirty) {
                 return Promise.resolve();
             }
 
@@ -135,6 +149,11 @@ function createKeyedThrottle(getIntervalMs, onError = () => undefined) {
         isPending: function (key) {
             const state = states.get(key);
             return !!state && (state.running || state.dirty);
+        },
+
+        /* The number of keys that are remembered (tests). */
+        size: function () {
+            return states.size;
         },
 
         /* Forgets every key and cancels the due runs (tests). */
