@@ -259,7 +259,9 @@ class DiscordBot extends Discord.Client {
         /*
             Lifecycle marker of the server-log channel. setupGuild() runs on startup (ready.js) and when the bot
             joins a guild (guildCreate.js), so the line marks the channel of the current process.
+            The setup is a new configuration of the channel, a channel that rejected the bot is tried again.
         */
+        LogChannelRelay.resume(guild.id);
         LogChannelRelay.pushStartLine(guild.id,
             `${this.intlGet(null, 'infoCap')}: rustplusplus ${Version} started`);
 
@@ -588,13 +590,15 @@ class DiscordBot extends Discord.Client {
         return undefined;
     }
 
-    async messageSend(channel, content) {
+    /* options.onError receives the error of a failed send (the server-log relay tells a missing access by it). */
+    async messageSend(channel, content, options = {}) {
         try {
             return await channel.send(content);
         }
         catch (e) {
             this.log(this.intlGet(null, 'errorCap'),
                 this.intlGet(null, 'messageSendFailed', { error: e }), 'error');
+            if (typeof options.onError === 'function') options.onError(e);
         }
 
         return undefined;

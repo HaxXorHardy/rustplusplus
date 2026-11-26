@@ -247,6 +247,124 @@ Test.describe('LogChannelRelay', () => {
         Assert.strictEqual(LogChannelRelay.getPendingLineCount(GUILD_ID), 3);
     });
 
+    Test.it('doubles the retry delay with every failed send up to the limit', () => {
+        LogChannelRelay.configure({ minSendIntervalMs: 1000, maxRetryDelayMs: 300000 });
+
+        try {
+            Assert.deepStrictEqual([1, 2, 3, 4].map(LogChannelRelay.getRetryDelay), [2000, 4000, 8000, 16000]);
+            Assert.strictEqual(LogChannelRelay.getRetryDelay(50), 300000);
+        }
+        finally {
+            LogChannelRelay.configure({ maxRetryDelayMs: 5 * 60 * 1000 });
+        }
+    });
+
+    /* The retry used to be scheduled while the flush was still marked as sending, so it never ran. */
+    Test.it('retries a failed send on its own', async () => {
+        const instance = fakeInstance();
+        Client.client = fakeClient(instance);
+        LogChannelRelay.configure({ flushDelayMs: 60000, minSendIntervalMs: 1 });
+
+        const send = Client.client.messageSend;
+        let attempts = 0;
+        Client.client.messageSend = async (channel, content, options) => {
+            attempts++;
+            if (attempts === 1) {
+                options.onError(Object.assign(new Error('Service Unavailable'), { status: 503 }));
+                return undefined;
+            }
+            return send(channel, content);
+        };
+
+        LogChannelRelay.push(GUILD_ID, 'line 1', 'info');
+        await LogChannelRelay.flushNow(GUILD_ID);
+        Assert.strictEqual(LogChannelRelay.getPendingLineCount(GUILD_ID), 1);
+
+        const deadline = Date.now() + 2000;
+        while (Client.client.sent.length === 0 && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+
+        Assert.strictEqual(attempts, 2);
+        Assert.strictEqual(LogChannelRelay.getPendingLineCount(GUILD_ID), 0);
+    });
+
+    Test.it('stops posting into a channel that rejects the bot until the channel changes', async () => {
+        const instance = fakeInstance('channel-old');
+        Client.client = fakeClient(instance);
+        const warnings = [];
+        Client.client.log = (title, text) => warnings.push(text);
+
+        const send = Client.client.messageSend;
+        let attempts = 0;
+        Client.client.messageSend = async (channel, content, options) => {
+            attempts++;
+            if (channel.id === 'channel-old') {
+                options.onError(Object.assign(new Error('Missing Access'), { status: 403, code: 50001 }));
+                return undefined;
+            }
+            return send(channel, content);
+        };
+
+        LogChannelRelay.push(GUILD_ID, 'line 1', 'info');
+        await LogChannelRelay.flushNow(GUILD_ID);
+
+        Assert.strictEqual(attempts, 1);
+        Assert.strictEqual(LogChannelRelay.getPendingLineCount(GUILD_ID), 0);
+        Assert.strictEqual(warnings.length, 1);
+
+        /* Further lines for the same channel are not queued, so nothing is sent again. */
+        LogChannelRelay.push(GUILD_ID, 'line 2', 'info');
+        await LogChannelRelay.flushNow(GUILD_ID);
+        Assert.strictEqual(attempts, 1);
+
+        /* A new channel (setup, /reset discord) is posted into again. */
+        instance.channelId.log = 'channel-new';
+        LogChannelRelay.push(GUILD_ID, 'line 3', 'info');
+        await LogChannelRelay.flushNow(GUILD_ID);
+
+        Assert.strictEqual(attempts, 2);
+        Assert.strictEqual(Client.client.sent.length, 1);
+        Assert.match(Client.client.sent[0].content, /line 3/);
+    });
+
+    Test.it('posts into a rejecting channel again after the guild was set up again', async () => {
+        const instance = fakeInstance('channel-old');
+        Client.client = fakeClient(instance);
+
+        const send = Client.client.messageSend;
+        let rejected = true;
+        Client.client.messageSend = async (channel, content, options) => {
+            if (rejected) {
+                options.onError(Object.assign(new Error('Unknown Channel'), { status: 404, code: 10003 }));
+                return undefined;
+            }
+            return send(channel, content);
+        };
+
+        LogChannelRelay.push(GUILD_ID, 'line 1', 'info');
+        await LogChannelRelay.flushNow(GUILD_ID);
+
+        rejected = false;
+        LogChannelRelay.resume(GUILD_ID);
+        LogChannelRelay.push(GUILD_ID, 'line 2', 'info');
+        await LogChannelRelay.flushNow(GUILD_ID);
+
+        Assert.strictEqual(Client.client.sent.length, 1);
+        Assert.match(Client.client.sent[0].content, /line 2/);
+    });
+
+    Test.it('flushAll() sends what is queued for every guild', async () => {
+        const instance = fakeInstance();
+        Client.client = fakeClient(instance);
+
+        LogChannelRelay.push(GUILD_ID, 'line 1', 'info');
+        LogChannelRelay.push('100000000000000008', 'line 2', 'info');
+        await LogChannelRelay.flushAll();
+
+        Assert.strictEqual(Client.client.sent.length, 2);
+    });
+
     Test.it('neutralises backticks so a line cannot close the code block', async () => {
         const instance = fakeInstance();
         Client.client = fakeClient(instance);

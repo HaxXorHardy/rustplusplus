@@ -43,7 +43,17 @@ const MAX_QUEUED_LINES = 500;
 const timing = {
     flushDelayMs: 500,
     minSendIntervalMs: 1000,
+    /* Upper limit of the retry delay after failed sends, it doubles with every failure in a row. */
+    maxRetryDelayMs: 5 * 60 * 1000,
 };
+
+/*
+    Discord answers that the bot cannot post into the channel (missing access/permissions) or that the channel does not
+    exist. Retrying cannot help and every rejected request counts against the invalid request limit of Cloudflare.
+*/
+const ACCESS_ERROR_STATUSES = new Set([403, 404]);
+const ACCESS_ERROR_CODES = new Set([10003 /* Unknown Channel */, 50001 /* Missing Access */,
+    50013 /* Missing Permissions */]);
 
 /**
  * One queue per guild.
@@ -54,6 +64,10 @@ const timing = {
  * @property {boolean} sending True while a flush is sending.
  * @property {number} lastSendAt Timestamp of the last message, used for the rate limit.
  * @property {*} timer Pending flush timer.
+ * @property {number} failures Failed sends in a row, the retry delay grows with it.
+ * @property {number} retryAt No flush before this timestamp (backoff after a failed send).
+ * @property {(string|null)} blockedChannelId Channel that rejected the bot, nothing is queued for it until the
+ *   channel changes or the guild is set up again (resume()).
  */
 
 /** @type {Map<string, GuildQueue>} */
@@ -74,6 +88,9 @@ function getQueue(guildId) {
             sending: false,
             lastSendAt: 0,
             timer: null,
+            failures: 0,
+            retryAt: 0,
+            blockedChannelId: null,
         };
         queues.set(guildId, queue);
     }
@@ -119,6 +136,14 @@ function pushStartLine(guildId, text) {
 function enqueue(guildId, line) {
     const queue = getQueue(guildId);
 
+    if (queue.blockedChannelId !== null) {
+        /* A new channel id in the instance (setup, /reset discord) is a new configuration, try it again. */
+        if (getChannelId(guildId) === queue.blockedChannelId) return;
+        queue.blockedChannelId = null;
+        queue.failures = 0;
+        queue.retryAt = 0;
+    }
+
     queue.lines.push(prepareLine(line));
 
     /* Drop the oldest lines, the newest ones describe the current state of the bot. */
@@ -144,11 +169,50 @@ function reset(guildId) {
     queue.lines = [];
     queue.dropped = 0;
     queue.lastSendAt = 0;
+    queue.failures = 0;
+    queue.retryAt = 0;
+    queue.blockedChannelId = null;
 
     if (queue.timer !== null) {
         clearTimeout(queue.timer);
         queue.timer = null;
     }
+}
+
+/**
+ * The guild was set up again (setupGuild): a channel that rejected the bot may have its permissions back, post into
+ * it again. What is queued stays queued.
+ * @param {string} guildId
+ * @returns {void}
+ */
+function resume(guildId) {
+    const queue = queues.get(guildId);
+    if (!queue) return;
+
+    queue.blockedChannelId = null;
+    queue.failures = 0;
+    queue.retryAt = 0;
+}
+
+/**
+ * Send what is queued for every guild, used on shutdown. A guild that is waiting for its retry is skipped.
+ * @returns {Promise<void>}
+ */
+async function flushAll() {
+    const flushes = [];
+
+    for (const [guildId, queue] of queues) {
+        if (queue.lines.length === 0 || queue.retryAt > Date.now()) continue;
+
+        if (queue.timer !== null) {
+            clearTimeout(queue.timer);
+            queue.timer = null;
+        }
+
+        flushes.push(flush(guildId, queue));
+    }
+
+    await Promise.all(flushes);
 }
 
 /**
@@ -172,6 +236,9 @@ function schedule(guildId, delay = timing.flushDelayMs) {
     const queue = getQueue(guildId);
     if (queue.timer !== null || queue.sending) return;
 
+    /* After a failed send no new line brings the retry forward. */
+    delay = Math.max(delay, queue.retryAt - Date.now());
+
     queue.timer = setTimeout(() => {
         queue.timer = null;
         flush(guildId, queue);
@@ -191,6 +258,7 @@ async function flush(guildId, queue) {
 
     const generation = queue.generation;
     queue.sending = true;
+    let retry = false;
 
     try {
         while (queue.lines.length > 0 && queue.generation === generation) {
@@ -209,16 +277,37 @@ async function flush(guildId, queue) {
             if (queue.generation !== generation) return;
 
             const batch = buildMessage(guildId, queue);
-            const message = await Client.client.messageSend(channel, { content: batch.content });
+            let sendError = null;
+            const message = await Client.client.messageSend(channel, { content: batch.content },
+                { onError: (e) => { sendError = e; } });
 
             /*
                 messageSend() reports the failure and returns undefined. The lines of the batch are only removed
-                after a successful send, so a failed send loses nothing and is retried with the next flush.
+                after a successful send, so a failed send loses nothing and is retried - later with every failure
+                in a row. A channel the bot cannot post into is not asked again: the lines are dropped and nothing
+                is queued for it until the configuration changes.
             */
             if (!message) {
-                schedule(guildId, timing.minSendIntervalMs);
+                if (queue.generation !== generation) return;
+
+                if (isAccessError(sendError)) {
+                    queue.lines = [];
+                    queue.dropped = 0;
+                    queue.blockedChannelId = `${channel.id}`;
+                    logWarning(`The server-log channel of guild ${guildId} rejected the bot ` +
+                        `(${sendError.status ?? ''} ${sendError.code ?? ''}), no log lines are posted until the ` +
+                        'channel or its permissions are set up again.');
+                    return;
+                }
+
+                queue.failures++;
+                queue.retryAt = Date.now() + getRetryDelay(queue.failures);
+                retry = true;
                 return;
             }
+
+            queue.failures = 0;
+            queue.retryAt = 0;
 
             /*
                 A reset() (for example /reset discord) during the send cleared the queue already, its lines and
@@ -234,13 +323,51 @@ async function flush(guildId, queue) {
     }
     catch (e) {
         /* Posting log lines is an optional side effect: report the failure instead of taking the bot down. */
-        const client = Client.client;
-        if (client && typeof client.log === 'function') {
-            client.log(client.intlGet(null, 'warningCap'), `The server-log relay failed: ${e}`, 'warn');
-        }
+        logWarning(`The server-log relay failed: ${e}`);
     }
     finally {
         queue.sending = false;
+
+        /* Scheduled after `sending` is cleared, schedule() ignores a queue that is still sending. */
+        if (retry && queue.lines.length > 0) {
+            if (queue.timer !== null) {
+                clearTimeout(queue.timer);
+                queue.timer = null;
+            }
+            schedule(guildId, 0);
+        }
+    }
+}
+
+/**
+ * @param {number} failures Failed sends in a row (1 or more).
+ * @returns {number} Delay until the next attempt: doubles with every failure, capped at maxRetryDelayMs.
+ */
+function getRetryDelay(failures) {
+    const delay = timing.minSendIntervalMs * Math.pow(2, Math.min(failures, 20));
+
+    return Math.min(delay, timing.maxRetryDelayMs);
+}
+
+/**
+ * @param {*} error The error messageSend() reported, null when it reported none.
+ * @returns {boolean} True when Discord said the bot cannot post into the channel or the channel is unknown.
+ */
+function isAccessError(error) {
+    if (!error) return false;
+
+    return ACCESS_ERROR_STATUSES.has(error.status) || ACCESS_ERROR_CODES.has(error.code);
+}
+
+/**
+ * Report into the bot log (not a guild log, which would feed this relay again).
+ * @param {string} text
+ * @returns {void}
+ */
+function logWarning(text) {
+    const client = Client.client;
+    if (client && typeof client.log === 'function') {
+        client.log(client.intlGet(null, 'warningCap'), text, 'warn');
     }
 }
 
@@ -310,6 +437,17 @@ function prepareLine(line) {
  * @returns {*|null} The server-log channel of the guild, or null when it does not exist (yet).
  */
 function getChannel(guildId) {
+    const channelId = getChannelId(guildId);
+    if (channelId === null) return null;
+
+    return DiscordTools.getTextChannelById(guildId, channelId);
+}
+
+/**
+ * @param {string} guildId
+ * @returns {(string|null)} The id of the server-log channel in the instance, null when there is none.
+ */
+function getChannelId(guildId) {
     const client = Client.client;
     if (!client || typeof client.getInstance !== 'function') return null;
 
@@ -319,7 +457,7 @@ function getChannel(guildId) {
     /* Old instances have no log id until createInstanceFile() migrated them. */
     const channelId = instance.channelId.log ?? null;
 
-    return DiscordTools.getTextChannelById(guildId, channelId);
+    return channelId === null ? null : `${channelId}`;
 }
 
 /**
@@ -362,12 +500,14 @@ function formatTime(date = new Date()) {
 
 /**
  * Timing knobs. The defaults fit the Discord rate limit, the tests shorten them so the suite stays fast.
- * @param {{flushDelayMs: (number|undefined), minSendIntervalMs: (number|undefined)}} options
+ * @param {{flushDelayMs: (number|undefined), minSendIntervalMs: (number|undefined),
+ *   maxRetryDelayMs: (number|undefined)}} options
  * @returns {void}
  */
 function configure(options = {}) {
     if (typeof options.flushDelayMs === 'number') timing.flushDelayMs = options.flushDelayMs;
     if (typeof options.minSendIntervalMs === 'number') timing.minSendIntervalMs = options.minSendIntervalMs;
+    if (typeof options.maxRetryDelayMs === 'number') timing.maxRetryDelayMs = options.maxRetryDelayMs;
 }
 
 /**
@@ -395,9 +535,12 @@ module.exports = {
     push,
     pushStartLine,
     reset,
+    resume,
     flushNow,
+    flushAll,
     configure,
     stopAll,
     getPendingLineCount,
+    getRetryDelay,
     formatTime,
 };
