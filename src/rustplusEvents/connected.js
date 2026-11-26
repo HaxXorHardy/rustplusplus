@@ -102,14 +102,39 @@ function startFirstPollWatchdog(client, rustplus) {
     if (typeof rustplus.operationalWatchdog.unref === 'function') rustplus.operationalWatchdog.unref();
 }
 
+/* guildId -> the device setup step that was started last, it may outlive its timeout (see runSetup). */
+const setupInFlight = new Object();
+
 /*
     Runs one device setup step. A failure is logged and must not abort the steps after it: when a single message could
     not be built, the guild lost the alarms and storage monitors of that server as well (and the rejection ended as an
     unhandled one that stopped the whole connect flow).
 */
-async function runSetup(client, rustplus, label, setupPath) {
-    await discordStep(client, rustplus, `The setup of ${label}`, () => require(setupPath)(client, rustplus),
-        SETUP_STEP_TIMEOUT_MS);
+async function runSetup(client, rustplus, label, setupPath, timeoutMs = SETUP_STEP_TIMEOUT_MS) {
+    const guildId = rustplus.guildId;
+    const previous = setupInFlight[guildId] || Promise.resolve();
+
+    /*
+        A step that timed out keeps running. The setup steps of a guild therefore run one after the other: the next one
+        (of this connection or of a reconnect) waits for it - at most one step timeout - and only starts while its
+        connection is still the one of the guild. Before, a reconnect ran the same setup concurrently with the late one
+        (duplicate messages, racing message id writes), and a retired connection still set up the devices.
+    */
+    const run = (async () => {
+        await WithTimeout.withTimeout(previous, timeoutMs, 'The previous setup step').catch(() => undefined);
+
+        if (!rustplus.isCurrentInstance()) return;
+
+        await require(setupPath)(client, rustplus);
+    })();
+
+    const settled = run.catch(() => undefined);
+    setupInFlight[guildId] = settled;
+    settled.then(() => {
+        if (setupInFlight[guildId] === settled) delete setupInFlight[guildId];
+    });
+
+    await discordStep(client, rustplus, `The setup of ${label}`, () => run, timeoutMs);
 }
 
 module.exports = {
@@ -117,6 +142,7 @@ module.exports = {
     /* exported for tests */
     FIRST_POLL_WATCHDOG_MS: FIRST_POLL_WATCHDOG_MS,
     startFirstPollWatchdog: startFirstPollWatchdog,
+    runSetup: runSetup,
     async execute(rustplus, client) {
         if (!rustplus.isServerAvailable()) return rustplus.deleteThisRustplusInstance();
 
