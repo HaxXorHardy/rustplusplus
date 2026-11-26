@@ -108,6 +108,12 @@ function describeReceived(data, notification) {
 }
 
 async function onData(client, steamId, data, deps) {
+    /*
+        Firebase redelivers what was not acknowledged before a reconnect or a restart. Every id is kept, also of a
+        message that is not handled: the next login acknowledges it, else it would come back on every restart.
+    */
+    if (!RustPlusPush.markPersistentId(steamId, data ? data.persistentId : null)) return;
+
     /* Another Firebase project than the Rust+ app: never acted on, but logged in case Rust+ ever changes its sender. */
     if (!RustPlusPushNotifications.isFromRustPlus(data)) {
         const field = (name) => JSON.stringify(data && data[name] !== undefined ? `${data[name]}`.slice(0, 100) : null);
@@ -122,9 +128,6 @@ async function onData(client, steamId, data, deps) {
     client.log(client.intlGet(null, 'infoCap'), describeReceived(data, notification), 'debug');
 
     if (notification === null) return;
-
-    /* Firebase redelivers what was not acknowledged before a reconnect or a restart. */
-    if (!RustPlusPush.markPersistentId(steamId, notification.persistentId)) return;
 
     try {
         await RustPlusPushNotifications.handle(client, steamId, notification, deps);

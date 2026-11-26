@@ -685,6 +685,27 @@ Test.describe('RustPlusPushListener', () => {
         Assert.ok(client.logs.some((text) => text.includes('from another sender') && text.includes('"1111"')));
     });
 
+    Test.it('keeps the id of every message, also of one without a channel', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        const services = fakeServices();
+        const module_ = fakeReceiverModule();
+        services.pushReceiver.Client = module_.Client;
+        const client = fakeClient(serverInstance());
+
+        await RustPlusPushListener.startAccount(client, STEAM_ID, services);
+
+        module_.receivers[0].handlers.ON_DATA_RECEIVED({ from: '976529667804',
+            category: 'com.facepunch.rust.companion', persistentId: 'n-3', appData: [{ key: 'title', value: 'x' }] });
+        module_.receivers[0].handlers.ON_DATA_RECEIVED({ from: '1111', category: 'com.evil', persistentId: 'n-4',
+            appData: [] });
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.deepStrictEqual(RustPlusPush.getPersistentIds(STEAM_ID), ['n-3', 'n-4']);
+    });
+
     Test.it('keeps the FCM connection when only the account token changed', async (t) => {
         useTempPushDir(t);
         const auth = { steamId: STEAM_ID, token: 'old' };
