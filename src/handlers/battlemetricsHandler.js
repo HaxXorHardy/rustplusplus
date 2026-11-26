@@ -18,6 +18,7 @@
 
 */
 
+const Battlemetrics = require('../structures/Battlemetrics.js');
 const Constants = require('../util/constants.js');
 const Config = require('../../config');
 const DiscordMessages = require('../discordTools/discordMessages.js');
@@ -32,11 +33,12 @@ module.exports = {
 
         if (!firstTime) await client.updateBattlemetricsInstances();
 
-        /* Warm the time played cache before the embeds are built (rate limited). */
+        /* Warm the time played cache before the embeds are built (rate limited, one time budget per round). */
+        const warmDeadline = Battlemetrics.timePlayedRoundDeadline();
         for (const bmInstance of Object.values(client.battlemetricsInstances)) {
             if (!bmInstance || !bmInstance.lastUpdateSuccessful) continue;
 
-            await bmInstance.warmTimePlayedCache();
+            await bmInstance.warmTimePlayedCache(undefined, warmDeadline);
         }
 
         for (const guildItem of client.guilds.cache) {

@@ -40,6 +40,12 @@ const SESSION_START_RETRY_MS = 10 * 60 * 1000; /* 10 minutes */
 /* A request without an answer must not hang its caller forever (the information messages waited on one for hours). */
 const REQUEST_TIMEOUT_MS = 20 * 1000;
 const PLAYERS_SINCE_WIPE_CACHE_TTL_MS = 10 * 60 * 1000; /* 10 minutes */
+const TIME_PLAYED_RETRY_MS = 10 * 60 * 1000; /* 10 minutes */
+const TIME_PLAYED_ROUND_BUDGET_MS = 2 * 60 * 1000; /* 2 minutes */
+const RATE_LIMIT_BACKOFF_MS = 60 * 1000; /* 1 minute */
+
+/* Every instance shares the one token, so a 429 of one server is the rate limit of all of them. */
+let rateLimitedUntil = 0;
 
 /*
     The last forced wipe at or before a time: the first Thursday of the month at 19:00 UK time, which is 18:00 UTC
@@ -112,6 +118,7 @@ class Battlemetrics {
 
         this._timePlayedCache = new Object();    /* { [playerId]: { seconds, fetchedAt } } */
         this._timePlayedPending = new Object();
+        this._timePlayedTried = new Object();    /* { [playerId]: timestamp of the last failed lookup } */
 
         this._playersSinceWipe = null;          /* { fetchedAt, since, players: [{ id, name, time }] } */
         this._playersSinceWipePending = null;
@@ -501,6 +508,7 @@ class Battlemetrics {
         if (response === null) return null;
 
         if (response.status !== 200) {
+            if (response.status === 429) rateLimitedUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
             Client.client.log(Client.client.intlGet(null, 'errorCap'),
                 Client.client.intlGet(null, 'battlemetricsApiRequestFailed', {
                     api_call: `${api_call} (${response.reason === undefined ? 'unknown error' : response.reason})`,
@@ -1043,8 +1051,12 @@ class Battlemetrics {
         }
 
         const times = await this.fetchTimesPlayed(playerId);
-        if (times === null) return cached ? cached.seconds : null;
+        if (times === null) {
+            this._timePlayedTried[playerId] = Date.now();
+            return cached ? cached.seconds : null;
+        }
 
+        delete this._timePlayedTried[playerId];
         this._timePlayedCache[playerId] = {
             seconds: times.server,
             totalSeconds: times.total,
@@ -1154,17 +1166,23 @@ class Battlemetrics {
      *  Warm the time played cache of the given player ids (rate limited).
      *  @param {Array} playerIds The Battlemetrics player ids to warm.
      *  @param {number} maxPerCall Maximum number of fetches per call.
+     *  @param {number} deadline Time (ms) after which no further fetch is started.
      */
-    async #warmTimePlayed(playerIds, maxPerCall) {
+    async #warmTimePlayed(playerIds, maxPerCall, deadline) {
         if (!Config.battlemetrics.enabled) return;
 
         let fetched = 0;
         for (const playerId of playerIds) {
             if (fetched >= maxPerCall) break;
+            /* A 429 or a slow API must not hold the round up for half an hour: the next round goes on. */
+            if (Battlemetrics.isRateLimited() || Date.now() >= deadline) break;
 
             const cached = this._timePlayedCache[playerId];
             if (cached && (Date.now() - cached.fetchedAt) < TIME_PLAYED_CACHE_TTL_MS) continue;
             if (this._timePlayedPending.hasOwnProperty(playerId)) continue;
+
+            const tried = this._timePlayedTried[playerId];
+            if (tried && (Date.now() - tried) < TIME_PLAYED_RETRY_MS) continue;
 
             this._timePlayedPending[playerId] = true;
             try {
@@ -1180,9 +1198,11 @@ class Battlemetrics {
     /**
      *  Warm the time played cache of the currently online players (rate limited).
      *  @param {number} maxPerCall Maximum number of fetches per call.
+     *  @param {number} deadline Time (ms) after which no further fetch is started.
      */
-    async warmTimePlayedCache(maxPerCall = TIME_PLAYED_DEFAULT_LIMIT) {
-        await this.#warmTimePlayed(this.onlinePlayers.slice(), maxPerCall);
+    async warmTimePlayedCache(maxPerCall = TIME_PLAYED_DEFAULT_LIMIT,
+        deadline = Battlemetrics.timePlayedRoundDeadline()) {
+        await this.#warmTimePlayed(this.onlinePlayers.slice(), maxPerCall, deadline);
     }
 
     /**
@@ -1239,15 +1259,40 @@ class Battlemetrics {
      *  Warm the time played cache of a set of players identified by their in-game name (rate limited).
      *  @param {Array} names The in-game names of the players.
      *  @param {number} maxPerCall Maximum number of fetches per call.
+     *  @param {number} deadline Time (ms) after which no further fetch is started.
      */
-    async warmTimePlayedCacheByNames(names, maxPerCall = TIME_PLAYED_DEFAULT_LIMIT) {
+    async warmTimePlayedCacheByNames(names, maxPerCall = TIME_PLAYED_DEFAULT_LIMIT,
+        deadline = Battlemetrics.timePlayedRoundDeadline()) {
         const playerIds = [];
         for (const name of names) {
             const playerId = this.getPlayerIdByName(name);
             if (playerId !== null && !playerIds.includes(playerId)) playerIds.push(playerId);
         }
 
-        await this.#warmTimePlayed(playerIds, maxPerCall);
+        await this.#warmTimePlayed(playerIds, maxPerCall, deadline);
+    }
+
+    /**
+     *  True while the API answered 429 within the last minute (the token is shared by every instance).
+     *  @return {boolean}
+     */
+    static isRateLimited() {
+        return Date.now() < rateLimitedUntil;
+    }
+
+    /**
+     *  Forget a 429 (tests).
+     */
+    static resetRateLimit() {
+        rateLimitedUntil = 0;
+    }
+
+    /**
+     *  The time after which a time played warming round starts no further fetch.
+     *  @return {number} Time in ms.
+     */
+    static timePlayedRoundDeadline() {
+        return Date.now() + TIME_PLAYED_ROUND_BUDGET_MS;
     }
 }
 

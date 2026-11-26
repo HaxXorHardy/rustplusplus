@@ -22,7 +22,11 @@
 const Assert = require('node:assert');
 const Test = require('node:test');
 
+const Axios = require('axios');
+
 const Battlemetrics = require('../src/structures/Battlemetrics.js');
+const Client = require('../src/structures/clientRegistry.js');
+const Config = require('../config');
 
 function playerResponse(positiveMatch) {
     const server = (id, game, timePlayed) => ({
@@ -53,5 +57,75 @@ Test.describe('Battlemetrics.fetchTimesPlayed', () => {
         const response = playerResponse(true);
         delete response.data.attributes.positiveMatch;
         Assert.deepStrictEqual(await fetchWith(response), { server: 3600, total: 3600 });
+    });
+});
+
+Test.describe('Battlemetrics.warmTimePlayedCache', () => {
+    Test.beforeEach((t) => {
+        const original = Config.battlemetrics.token;
+        Config.battlemetrics.token = 'test-token';  /* enabled is derived from the token. */
+        Battlemetrics.resetRateLimit();
+        t.after(() => {
+            Config.battlemetrics.token = original;
+            Battlemetrics.resetRateLimit();
+        });
+    });
+
+    function onlineInstance(playerIds) {
+        const bmInstance = new Battlemetrics(1234567, 'Test Server');
+        bmInstance.onlinePlayers = playerIds;
+        return bmInstance;
+    }
+
+    Test.it('does not ask again right away for a player whose lookup failed', async () => {
+        const bmInstance = onlineInstance(['1', '2']);
+        const calls = [];
+        bmInstance.request = async (apiCall) => {
+            calls.push(apiCall);
+            return null;
+        };
+
+        await bmInstance.warmTimePlayedCache();
+        await bmInstance.warmTimePlayedCache();
+
+        Assert.strictEqual(calls.length, 2);
+    });
+
+    Test.it('stops the round on a 429 for every instance', async (t) => {
+        const previousClient = Client.client;
+        Client.client = { log: () => { }, intlGet: (guildId, key) => key };
+        const originalGet = Axios.get;
+        let calls = 0;
+        Axios.get = async () => {
+            calls += 1;
+            const error = new Error('Too Many Requests');
+            error.response = { status: 429 };
+            throw error;
+        };
+        t.after(() => {
+            Client.client = previousClient;
+            Axios.get = originalGet;
+        });
+
+        await onlineInstance(['1', '2', '3']).warmTimePlayedCache();
+        await onlineInstance(['4', '5']).warmTimePlayedCache();
+
+        Assert.strictEqual(calls, 1);
+        Assert.strictEqual(Battlemetrics.isRateLimited(), true);
+    });
+
+    Test.it('starts no fetch after the deadline of the round', async () => {
+        const bmInstance = onlineInstance(['1', '2']);
+        let calls = 0;
+        bmInstance.request = async () => {
+            calls += 1;
+            return playerResponse(true);
+        };
+
+        await bmInstance.warmTimePlayedCache(undefined, Date.now() - 1);
+        Assert.strictEqual(calls, 0);
+
+        await bmInstance.warmTimePlayedCache(undefined, Date.now() + 60000);
+        Assert.strictEqual(calls, 2);
     });
 });
