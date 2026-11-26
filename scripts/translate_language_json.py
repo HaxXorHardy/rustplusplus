@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
 from xml.sax.saxutils import escape as xml_escape
@@ -13,6 +14,7 @@ from xml.sax.saxutils import unescape as xml_unescape
 import requests
 
 PLACEHOLDER_RE = re.compile(r"\{[^{}]+\}")
+MASK_TOKEN_RE = re.compile(r"__PH_\d+__")
 DEEPL_BYTE_LIMIT = 120 * 1024  # keep below the official 128 KiB limit
 DEEPL_TEXT_LIMIT = 50  # DeepL rejects a request with more than 50 text parameters (400 Bad Request)
 
@@ -97,6 +99,19 @@ def unmask_placeholders(text: str, mapping: Dict[str, str]) -> str:
     for token, original in mapping.items():
         text = text.replace(token, original)
     return text
+
+
+def placeholders_intact(source_text: str, translated_text: str) -> bool:
+    """True when every {placeholder} of the source is still in the translation and no mask token is left over.
+
+    The translator may drop or mangle a masked __PH_n__ token; unmasking then silently loses the placeholder (e.g.
+    {amount}) and the bot would print the message without the value.
+    """
+    if MASK_TOKEN_RE.search(translated_text):
+        return False
+    wanted = Counter(PLACEHOLDER_RE.findall(source_text))
+    found = Counter(PLACEHOLDER_RE.findall(translated_text))
+    return all(found[placeholder] >= count for placeholder, count in wanted.items())
 
 
 def build_context(keys: List[str]) -> str:
@@ -297,6 +312,18 @@ def main() -> int:
         if missing_keys:
             pairs = [(k, str(source[k])) for k in missing_keys]
             translated = translator.translate_many(pairs, lang)
+
+            broken_keys = [
+                key for key in list(translated) if not placeholders_intact(str(source[key]), str(translated[key]))
+            ]
+            for key in broken_keys:
+                # The English text keeps the bot working; the key stays a fallback that --fallbacks can retry.
+                translated[key] = str(source[key])
+            if broken_keys:
+                print(
+                    f"[{lang}] placeholders lost in {len(broken_keys)} translation(s), kept the English text: "
+                    f"{', '.join(broken_keys)}"
+                )
 
         stale_keys = [key for key in existing if key not in source]
         merged: Dict[str, str] = {}
