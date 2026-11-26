@@ -475,6 +475,31 @@ Test.describe('RustPlusHistory.refresh', () => {
         Assert.strictEqual(instance.activeServer, serverKey);
     });
 
+    Test.it('does not mark the active server unpaired while its reconnect is pending', async (t) => {
+        for (const pending of ['reconnecting', 'timer']) {
+            stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+
+            const { serverKey, instance } = pairedServerInstance();
+            const client = fakeClient(instance);
+            if (pending === 'reconnecting') client.rustplusReconnecting[GUILD_ID] = true;
+            else client.rustplusReconnectTimers[GUILD_ID] = setTimeout(() => undefined, 0);
+
+            await RustPlusHistory.refresh(client, async () => [], async () => ({ servers: [] }));
+
+            clearTimeout(client.rustplusReconnectTimers[GUILD_ID]);
+
+            Assert.notStrictEqual(instance.serverList[serverKey].paired, false, pending);
+            Assert.strictEqual(instance.activeServer, serverKey, pending);
+        }
+
+        /* Without a pending reconnect the same run marks it unpaired. */
+        stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });
+        const { serverKey, instance } = pairedServerInstance();
+        await RustPlusHistory.refresh(fakeClient(instance), async () => [], async () => ({ servers: [] }));
+        Assert.strictEqual(instance.serverList[serverKey].paired, false);
+        Assert.strictEqual(instance.activeServer, null);
+    });
+
     /* Two guilds with the same account used to ask Facepunch twice per run. */
     Test.it('reads an account once for every guild that uses it', async (t) => {
         stubAuth(t, { steamId: STEAM_ID, token: 'test-token', servers: [] });

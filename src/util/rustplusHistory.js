@@ -726,13 +726,23 @@ function markUnpairedServers(client, instance, pairedIds, guildId = null) {
     let changed = 0;
     const rustplus = (guildId !== null && client.rustplusInstances) ? client.rustplusInstances[guildId] : null;
 
+    /*
+        Between a disconnect and its reconnect the guild has no operational instance. The active server must not be
+        marked unpaired (and activeServer cleared and persisted) in that gap: the reconnect would be dropped and the
+        guild stayed disconnected, even after a restart.
+    */
+    const reconnectPending = guildId !== null && Boolean(
+        (client.rustplusReconnecting && client.rustplusReconnecting[guildId]) ||
+        (client.rustplusReconnectTimers && client.rustplusReconnectTimers[guildId]));
+
     for (const [key, server] of Object.entries(instance.serverList)) {
         if (!server) continue;
 
         /* A server that answers right now is paired, whatever the lists say. */
         const isWorking = Boolean(rustplus && rustplus.serverId === key && rustplus.isOperational);
+        const isReconnecting = reconnectPending && instance.activeServer === key;
 
-        const paired = isWorking || !server.guid || pairedIds.has(`${server.guid}`);
+        const paired = isWorking || isReconnecting || !server.guid || pairedIds.has(`${server.guid}`);
         if (server.paired === paired) continue;
 
         server.paired = paired;
