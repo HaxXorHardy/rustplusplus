@@ -239,6 +239,18 @@ function clientWithFakes(t, options = {}) {
     return { client: client, sockets: sockets, checkIns: checkIns };
 }
 
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+/*
+    connect() only settles with the login: starts it and waits until the socket is open. { result } ends with
+    'connected' or the error.
+*/
+async function startConnect(client) {
+    const result = client.connect().then(() => 'connected', (e) => e);
+    await flush();
+    return { result: result };
+}
+
 Test.describe('fcm/mcsClient', () => {
     Test.it('is what rustplusPush loads', () => {
         Assert.strictEqual(Fcm.Client, McsClient);
@@ -250,7 +262,7 @@ Test.describe('fcm/mcsClient', () => {
         const events = [];
         client.on('connect', () => events.push('connect'));
 
-        await client.connect();
+        await startConnect(client);
         sockets[0].emit('secureConnect');
         /* TLS alone is not a connection: 'connect' waits for the accepted login. */
         Assert.deepStrictEqual(events, []);
@@ -278,7 +290,7 @@ Test.describe('fcm/mcsClient', () => {
         const received = [];
         client.on('ON_DATA_RECEIVED', (data) => received.push(data));
 
-        await client.connect();
+        await startConnect(client);
         sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse(), dataMessage('0:1')]));
         sockets[0].emit('data', dataMessage('0:1'));
         sockets[0].emit('data', dataMessage('0:2'));
@@ -293,7 +305,7 @@ Test.describe('fcm/mcsClient', () => {
         const events = [];
         client.on('disconnect', () => events.push('disconnect'));
 
-        await client.connect();
+        await startConnect(client);
         sockets[0].emit('close');
         Assert.strictEqual(sockets[0].destroyed, true);
         Assert.deepStrictEqual(events, ['disconnect']);
@@ -322,7 +334,7 @@ Test.describe('fcm/mcsClient', () => {
         const rejected = () => Buffer.concat([Buffer.from([MCS_VERSION]),
             frame(TAGS.loginResponse, 'LoginResponse', { id: 'x', error: { code: 401 } })]);
 
-        await client.connect();
+        await startConnect(client);
         sockets[0].emit('secureConnect');
         sockets[0].emit('data', rejected());
         Assert.deepStrictEqual(events, ['disconnect']);
@@ -356,7 +368,7 @@ Test.describe('fcm/mcsClient', () => {
         const events = [];
         client.on('disconnect', () => events.push('disconnect'));
 
-        await client.connect();
+        await startConnect(client);
         sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse(),
             frame(TAGS.close, 'Close', {})]));
         Assert.deepStrictEqual(events, ['disconnect']);
@@ -370,10 +382,47 @@ Test.describe('fcm/mcsClient', () => {
         Assert.strictEqual(sockets.length, 0);
     });
 
+    Test.it('settles connect() with the login: accepted, rejected, timed out or destroyed', async (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+
+        const accepted = clientWithFakes(t);
+        const first = await startConnect(accepted.client);
+        accepted.sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse()]));
+        Assert.strictEqual(await first.result, 'connected');
+
+        const rejected = clientWithFakes(t);
+        const second = await startConnect(rejected.client);
+        rejected.sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]),
+            frame(TAGS.loginResponse, 'LoginResponse', { id: 'x', error: { code: 401 } })]));
+        const error = await second.result;
+        Assert.strictEqual(error.mcsLogin, true);
+        Assert.match(error.message, /rejected \(code 401\)/);
+
+        const silent = clientWithFakes(t);
+        const third = await startConnect(silent.client);
+        t.mock.timers.tick(McsClient.LOGIN_TIMEOUT_MS);
+        Assert.match((await third.result).message, /timed out/);
+
+        const destroyed = clientWithFakes(t);
+        const fourth = await startConnect(destroyed.client);
+        destroyed.client.destroy();
+        Assert.strictEqual(await fourth.result, 'connected');
+        Assert.strictEqual(destroyed.sockets[0].destroyed, true);
+    });
+
+    Test.it('opens no socket when the login request cannot be built', async (t) => {
+        const { client, sockets } = clientWithFakes(t);
+        client._androidId = 'not-a-number';
+
+        await Assert.rejects(client.connect());
+        Assert.strictEqual(sockets.length, 0);
+        Assert.strictEqual(client._socket, null);
+    });
+
     Test.it('answers the pings of the server', async (t) => {
         const { client, sockets } = clientWithFakes(t);
 
-        await client.connect();
+        await startConnect(client);
         sockets[0].emit('data', Buffer.concat([Buffer.from([MCS_VERSION]), loginResponse(),
             frame(TAGS.heartbeatPing, 'HeartbeatPing', null)]));
 
@@ -387,7 +436,7 @@ Test.describe('fcm/mcsClient', () => {
         const events = [];
         client.on('disconnect', () => events.push('disconnect'));
 
-        await client.connect();
+        await startConnect(client);
         t.mock.timers.tick(McsClient.LOGIN_TIMEOUT_MS - 1);
         Assert.strictEqual(sockets[0].written.length, 1, 'no ping before the login');
 
@@ -418,7 +467,7 @@ Test.describe('fcm/mcsClient', () => {
         const events = [];
         client.on('disconnect', () => events.push('disconnect'));
 
-        await client.connect();
+        await startConnect(client);
         t.mock.timers.tick(McsClient.LOGIN_TIMEOUT_MS - 1);
         Assert.deepStrictEqual(events, []);
 
@@ -444,7 +493,7 @@ Test.describe('fcm/mcsClient', () => {
         const options = {};
         const { client, sockets, checkIns } = clientWithFakes(t, options);
 
-        await client.connect();
+        await startConnect(client);
         options.checkInError = 'offline';
         sockets[0].emit('close');
 

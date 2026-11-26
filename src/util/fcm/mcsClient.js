@@ -63,8 +63,15 @@ class McsClient extends EventEmitter {
         this._heartbeatTimer = null;
         this._loginTimer = null;
         this._receivedSincePing = true;
+        this._pendingLogin = null;
     }
 
+    /*
+        Resolves once Google accepted the login. Rejects when the check-in fails, or when the login is rejected, times
+        out or the connection closes before it (error.mcsLogin) - the client plans its own retry in that case as after
+        any drop, the caller learns of it to count failures (a device Google dropped only shows at the login).
+        Resolves without a connection when destroy() comes first.
+    */
     async connect() {
         this._destroyed = false;
         clearTimeout(this._retryTimeout);
@@ -73,16 +80,34 @@ class McsClient extends EventEmitter {
         await this._checkIn(this._androidId, this._securityToken);
         if (this._destroyed) return;
 
-        this._open();
+        await new Promise((resolve, reject) => {
+            this._settleLogin(new Error('A newer connect() replaced this one.'));
+            this._pendingLogin = { resolve: resolve, reject: reject };
+            this._open();
+        });
     }
 
     destroy() {
         this._destroyed = true;
         this._teardown();
+        this._settleLogin(null);
+    }
+
+    /* Ends the promise of a connect() that waits for its login: resolved without an error, else rejected. */
+    _settleLogin(error) {
+        const pending = this._pendingLogin;
+        if (!pending) return;
+
+        this._pendingLogin = null;
+        if (error) pending.reject(error);
+        else pending.resolve();
     }
 
     _open() {
         this._teardown();
+
+        /* Built before the socket opens: a throw here must not leave a connection behind. */
+        const login = this._loginBuffer();
 
         const socket = this._connectSocket({ host: HOST, port: PORT, servername: HOST });
         this._socket = socket;
@@ -103,7 +128,7 @@ class McsClient extends EventEmitter {
             /* 'close' follows and reconnects. */
         });
 
-        socket.write(this._loginBuffer());
+        socket.write(login);
 
         /*
             The heartbeat only starts with the login response: a connection that never answers the login would stay
@@ -111,7 +136,7 @@ class McsClient extends EventEmitter {
         */
         this._loginTimer = setTimeout(() => {
             this._loginTimer = null;
-            if (this._socket === socket) this._drop();
+            if (this._socket === socket) this._drop('The MCS login timed out.');
         }, LOGIN_TIMEOUT_MS);
 
         if (typeof this._loginTimer.unref === 'function') this._loginTimer.unref();
@@ -143,7 +168,8 @@ class McsClient extends EventEmitter {
 
             /* "Null if login was ok" (mcs.proto): a rejected login keeps the ids and backs off like any drop. */
             if (object && object.error) {
-                this._drop();
+                const code = object.error.code !== undefined ? ` (code ${object.error.code})` : '';
+                this._drop(`The MCS login was rejected${code}.`);
                 return;
             }
 
@@ -152,6 +178,7 @@ class McsClient extends EventEmitter {
             this._retryCount = 0;
             this._startHeartbeat();
             this.emit('connect');
+            this._settleLogin(null);
         }
         else if (tag === TAGS.close || tag === TAGS.streamErrorStanza) {
             /* The server ends the stream; waiting for the socket close would only delay the reconnect. */
@@ -223,7 +250,7 @@ class McsClient extends EventEmitter {
         if (typeof this._heartbeatTimer.unref === 'function') this._heartbeatTimer.unref();
     }
 
-    _drop() {
+    _drop(reason = 'The MCS connection closed before the login.') {
         this._teardown();
         if (this._destroyed) return;
 
@@ -238,6 +265,13 @@ class McsClient extends EventEmitter {
                     if (!this._destroyed && this._socket === null && this._retryTimeout === null) this._drop();
                 });
         }, seconds * 1000);
+
+        /* A connect() still waiting for its login fails; the retry above stays unless the caller destroys the client. */
+        if (this._pendingLogin) {
+            const error = new Error(reason);
+            error.mcsLogin = true;
+            this._settleLogin(error);
+        }
     }
 
     _teardown() {

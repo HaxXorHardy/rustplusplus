@@ -170,6 +170,9 @@ function watchConnection(client, steamId, receiver) {
     receiver.connect = () => connect().catch((e) => {
         if (!state.started) throw e;
 
+        /* A failed login after the start: the receiver plans its next try itself, 'disconnect' logged the drop. */
+        if (e && e.mcsLogin) return;
+
         if (state.downSince === null) state.downSince = Date.now();
         client.log(client.intlGet(null, 'warningCap'),
             `Rust+ push: reconnecting ${steamId} failed (${errorText(e)}), the watchdog starts it again.`, 'warn');
