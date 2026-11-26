@@ -629,7 +629,12 @@ Test.describe('RustPlusPushListener', () => {
                 receivers.push(this);
             }
             on(event, handler) { this.handlers[event] = handler; }
-            async connect() { if (options.connectError) throw new Error(options.connectError); }
+            async connect() {
+                if (options.connectGate) await options.connectGate;
+                if (options.connectError) {
+                    throw Object.assign(new Error(options.connectError), options.mcsLogin ? { mcsLogin: true } : {});
+                }
+            }
             destroy() { this.destroyed = true; }
         }
 
@@ -790,6 +795,51 @@ Test.describe('RustPlusPushListener', () => {
         options.connectError = 'checkin failed';
         await Assert.doesNotReject(module_.receivers[0].connect());
         Assert.ok(client.logs.some((text) => text.includes('reconnecting') && text.includes('checkin failed')));
+    });
+
+    Test.it('leaves a failed login after the start to the receiver, without a warning', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        const services = fakeServices();
+        const options = {};
+        const module_ = fakeReceiverModule(options);
+        services.pushReceiver.Client = module_.Client;
+        const client = fakeClient(serverInstance());
+
+        await RustPlusPushListener.startAccount(client, STEAM_ID, services);
+
+        Object.assign(options, { connectError: 'The MCS login was rejected.', mcsLogin: true });
+        await Assert.doesNotReject(module_.receivers[0].connect());
+        Assert.ok(!client.logs.some((text) => text.includes('reconnecting')));
+    });
+
+    Test.it('drops a receiver whose account was stopped while it connected', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        for (const failing of [false, true]) {
+            const services = fakeServices();
+            let open = null;
+            const options = { connectGate: new Promise((resolve) => { open = resolve; }),
+                connectError: failing ? 'login timed out' : null };
+            const module_ = fakeReceiverModule(options);
+            services.pushReceiver.Client = module_.Client;
+            const client = fakeClient(serverInstance());
+
+            const started = RustPlusPushListener.startAccount(client, STEAM_ID, services);
+            while (module_.receivers.length === 0) await new Promise((resolve) => setImmediate(resolve));
+
+            RustPlusPushListener.stop();
+            open();
+
+            Assert.strictEqual(await started, false);
+            Assert.strictEqual(module_.receivers[0].destroyed, true);
+            Assert.strictEqual(RustPlusPushListener.isListening(STEAM_ID), false);
+            Assert.ok(!client.logs.some((text) => text.includes('failed (')), 'a stop is no connection failure');
+        }
     });
 
     Test.it('the watchdog starts a connection again that is down too long, and retries a failed restart', async (t) => {

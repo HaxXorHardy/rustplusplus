@@ -55,6 +55,7 @@ const listeners = new Map();    /* steamId -> { receiver, androidId, state: { do
 const restarts = new Map();     /* steamId -> time of the next attempt after a watchdog restart failed */
 const starting = new Map();     /* steamId -> promise of a running startAccount() */
 const connectFailures = new Map();
+const generations = new Map();  /* steamId -> counter, raised by stopAccount(): a running start sees it was stopped */
 let checkTimer = null;
 let watchdogTimer = null;
 let unsubscribe = null;
@@ -75,7 +76,17 @@ function connectionState(steamId) {
     return { up: !entry.state || entry.state.downSince === null, downSince: entry.state ? entry.state.downSince : null };
 }
 
+function generation(steamId) {
+    return generations.get(`${steamId}`) || 0;
+}
+
+/* Stops the listener of the account, and a start that is still running (it drops its receiver when it returns). */
 function stopAccount(steamId) {
+    generations.set(`${steamId}`, generation(steamId) + 1);
+    closeListener(steamId);
+}
+
+function closeListener(steamId) {
     const entry = listeners.get(`${steamId}`);
     if (!entry) return;
 
@@ -225,6 +236,7 @@ async function checkConnections(client, deps = {}) {
 
 async function doStartAccount(client, steamId, deps) {
     const log = (text) => client.log(client.intlGet(null, 'infoCap'), text, 'debug');
+    const startGeneration = generation(steamId);
 
     let result = null;
 
@@ -249,7 +261,10 @@ async function doStartAccount(client, steamId, deps) {
     /* The device did not change, only its registration with Facepunch: the connection to FCM stays. */
     if (running && running.androidId === fcm.androidId) return true;
 
-    stopAccount(steamId);
+    /* stop(), stopAccount() or the removal of the login while the registration ran. */
+    if (generation(steamId) !== startGeneration) return false;
+
+    closeListener(steamId);
 
     const pushReceiver = deps.pushReceiver || RustPlusPush.loadPushReceiver();
     const receiver = new pushReceiver.Client(fcm.androidId, fcm.securityToken,
@@ -261,11 +276,27 @@ async function doStartAccount(client, steamId, deps) {
 
     const state = watchConnection(client, steamId, receiver);
 
+    const stoppedMeanwhile = () => {
+        if (generation(steamId) === startGeneration) return false;
+
+        try {
+            receiver.destroy();
+        }
+        catch (destroyError) {
+            /* Already closed. */
+        }
+
+        return true;
+    };
+
     try {
         await receiver.connect();
         state.started = true;
     }
     catch (e) {
+        /* A stop during the connect is no failure of the device. */
+        if (stoppedMeanwhile()) return false;
+
         const failures = (connectFailures.get(`${steamId}`) || 0) + 1;
         connectFailures.set(`${steamId}`, failures);
 
@@ -292,6 +323,9 @@ async function doStartAccount(client, steamId, deps) {
 
         return false;
     }
+
+    /* Stopped while connecting: the receiver is not registered, it would keep delivering pushes no one stops. */
+    if (stoppedMeanwhile()) return false;
 
     connectFailures.delete(`${steamId}`);
     listeners.set(`${steamId}`, { receiver: receiver, androidId: fcm.androidId, state: state });
@@ -323,7 +357,7 @@ async function checkAll(client, deps = {}) {
     }
 
     /* A login that was removed. */
-    for (const steamId of [...listeners.keys()]) {
+    for (const steamId of new Set([...listeners.keys(), ...starting.keys()])) {
         if (!steamIds.includes(steamId)) stopAccount(steamId);
     }
 }
@@ -373,7 +407,7 @@ function stop() {
         unsubscribe = null;
     }
 
-    for (const steamId of [...listeners.keys()]) stopAccount(steamId);
+    for (const steamId of new Set([...listeners.keys(), ...starting.keys()])) stopAccount(steamId);
 
     connectFailures.clear();
     restarts.clear();
