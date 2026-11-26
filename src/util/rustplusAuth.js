@@ -44,17 +44,43 @@ const Path = require('path');
 const AtomicWriteFile = require('./atomicWriteFile.js');
 const RustPlusTransport = require('./rustplusTransport.js');
 
-const AUTH_DIR = Path.join(__dirname, '..', '..', 'credentials', 'rustplusAuth');
+const DEFAULT_AUTH_DIR = Path.join(__dirname, '..', '..', 'credentials', 'rustplusAuth');
+
+let authDir = DEFAULT_AUTH_DIR;
+
+/* The directory of the stored logins. */
+function getAuthDir() {
+    return authDir;
+}
+
+/* Only for the tests: they write into a temporary directory, never into the real credentials. null resets it. */
+function setAuthDir(directory) {
+    authDir = (directory === null || directory === undefined) ? DEFAULT_AUTH_DIR : `${directory}`;
+}
+
+/*
+    A SteamID64 of an individual account. The steam id becomes a file name, so anything else (a path, "hoster", a value
+    out of a forged token) is refused.
+*/
+const STEAM_ID_PATTERN = /^7656\d{13}$/;
+
+function isValidSteamId(steamId) {
+    return (typeof steamId === 'string' || typeof steamId === 'number') && STEAM_ID_PATTERN.test(`${steamId}`);
+}
 
 function getAuthFilePath(steamId) {
-    return Path.join(AUTH_DIR, `${steamId}.json`);
+    if (!isValidSteamId(steamId)) throw new Error('Invalid steam id.');
+
+    return Path.join(authDir, `${steamId}.json`);
 }
 
 function readAuth(steamId) {
+    if (!isValidSteamId(steamId)) return null;
+
     const path = getAuthFilePath(steamId);
 
     try {
-        if (!steamId || !Fs.existsSync(path)) return null;
+        if (!Fs.existsSync(path)) return null;
 
         const auth = JSON.parse(Fs.readFileSync(path, 'utf8'));
         return (typeof auth.token === 'string' && auth.token.length !== 0) ? auth : null;
@@ -65,14 +91,16 @@ function readAuth(steamId) {
 }
 
 function writeAuth(steamId, auth) {
-    Fs.mkdirSync(AUTH_DIR, { recursive: true });
+    const path = getAuthFilePath(steamId);
+
+    Fs.mkdirSync(authDir, { recursive: true });
     /* The account token is a credential: the file is not readable for other users of the host. */
-    AtomicWriteFile(getAuthFilePath(steamId), JSON.stringify(auth, null, 2), 'utf8', 0o600);
+    AtomicWriteFile(path, JSON.stringify(auth, null, 2), 'utf8', 0o600);
 }
 
 /* Removes the stored login of an account (its owner removed it in Discord). */
 function removeAuth(steamId) {
-    if (!steamId) return;
+    if (!isValidSteamId(steamId)) return;
     try {
         Fs.unlinkSync(getAuthFilePath(steamId));
     }
@@ -87,12 +115,12 @@ function removeAuth(steamId) {
 */
 function listSteamIds() {
     try {
-        if (!Fs.existsSync(AUTH_DIR)) return [];
+        if (!Fs.existsSync(authDir)) return [];
 
-        return Fs.readdirSync(AUTH_DIR)
+        return Fs.readdirSync(authDir)
             .filter((file) => file.endsWith('.json'))
             .map((file) => file.slice(0, -'.json'.length))
-            .filter((steamId) => readAuth(steamId) !== null);
+            .filter((steamId) => isValidSteamId(steamId) && readAuth(steamId) !== null);
     }
     catch (e) {
         return [];
@@ -138,7 +166,8 @@ function getTokenSteamId(token) {
         const payload = `${token}`.trim().split('.')[0];
         const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
 
-        return (data && data.steamId) ? `${data.steamId}` : null;
+        /* A JSON number cannot hold a SteamID64 without losing digits, only the string form is taken. */
+        return (data && typeof data.steamId === 'string' && isValidSteamId(data.steamId)) ? data.steamId : null;
     }
     catch (e) {
         return null;
@@ -171,7 +200,9 @@ function isTokenExpiringSoon(auth, renewBeforeSeconds, nowSeconds = Math.floor(D
 }
 
 module.exports = {
-    AUTH_DIR: AUTH_DIR,
+    getAuthDir: getAuthDir,
+    setAuthDir: setAuthDir,
+    isValidSteamId: isValidSteamId,
     getAuthFilePath: getAuthFilePath,
     readAuth: readAuth,
     writeAuth: writeAuth,
@@ -183,3 +214,6 @@ module.exports = {
     isTokenExpired: isTokenExpired,
     isTokenExpiringSoon: isTokenExpiringSoon,
 };
+
+/* Kept for scripts/rustplusLogin.js, follows setAuthDir(). */
+Object.defineProperty(module.exports, 'AUTH_DIR', { enumerable: true, get: getAuthDir });

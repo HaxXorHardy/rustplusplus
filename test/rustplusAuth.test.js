@@ -20,20 +20,32 @@
 
 const Assert = require('node:assert');
 const Fs = require('node:fs');
+const Os = require('node:os');
+const Path = require('node:path');
 const Test = require('node:test');
 
 const RustPlusAuth = require('../src/util/rustplusAuth.js');
 
-const STEAM_ID = '900000000000000002';
+const STEAM_ID = '76561198000000102';
 
 function tokenPayload(data) {
     return `${Buffer.from(JSON.stringify(data)).toString('base64')}.signature`;
 }
 
+/* The stored logins go to a temporary directory, never into the real credentials of a local bot. */
+function useTempAuthDir(t) {
+    const directory = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'rpp-auth-'));
+    RustPlusAuth.setAuthDir(directory);
+    t.after(() => {
+        RustPlusAuth.setAuthDir(null);
+        Fs.rmSync(directory, { recursive: true, force: true });
+    });
+    return directory;
+}
+
 Test.describe('RustPlusAuth', () => {
-    Test.afterEach(() => {
-        const path = RustPlusAuth.getAuthFilePath(STEAM_ID);
-        if (Fs.existsSync(path)) Fs.unlinkSync(path);
+    Test.beforeEach((t) => {
+        useTempAuthDir(t);
     });
 
     Test.it('stores and reads the account token', () => {
@@ -78,6 +90,45 @@ Test.describe('RustPlusAuth', () => {
         Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(auth, 100, 1200), true);   /* expired */
         Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon(null, 100, 0), false);
         Assert.strictEqual(RustPlusAuth.isTokenExpiringSoon({ token: 'not-a-token' }, 100, 0), false);
+    });
+});
+
+Test.describe('RustPlusAuth steam id validation', () => {
+    Test.it('accepts only a SteamID64 of an account', () => {
+        Assert.strictEqual(RustPlusAuth.isValidSteamId('76561198000000102'), true);
+        Assert.strictEqual(RustPlusAuth.isValidSteamId('hoster'), false);
+        Assert.strictEqual(RustPlusAuth.isValidSteamId('../../instances/123'), false);
+        Assert.strictEqual(RustPlusAuth.isValidSteamId('900000000000000002'), false);
+        Assert.strictEqual(RustPlusAuth.isValidSteamId('7656119800000010'), false);
+        Assert.strictEqual(RustPlusAuth.isValidSteamId('76561198000000102\n'), false);
+        Assert.strictEqual(RustPlusAuth.isValidSteamId(null), false);
+    });
+
+    Test.it('never builds a path out of another value', (t) => {
+        const directory = useTempAuthDir(t);
+
+        Assert.throws(() => RustPlusAuth.getAuthFilePath('../escape'), /Invalid steam id/);
+        Assert.throws(() => RustPlusAuth.writeAuth('hoster', { token: 'x' }), /Invalid steam id/);
+        Assert.strictEqual(RustPlusAuth.readAuth('../escape'), null);
+        Assert.doesNotThrow(() => RustPlusAuth.removeAuth('../escape'));
+        Assert.deepStrictEqual(Fs.readdirSync(directory), []);
+    });
+
+    Test.it('takes the steam id of a token only when it is a SteamID64', () => {
+        Assert.strictEqual(RustPlusAuth.getTokenSteamId(tokenPayload({ steamId: '76561198000000102' })),
+            '76561198000000102');
+        Assert.strictEqual(RustPlusAuth.getTokenSteamId(tokenPayload({ steamId: '../../x' })), null);
+        Assert.strictEqual(RustPlusAuth.getTokenSteamId(tokenPayload({ steamId: 'hoster' })), null);
+        Assert.strictEqual(RustPlusAuth.getTokenSteamId(tokenPayload({ steamId: 76561198000000102 })), null);
+    });
+
+    Test.it('lists only stored logins with a valid steam id', (t) => {
+        const directory = useTempAuthDir(t);
+
+        RustPlusAuth.writeAuth(STEAM_ID, { steamId: STEAM_ID, token: 'payload.signature', servers: [] });
+        Fs.writeFileSync(Path.join(directory, 'hoster.json'), JSON.stringify({ token: 'payload.signature' }));
+
+        Assert.deepStrictEqual(RustPlusAuth.listSteamIds(), [STEAM_ID]);
     });
 });
 

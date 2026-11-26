@@ -20,6 +20,8 @@
 
 const Assert = require('node:assert');
 const Fs = require('node:fs');
+const Os = require('node:os');
+const Path = require('node:path');
 const Test = require('node:test');
 
 const RustPlusAuth = require('../src/util/rustplusAuth.js');
@@ -28,12 +30,22 @@ const RustPlusLogin = require('../src/util/rustplusLogin.js');
 /* Account token with a known expiry (1795255624), the refresh token below is only a marker. */
 const TOKEN = 'eyJzdGVhbUlkIjoiNzY1NjExOTgwMDAwMDAwMDAiLCJleHAiOjE3OTUyNTU2MjR9.c2lnbmF0dXJlLXNpZ25hdHVyZQ==';
 
+/* The stored logins go to a temporary directory, never into the real credentials of a local bot. */
+function useTempAuthDir(t) {
+    const directory = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'rpp-login-'));
+    RustPlusAuth.setAuthDir(directory);
+    t.after(() => {
+        RustPlusAuth.setAuthDir(null);
+        Fs.rmSync(directory, { recursive: true, force: true });
+    });
+    return directory;
+}
+
 Test.describe('RustPlusLogin.storeAuth', () => {
     const STEAM_ID = '76561198000000001';
 
-    Test.afterEach(() => {
-        const path = RustPlusAuth.getAuthFilePath(STEAM_ID);
-        if (Fs.existsSync(path)) Fs.unlinkSync(path);
+    Test.beforeEach((t) => {
+        useTempAuthDir(t);
     });
 
     Test.it('stores the token, the servers and the Steam refresh token', () => {
@@ -68,7 +80,8 @@ Test.describe('RustPlusLogin.storeAuth', () => {
 });
 
 Test.describe('RustPlusLogin.renewAuth', () => {
-    Test.it('needs a stored login and a stored refresh token', async () => {
+    Test.it('needs a stored login and a stored refresh token', async (t) => {
+        useTempAuthDir(t);
         const steamId = '76561198000000002';
 
         await Assert.rejects(() => RustPlusLogin.renewAuth(steamId), /No stored Rust\+ login/);
@@ -76,20 +89,16 @@ Test.describe('RustPlusLogin.renewAuth', () => {
         /* A login file without refresh token cannot be renewed (only a new login can). */
         RustPlusLogin.storeAuth(steamId, TOKEN, []);
         await Assert.rejects(() => RustPlusLogin.renewAuth(steamId), /No Steam refresh token stored/);
-
-        const path = RustPlusAuth.getAuthFilePath(steamId);
-        if (Fs.existsSync(path)) Fs.unlinkSync(path);
     });
-    Test.it('reports a refresh token Steam does not accept', async () => {
+
+    Test.it('reports a refresh token Steam does not accept', async (t) => {
+        useTempAuthDir(t);
         const steamId = '76561198000000003';
 
         RustPlusLogin.storeAuth(steamId, TOKEN, [], 'not-a-jwt');
 
         /* The steam-session setter validates the token, so a broken file fails fast. */
         await Assert.rejects(() => RustPlusLogin.renewAuth(steamId), /Invalid JWT/);
-
-        const path = RustPlusAuth.getAuthFilePath(steamId);
-        if (Fs.existsSync(path)) Fs.unlinkSync(path);
     });
 });
 
