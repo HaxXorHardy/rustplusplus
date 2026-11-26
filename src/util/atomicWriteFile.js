@@ -18,8 +18,75 @@
 
 */
 
+const Crypto = require('crypto');
 const Fs = require('fs');
 const Path = require('path');
+
+/* Windows: a virus scanner or the indexer can hold the target open for a moment, the rename is tried again. */
+const RENAME_RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
+const RENAME_ATTEMPTS = 5;
+const RENAME_RETRY_DELAY_MS = 20;
+
+/** @param {number} ms */
+function sleepSync(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** @param {string} path */
+function unlinkQuietly(path) {
+    try {
+        Fs.unlinkSync(path);
+    }
+    catch (e) {
+        /* Not created or already gone. */
+    }
+}
+
+/**
+ * @param {string} from
+ * @param {string} to
+ */
+function renameWithRetry(from, to) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            Fs.renameSync(from, to);
+            return;
+        }
+        catch (error) {
+            const code = (error && typeof error === 'object' && 'code' in error) ? `${error.code}` : '';
+            if (attempt >= RENAME_ATTEMPTS || !RENAME_RETRY_CODES.includes(code)) throw error;
+            sleepSync(RENAME_RETRY_DELAY_MS * attempt);
+        }
+    }
+}
+
+/*
+    The rename is only durable once the directory entry is on disk. Windows cannot open a directory for that, elsewhere
+    it is best effort (some file systems refuse it, the data itself is flushed already).
+    @param {string} directory
+*/
+function fsyncDirectory(directory) {
+    if (process.platform === 'win32') return;
+
+    let fd = null;
+    try {
+        fd = Fs.openSync(directory, 'r');
+        Fs.fsyncSync(fd);
+    }
+    catch (e) {
+        /* Best effort. */
+    }
+    finally {
+        if (fd !== null) {
+            try {
+                Fs.closeSync(fd);
+            }
+            catch (e) {
+                /* Nothing to do. */
+            }
+        }
+    }
+}
 
 /*
     Write a file so that a crash can never leave a half-written result behind: the data goes to a
@@ -34,24 +101,38 @@ const Path = require('path');
     @param {number|null} [mode] File mode of the target, null keeps the default of the runtime.
 */
 module.exports = function atomicWriteFile(targetPath, data, encoding = /** @type {BufferEncoding} */ ('utf8'), mode = null) {
-    Fs.mkdirSync(Path.dirname(targetPath), { recursive: true });
+    const directory = Path.dirname(targetPath);
+    Fs.mkdirSync(directory, { recursive: true });
 
-    const tempPath = `${targetPath}.tmp`;
+    /*
+        A unique name (pid + random), created exclusively: a leftover file of a crashed write or of a second writer
+        is never reused, so it can neither mix contents nor hand its (wider) permissions to the target.
+    */
+    const tempPath = `${targetPath}.${process.pid}.${Crypto.randomBytes(6).toString('hex')}.tmp`;
 
-    /* A file that only the bot has to read (the Rust+ account token) is created with restrictive permissions. */
-    Fs.writeFileSync(tempPath, data, (mode === null) ? { encoding } : { encoding, mode });
-
+    let fd = null;
     try {
-        const fd = Fs.openSync(tempPath, 'r+');
+        /* A file that only the bot has to read (the Rust+ account token) is created with restrictive permissions. */
+        fd = (mode === null) ? Fs.openSync(tempPath, 'wx') : Fs.openSync(tempPath, 'wx', mode);
+        Fs.writeFileSync(fd, data, { encoding });
         Fs.fsyncSync(fd);
         Fs.closeSync(fd);
+        fd = null;
+
+        renameWithRetry(tempPath, targetPath);
     }
     catch (error) {
-        if (Fs.existsSync(tempPath)) {
-            Fs.unlinkSync(tempPath);
+        if (fd !== null) {
+            try {
+                Fs.closeSync(fd);
+            }
+            catch (e) {
+                /* The original error is the one that matters. */
+            }
         }
+        unlinkQuietly(tempPath);
         throw error;
     }
 
-    Fs.renameSync(tempPath, targetPath);
+    fsyncDirectory(directory);
 };

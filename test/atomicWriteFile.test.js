@@ -81,4 +81,88 @@ Test.describe("atomicWriteFile mode", () => {
 
         Assert.strictEqual(Fs.statSync(target).mode & 0o777, 0o600);
     });
+
+    Test.it("does not reuse a leftover temporary file with wider permissions", { skip: process.platform === 'win32' }, (t) => {
+        const directory = makeTempDirectory(t);
+        const target = Path.join(directory, 'token.json');
+
+        /* The fixed name of older versions, left behind by a crash. */
+        Fs.writeFileSync(`${target}.tmp`, 'old', { mode: 0o644 });
+
+        AtomicWriteFile(target, '{"token":"x"}', 'utf8', 0o600);
+
+        Assert.strictEqual(Fs.statSync(target).mode & 0o777, 0o600);
+        Assert.strictEqual(Fs.readFileSync(target, 'utf8'), '{"token":"x"}');
+    });
+});
+
+Test.describe('atomicWriteFile failures', () => {
+    Test.it('retries a rename that Windows refused for a moment', (t) => {
+        const directory = makeTempDirectory(t);
+        const target = Path.join(directory, 'instance.json');
+
+        const original = Fs.renameSync;
+        let calls = 0;
+        Fs.renameSync = (from, to) => {
+            calls += 1;
+            if (calls < 3) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+            return original(from, to);
+        };
+        t.after(() => { Fs.renameSync = original; });
+
+        AtomicWriteFile(target, 'payload');
+
+        Assert.strictEqual(calls, 3);
+        Assert.strictEqual(Fs.readFileSync(target, 'utf8'), 'payload');
+        Assert.deepStrictEqual(Fs.readdirSync(directory), ['instance.json']);
+    });
+
+    Test.it('removes the temporary file when the rename keeps failing', (t) => {
+        const directory = makeTempDirectory(t);
+        const target = Path.join(directory, 'instance.json');
+
+        const original = Fs.renameSync;
+        Fs.renameSync = () => { throw Object.assign(new Error('denied'), { code: 'EPERM' }); };
+        t.after(() => { Fs.renameSync = original; });
+
+        Assert.throws(() => AtomicWriteFile(target, 'payload'), /denied/);
+        Assert.deepStrictEqual(Fs.readdirSync(directory), []);
+    });
+
+    Test.it('does not retry other errors', (t) => {
+        const directory = makeTempDirectory(t);
+        const target = Path.join(directory, 'instance.json');
+
+        const original = Fs.renameSync;
+        let calls = 0;
+        Fs.renameSync = () => {
+            calls += 1;
+            throw Object.assign(new Error('no space'), { code: 'ENOSPC' });
+        };
+        t.after(() => { Fs.renameSync = original; });
+
+        Assert.throws(() => AtomicWriteFile(target, 'payload'), /no space/);
+        Assert.strictEqual(calls, 1);
+        Assert.deepStrictEqual(Fs.readdirSync(directory), []);
+    });
+
+    Test.it('uses a different temporary file for every write', (t) => {
+        const directory = makeTempDirectory(t);
+        const target = Path.join(directory, 'instance.json');
+
+        const original = Fs.renameSync;
+        const temps = [];
+        Fs.renameSync = (from, to) => {
+            temps.push(from);
+            return original(from, to);
+        };
+        t.after(() => { Fs.renameSync = original; });
+
+        AtomicWriteFile(target, 'first');
+        AtomicWriteFile(target, 'second');
+
+        Assert.strictEqual(temps.length, 2);
+        Assert.notStrictEqual(temps[0], temps[1]);
+        Assert.ok(temps.every((e) => e.startsWith(`${target}.${process.pid}.`)));
+    });
 });
