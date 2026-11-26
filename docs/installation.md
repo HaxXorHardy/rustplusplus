@@ -4,10 +4,12 @@
 
 Program | Version | Download | Note
 ------- | ------- | -------- | ----
-`NodeJS` | >= 22.12.0 | [**here**](https://nodejs.org/en/download/) | Since discordjs v14 is used, the version needs to be at least 22.12.0.
+`NodeJS` | >= 22.13.0 | [**here**](https://nodejs.org/en/download/) | The runtime data is stored with the built-in `node:sqlite`, which needs no `--experimental-sqlite` flag from 22.13.0 on.
 `Git` | Any | [**here**](https://git-scm.com/downloads) | &nbsp;
 
 ## Optional Software
+[**FFmpeg**](https://ffmpeg.org/download.html) (with libopus, as in the usual builds) has to be on the `PATH` for the voice feature (`/voice join`, event notifications spoken in the voice channel): the text-to-speech audio is converted with it. The Docker image contains it.
+
 [**GraphicsMagick**](http://www.graphicsmagick.org/download.html) draws the step-trace of the cargoship and the patrol helicopter on the map. The Rust+ API no longer reports those two, so it is not needed at the moment; the Docker image contains it anyway.
 
 ## Configuration
