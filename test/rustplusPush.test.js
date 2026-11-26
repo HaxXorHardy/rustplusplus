@@ -221,6 +221,8 @@ Test.describe('RustPlusPush.ensureRegistered', () => {
 /* A notification as the FCM client (src/util/fcm) delivers it. */
 function notification(channelId, title, message, body, persistentId = 'p-1') {
     return {
+        from: '976529667804',
+        category: 'com.facepunch.rust.companion',
         persistentId: persistentId,
         appData: [
             { key: 'channelId', value: channelId },
@@ -303,6 +305,55 @@ Test.describe('RustPlusPushNotifications', () => {
 
         Assert.strictEqual(scheduled.length, 0);
         Assert.deepStrictEqual(runs, [{ pushPairing: { steamId: STEAM_ID, body: body } }]);
+    });
+
+    Test.it('only reads messages of the Rust+ sender', () => {
+        const data = notification('alarm', 'You\'re getting raided!', 'msg', { id: SERVER_ID });
+
+        Assert.notStrictEqual(RustPlusPushNotifications.parse(data), null);
+        Assert.strictEqual(RustPlusPushNotifications.parse(Object.assign({}, data, { from: '123456789' })), null);
+        Assert.strictEqual(RustPlusPushNotifications.parse(Object.assign({}, data, { category: 'com.evil.app' })),
+            null);
+        Assert.strictEqual(RustPlusPushNotifications.parse(Object.assign({}, data, { from: undefined })), null);
+    });
+
+    Test.it('tells public server addresses from local ones', () => {
+        for (const host of ['1.2.3.4', '203.0.113.9', 'play.example.com', '2001:db8::1', '::ffff:8.8.8.8']) {
+            Assert.strictEqual(RustPlusPushNotifications.isPublicHost(host), true, host);
+        }
+        for (const host of ['127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.10', '169.254.169.254', '0.0.0.0',
+            '100.64.0.1', '::1', '::', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', 'localhost', 'a.localhost',
+            'intranet', 'bad_host.com', '', '-x.com']) {
+            Assert.strictEqual(RustPlusPushNotifications.isPublicHost(host), false, host);
+        }
+    });
+
+    Test.it('names the invalid field of a pairing body', () => {
+        const valid = { id: SERVER_ID, ip: '1.2.3.4', port: '28082', playerToken: '-123', entityId: '456' };
+        const field = (change) => RustPlusPushNotifications.invalidPairingField(Object.assign({}, valid, change));
+
+        Assert.strictEqual(field({}), null);
+        Assert.strictEqual(field({ port: 28082, entityId: 456, playerToken: 123 }), null);
+        Assert.strictEqual(field({ ip: '127.0.0.1' }), 'ip');
+        Assert.strictEqual(field({ port: '0' }), 'port');
+        Assert.strictEqual(field({ port: '65536' }), 'port');
+        Assert.strictEqual(field({ port: '28082.5' }), 'port');
+        Assert.strictEqual(field({ entityId: '1; drop' }), 'entityId');
+        Assert.strictEqual(field({ playerToken: 'abc' }), 'playerToken');
+    });
+
+    Test.it('reads the history instead of a pairing push that points to a local address', async () => {
+        const client = fakeClient(serverInstance());
+        const runs = [];
+
+        client.refreshPairingHistory = async (options) => { runs.push(options); };
+
+        const body = { type: 'server', id: SERVER_ID, ip: '192.168.0.5', port: '28082', playerToken: '-123' };
+        await RustPlusPushNotifications.handle(client, STEAM_ID,
+            RustPlusPushNotifications.parse(notification('pairing', 'Server', '', body)), { schedule: (fn) => fn() });
+
+        Assert.deepStrictEqual(runs, [{ steamIds: [STEAM_ID], freshAccountState: true }]);
+        Assert.ok(client.logs.some((text) => text.includes('invalid ip')));
     });
 
     Test.it('reads the history when the pairing push carries no pairing data', async () => {
@@ -608,6 +659,30 @@ Test.describe('RustPlusPushListener', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         Assert.strictEqual(runs.length, 1);
+    });
+
+    Test.it('ignores a message of another sender', async (t) => {
+        useTempPushDir(t);
+        stubAuth(t, { steamId: STEAM_ID, token: 'token' });
+        t.after(() => RustPlusPushListener.stop());
+
+        const services = fakeServices();
+        const module_ = fakeReceiverModule();
+        services.pushReceiver.Client = module_.Client;
+
+        const client = fakeClient(serverInstance());
+        const runs = [];
+        client.refreshPairingHistory = async (options) => { runs.push(options); };
+
+        await RustPlusPushListener.startAccount(client, STEAM_ID, Object.assign({ schedule: (fn) => fn() }, services));
+
+        const forged = Object.assign(notification('pairing', 'Server', '', { type: 'server', id: SERVER_ID,
+            ip: '1.2.3.4', port: '28082', playerToken: '1' }, 'n-2'), { from: '1111', category: 'com.evil' });
+        module_.receivers[0].handlers.ON_DATA_RECEIVED(forged);
+        await new Promise((resolve) => setImmediate(resolve));
+
+        Assert.strictEqual(runs.length, 0);
+        Assert.ok(client.logs.some((text) => text.includes('from another sender') && text.includes('"1111"')));
     });
 
     Test.it('keeps the FCM connection when only the account token changed', async (t) => {

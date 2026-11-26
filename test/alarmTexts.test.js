@@ -128,6 +128,8 @@ Test.describe('alarm push: texts of the game', () => {
     /* As the game sends it (seen live): the body names the server, not the alarm. */
     function alarmPush(title, message) {
         return RustPlusPushNotifications.parse({
+            from: '976529667804',
+            category: 'com.facepunch.rust.companion',
             persistentId: 'p-1',
             appData: [
                 { key: 'channelId', value: 'alarm' },

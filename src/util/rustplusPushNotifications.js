@@ -33,6 +33,7 @@
 */
 
 const Discord = require('discord.js');
+const Net = require('net');
 const Path = require('path');
 
 const AlarmTexts = require('./alarmTexts.js');
@@ -40,6 +41,7 @@ const Config = require('../../config');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const RustPlusHistory = require('./rustplusHistory.js');
+const RustPlusPush = require('./rustplusPush.js');
 const Scrape = require('./scrape.js');
 
 const RAID_ALARM_TITLE = 'You\'re getting raided!';
@@ -77,9 +79,19 @@ function sentAtMs(sent) {
     return null;
 }
 
+/*
+    Whether an FCM data message comes from the Rust+ app's Firebase project: "from" is its sender id, "category" the
+    package of the app (both required fields of DataMessageStanza). Anyone who knows the FCM token of the device could
+    send it a message of another project; the bot only acts on those of Rust+.
+*/
+function isFromRustPlus(data) {
+    return Boolean(data) && `${data.from}` === RustPlusPush.RUSTPLUS_FCM.gcmSenderId &&
+        data.category === RustPlusPush.RUSTPLUS_FCM.androidPackageName;
+}
+
 /* { persistentId, sentAtMs, channelId, title, message, body } of an FCM data message (src/util/fcm), or null. */
 function parse(data) {
-    if (!data || !Array.isArray(data.appData)) return null;
+    if (!data || !Array.isArray(data.appData) || !isFromRustPlus(data)) return null;
 
     const value = (key) => {
         const item = data.appData.find((entry) => entry && entry.key === key);
@@ -182,6 +194,70 @@ function isConnectedTo(client, guildId, serverKey) {
     const rustplus = client.rustplusInstances ? client.rustplusInstances[guildId] : null;
 
     return Boolean(rustplus && rustplus.serverId === serverKey && rustplus.isOperational);
+}
+
+function isPublicIpv4(ip) {
+    const [a, b] = ip.split('.').map(Number);
+
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;     /* this network, private, loopback, multicast */
+    if (a === 100 && b >= 64 && b <= 127) return false;                 /* carrier-grade NAT */
+    if (a === 169 && b === 254) return false;                           /* link-local */
+    if (a === 172 && b >= 16 && b <= 31) return false;                  /* private */
+    if (a === 192 && b === 168) return false;                           /* private */
+
+    return true;
+}
+
+function isPublicIpv6(ip) {
+    const address = ip.split('%')[0].toLowerCase();
+
+    /* ::, ::1 and the other addresses with a zero prefix; an IPv4-mapped one counts as its IPv4 address. */
+    if (address.startsWith('::')) {
+        const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(address);
+        return mapped !== null && isPublicIpv4(mapped[1]);
+    }
+
+    const first = parseInt(address.split(':')[0], 16);
+    if ((first & 0xfe00) === 0xfc00) return false;                      /* unique local */
+    if ((first & 0xffc0) === 0xfe80) return false;                      /* link-local */
+    if ((first & 0xff00) === 0xff00) return false;                      /* multicast */
+
+    return true;
+}
+
+/*
+    A server address a pairing push may name: a public IP address or a host name. A name can still resolve to a
+    private address - the push of the Rust+ project is trusted that far, the history is the fallback for the rest.
+*/
+function isPublicHost(value) {
+    if (typeof value !== 'string' || value === '' || value.length > 253) return false;
+
+    const host = value.toLowerCase();
+    const version = Net.isIP(host);
+    if (version === 4) return isPublicIpv4(host);
+    if (version === 6) return isPublicIpv6(host);
+
+    if (host === 'localhost' || host.endsWith('.localhost')) return false;
+
+    return /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$/.test(host);
+}
+
+/*
+    The field of a pairing body that is not what Rust+ sends, or null when all are. Only present fields are checked
+    (a device pairing names the server by its id and may leave the address out).
+*/
+function invalidPairingField(body) {
+    const present = (value) => value !== undefined && value !== null && value !== '';
+
+    if (present(body.ip) && !isPublicHost(`${body.ip}`)) return 'ip';
+    if (present(body.port)) {
+        const port = Number(body.port);
+        if (!/^\d{1,5}$/.test(`${body.port}`) || port < 1 || port > 65535) return 'port';
+    }
+    if (present(body.entityId) && !/^\d{1,20}$/.test(`${body.entityId}`)) return 'entityId';
+    if (present(body.playerToken) && !/^-?\d{1,20}$/.test(`${body.playerToken}`)) return 'playerToken';
+
+    return null;
 }
 
 function isValidUrl(url) {
@@ -477,7 +553,11 @@ async function handle(client, steamId, notification, deps = {}) {
         */
         const body = notification.body;
         const present = (value) => value !== undefined && value !== null && value !== '';
-        const usable = Boolean(body.id) && (present(body.entityId) || present(body.playerToken));
+        const complete = Boolean(body.id) && (present(body.entityId) || present(body.playerToken));
+
+        /* A pairing with an address or token Rust+ does not send is not applied, the history has the real one. */
+        const invalidField = complete ? invalidPairingField(body) : null;
+        const usable = complete && invalidField === null;
 
         if (typeof client.refreshPairingHistory === 'function') {
             const run = () => client.refreshPairingHistory(usable ?
@@ -491,7 +571,9 @@ async function handle(client, steamId, notification, deps = {}) {
 
         client.log(client.intlGet(null, 'infoCap'),
             `Rust+ push: pairing (${body.type || 'unknown'}${body.entityName ? ` "${body.entityName}"` : ''}) for ` +
-            `${steamId}, ${usable ? 'applied from the push' : 'no pairing data in the push, the history is read'}.`);
+            `${steamId}, ${usable ? 'applied from the push' : invalidField !== null ?
+                `the push has an invalid ${invalidField}, the history is read` :
+                'no pairing data in the push, the history is read'}.`);
 
         return [{ kind: kind, handled: true }];
     }
@@ -544,6 +626,9 @@ async function handle(client, steamId, notification, deps = {}) {
 
 module.exports = {
     RAID_ALARM_TITLE: RAID_ALARM_TITLE,
+    isFromRustPlus: isFromRustPlus,
+    isPublicHost: isPublicHost,
+    invalidPairingField: invalidPairingField,
     parse: parse,
     classify: classify,
     findServerKey: findServerKey,

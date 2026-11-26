@@ -108,6 +108,15 @@ function describeReceived(data, notification) {
 }
 
 async function onData(client, steamId, data, deps) {
+    /* Another Firebase project than the Rust+ app: never acted on, but logged in case Rust+ ever changes its sender. */
+    if (!RustPlusPushNotifications.isFromRustPlus(data)) {
+        const field = (name) => JSON.stringify(data && data[name] !== undefined ? `${data[name]}`.slice(0, 100) : null);
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: a message of ${steamId} from another sender was ignored (from ${field('from')}, ` +
+            `category ${field('category')}).`, 'warn');
+        return;
+    }
+
     const notification = RustPlusPushNotifications.parse(data);
 
     client.log(client.intlGet(null, 'infoCap'), describeReceived(data, notification), 'debug');
