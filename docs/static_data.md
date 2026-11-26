@@ -171,12 +171,16 @@ pipeline on GitHub Actions:
 * **Manual (`workflow_dispatch`)** - choose whether to refresh the item metadata and the RustLabs
   data, the page delay, headless mode and a dry run that does not commit.
 
-The workflow installs the pinned `DepotDownloader_3.4.0` release (linux-x64), exports
+The workflow installs the pinned `DepotDownloader_3.4.0` release (linux-x64) after checking the archive against the
+SHA-256 in `DEPOT_DOWNLOADER_SHA256` (the release publishes no checksum, so it is pinned in the workflow and has to be
+updated together with the version; without it the step fails), exports
 `RPP_DEPOTDOWNLOADER_PATH` and runs `node scripts/updateStaticData.js --download ...`. The dedicated
 server depot is anonymously downloadable, so **no Steam credentials or secrets are needed**.
 
-The workflow only commits when `data/static-json` or `data/staticData.sqlite` actually changed, and
-pushes directly to the branch it runs on (default: `master`).
+The workflow only commits when `data/static-json` or `data/staticData.sqlite` actually changed. It
+never pushes to the branch it runs on: the commit goes to `chore/static-data-refresh` and a pull
+request against that branch is opened (or the open one is updated). A pull request opened with the
+workflow token does not start the other workflows, close and reopen it to run the tests.
 
 ### Limitations in CI
 
@@ -187,5 +191,5 @@ pushes directly to the branch it runs on (default: `master`).
   metadata plus the database are still rebuilt.
 * The browser session (`scripts/rustlabs/.browser-profile`) is not committed and does not exist on a
   fresh runner, so no Cloudflare clearance from a local run can be reused.
-* If `master` is protected, the automated commit is rejected. Allow `github-actions[bot]` to push
-  (or switch the workflow to open a pull request instead).
+* The repository setting "Allow GitHub Actions to create and approve pull requests" has to be on,
+  otherwise the pull request cannot be opened (the branch is pushed all the same).

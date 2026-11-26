@@ -32,8 +32,11 @@ on:
     # Monthly, on the 1st at 04:00 UTC.
     - cron: "0 4 1 * *"
 
+# The job opens a pull request instead of pushing to the default branch: a refresh is reviewed (and runs the tests)
+# before it can reach master and with it the :master image.
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: update-static-data
@@ -45,33 +48,46 @@ jobs:
     timeout-minutes: 90
 
     steps:
+      # The write token stays out of .git/config while downloaded tools run; only the last step pushes, with an
+      # explicit token.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 
-      # The pipeline only uses Node built-ins; only the RustLabs scraper needs playwright-core.
+      # The pipeline only uses Node built-ins; only the RustLabs scraper needs playwright-core. The version is the one
+      # of package-lock.json.
       - name: Install scraper dependency
-        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright-core@1.58.2
 
       # scripts/downloadRustItems.js pulls only Bundles/items/*.json from depot 258554 (~0.5 MB)
       # out of the ~5 GB Rust dedicated server depot. That depot is downloadable anonymously,
-      # so this needs no Steam credentials. The version is pinned for reproducible runs.
+      # so this needs no Steam credentials. The version is pinned for reproducible runs, and the archive is checked
+      # against a pinned SHA-256 before anything in it runs. The release publishes no checksum, so
+      # DEPOT_DOWNLOADER_SHA256 has to be filled in from a verified download of the archive
+      # (sha256sum DepotDownloader-linux-x64.zip) and updated together with the version. Without it the step fails.
       - name: Install DepotDownloader
         if: github.event_name == 'schedule' || inputs.items
         env:
           DEPOT_DOWNLOADER_VERSION: DepotDownloader_3.4.0
+          DEPOT_DOWNLOADER_SHA256: ""
         run: |
           set -euo pipefail
+          if [ -z "${DEPOT_DOWNLOADER_SHA256}" ]; then
+            echo "::error::DEPOT_DOWNLOADER_SHA256 is not set in update-static-data.yml, refusing to run an unverified download."
+            exit 1
+          fi
           mkdir -p .cache/depotdownloader
           curl -fsSL \
             "https://github.com/SteamRE/DepotDownloader/releases/download/${DEPOT_DOWNLOADER_VERSION}/DepotDownloader-linux-x64.zip" \
             -o "${RUNNER_TEMP}/depotdownloader.zip"
+          echo "${DEPOT_DOWNLOADER_SHA256}  ${RUNNER_TEMP}/depotdownloader.zip" | sha256sum --check --strict
           unzip -q -o "${RUNNER_TEMP}/depotdownloader.zip" -d .cache/depotdownloader
           chmod +x .cache/depotdownloader/DepotDownloader
           echo "RPP_DEPOTDOWNLOADER_PATH=${GITHUB_WORKSPACE}/.cache/depotdownloader/DepotDownloader" >> "${GITHUB_ENV}"
@@ -119,9 +135,18 @@ jobs:
 
           node scripts/updateStaticData.js "${args[@]}" --sleep "${INPUT_SLEEP_MS:-1500}"
 
-      - name: Commit changes
+      # The refresh goes to its own branch with a pull request; an open one is updated. The branch is rebuilt from the
+      # base on every run. The lease only replaces the state read just before the push, so a maintainer push in between
+      # makes the push fail instead of being overwritten.
+      - name: Open a pull request with the changes
         if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: chore/static-data-refresh
+          BASE: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -132,5 +157,25 @@ jobs:
             exit 0
           fi
 
+          git switch -c "$BRANCH"
           git commit -m "chore(static-data): automated refresh"
-          git push origin "HEAD:${{ github.ref_name }}"
+
+          # The token is only passed to these git calls, it is never written to .git/config.
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          current=$(git -c "http.https://github.com/.extraheader=$auth" ls-remote "$remote" "refs/heads/$BRANCH" | cut -f1)
+          git -c "http.https://github.com/.extraheader=$auth" push \
+            --force-with-lease="refs/heads/$BRANCH:$current" "$remote" "HEAD:refs/heads/$BRANCH"
+
+          body="Static data refreshed by the [update workflow run]($RUN_URL) on \`$BASE\`. Pull requests opened with the workflow token do not start other workflows: close and reopen this one to run the tests."
+          existing=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json url --jq '.[0].url')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body "$body"
+            echo "Updated the open pull request: $existing"
+            exit 0
+          fi
+
+          gh pr create --head "$BRANCH" --base "$BASE" \
+            --title "chore(static-data): automated refresh" \
+            --body "$body"
