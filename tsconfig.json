@@ -11,6 +11,15 @@
     "strict": true,                                      /* Enable all strict type-checking options. */
     "skipLibCheck": true,                                /* Skip type checking all .d.ts files. */
     "outDir": "./dist",                                  /* Redirect output structure to the directory. */
-  }
+  },
+  /* With checkJs off, `tsc --noEmit -p .` only parses these files: it is a syntax check of all JavaScript, not a type
+     check. The type check runs with tsconfig.checkjs.json, which replaces this list with the files it covers. */
+  "include": [
+    "index.js",
+    "config/**/*.js",
+    "src/**/*.js",
+    "scripts/**/*.js",
+    "stubs/**/*.js",
+    "test/**/*.js"
+  ]
 }
-
