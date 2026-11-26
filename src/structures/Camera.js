@@ -92,7 +92,15 @@ class Camera {
             return false;
         }
 
-        this._subscribeInfo = response.cameraSubscribeInfo;
+        const info = response.cameraSubscribeInfo;
+        if (!CameraRenderer.isValidResolution(info.width, info.height)) {
+            /* The server holds the subscription already: release it, nothing is rendered at that size. */
+            this._lastError = 'invalid_resolution';
+            await Promise.resolve(this._rustplus.unsubscribeFromCameraAsync()).catch(() => null);
+            return false;
+        }
+
+        this._subscribeInfo = info;
         this._frames = [];
         this._listener = (message) => {
             if (message.broadcast && message.broadcast.cameraRays) this._frames.push(message.broadcast.cameraRays);

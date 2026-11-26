@@ -61,8 +61,25 @@ class IndexGenerator {
     }
 }
 
+/*
+    The resolution comes from the server and sizes every buffer below: a server that reports 20000x20000 would make the
+    whole bot run out of memory. Rust+ cameras are a few hundred pixels wide.
+*/
+const MAX_SIDE = 1024;
+const MAX_PIXELS = 1024 * 1024;
+
+function isValidResolution(width, height) {
+    return Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 &&
+        width <= MAX_SIDE && height <= MAX_SIDE && width * height <= MAX_PIXELS;
+}
+
+function assertValidResolution(width, height) {
+    if (!isValidResolution(width, height)) throw new RangeError(`Invalid camera resolution ${width}x${height}`);
+}
+
 /* Sample index -> pixel index, built once per resolution. */
 function buildSampleMap(width, height) {
+    assertValidResolution(width, height);
     const map = new Int32Array(width * height);
     for (let index = 0; index < map.length; index++) map[index] = index;
 
@@ -173,6 +190,7 @@ function rayColour(ray) {
     whether more frames are needed.
 */
 async function renderPng(frames, width, height) {
+    assertValidResolution(width, height);
     const { Jimp, JimpMime, rgbaToInt } = require('jimp');
 
     const { rays, filled } = decodeFrames(frames, width, height);
@@ -209,4 +227,5 @@ module.exports = {
     renderPng: renderPng,
     coverage: coverage,
     buildSampleMap: buildSampleMap,
+    isValidResolution: isValidResolution,
 };

@@ -27,6 +27,7 @@
 const Assert = require('node:assert');
 const Test = require('node:test');
 
+const Camera = require('../src/structures/Camera.js');
 const CameraRenderer = require('../src/util/cameraRenderer.js');
 
 /* A complete sample: control byte 255, then distance/alignment, then the material. */
@@ -107,5 +108,43 @@ Test.describe('CameraRenderer', () => {
 
         Assert.strictEqual(rendered.filled, 0);
         Assert.strictEqual(rendered.coverage, 0);
+    });
+});
+
+Test.describe('Camera resolution', () => {
+    Test.it('accepts camera sized resolutions only', () => {
+        Assert.strictEqual(CameraRenderer.isValidResolution(160, 90), true);
+        Assert.strictEqual(CameraRenderer.isValidResolution(1024, 1024), true);
+        for (const [width, height] of [[0, 90], [-1, 90], [160.5, 90], [20000, 20000], [1025, 1], [null, 90],
+            [undefined, undefined], ['160', 90]]) {
+            Assert.strictEqual(CameraRenderer.isValidResolution(width, height), false, `${width}x${height}`);
+        }
+    });
+
+    Test.it('renders nothing at a resolution the server should never report', async () => {
+        await Assert.rejects(CameraRenderer.renderPng([], 20000, 20000), RangeError);
+        Assert.throws(() => CameraRenderer.decodeFrames([], 0, 10), RangeError);
+    });
+
+    Test.it('refuses a subscription with a huge resolution and releases it', async () => {
+        let unsubscribed = 0;
+        const listeners = [];
+        const adapter = {
+            on: (event, listener) => listeners.push(listener),
+            removeListener: () => { },
+            subscribeToCameraAsync: async () => ({
+                error: null, cameraSubscribeInfo: { width: 20000, height: 20000, controlFlags: 0 },
+            }),
+            unsubscribeFromCameraAsync: async () => { unsubscribed += 1; },
+        };
+        const camera = new Camera(adapter, 'cam1');
+
+        const result = await camera.snapshot(0);
+
+        Assert.strictEqual(result.ok, false);
+        Assert.strictEqual(result.error, 'invalid_resolution');
+        Assert.strictEqual(unsubscribed, 1);
+        Assert.strictEqual(listeners.length, 0);
+        Assert.strictEqual(camera.width, 0);
     });
 });
