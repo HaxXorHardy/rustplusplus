@@ -72,6 +72,20 @@ function statsOf(server, key) {
     return server.teamStats;
 }
 
+/*
+    The stats of the current week, a new week when it changed. The finished week (with data) is kept in
+    server.teamStatsFinished until the team poll returns it, so a session or death that starts the new week does not
+    count into the old one nor lose it for the weekly report.
+*/
+function currentWeek(server, week) {
+    const stats = statsOf(server, week);
+    if (stats.week !== week) {
+        if (Object.keys(stats.players).length !== 0) server.teamStatsFinished = stats;
+        server.teamStats = emptyWeek(week);
+    }
+    return server.teamStats;
+}
+
 function playerOf(stats, steamId, name) {
     const id = `${steamId}`;
     if (!stats.players[id]) stats.players[id] = { name: `${name || id}`, onlineMs: 0, sessions: 0, deaths: 0 };
@@ -90,15 +104,10 @@ function tick(client, guildId, serverId, members, now = Date.now(), date = new D
 
     const key = `${guildId}:${serverId}`;
     const week = weekKey(date, GuildSettings.timeZone(guildId));
-    let finished = null;
+    const current = currentWeek(server, week);
+    const finished = server.teamStatsFinished || null;
+    delete server.teamStatsFinished;
 
-    const stats = statsOf(server, week);
-    if (stats.week !== week) {
-        if (Object.keys(stats.players).length !== 0) finished = stats;
-        server.teamStats = emptyWeek(week);
-    }
-
-    const current = server.teamStats;
     const previous = lastTick.get(key);
     const elapsed = previous === undefined ? 0 : Math.min(MAX_TICK_MS, Math.max(0, now - previous));
     lastTick.set(key, now);
@@ -117,16 +126,16 @@ function tick(client, guildId, serverId, members, now = Date.now(), date = new D
     return finished;
 }
 
-function noteSession(client, guildId, serverId, steamId, name) {
+function noteSession(client, guildId, serverId, steamId, name, date = new Date()) {
     const server = client.getInstance(guildId).serverList[serverId];
     if (!server) return;
-    playerOf(statsOf(server, weekKey(new Date(), GuildSettings.timeZone(guildId))), steamId, name).sessions += 1;
+    playerOf(currentWeek(server, weekKey(date, GuildSettings.timeZone(guildId))), steamId, name).sessions += 1;
 }
 
-function noteDeath(client, guildId, serverId, steamId, name) {
+function noteDeath(client, guildId, serverId, steamId, name, date = new Date()) {
     const server = client.getInstance(guildId).serverList[serverId];
     if (!server) return;
-    playerOf(statsOf(server, weekKey(new Date(), GuildSettings.timeZone(guildId))), steamId, name).deaths += 1;
+    playerOf(currentWeek(server, weekKey(date, GuildSettings.timeZone(guildId))), steamId, name).deaths += 1;
 }
 
 /* The players of a week, most online time first. */

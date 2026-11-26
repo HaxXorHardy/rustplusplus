@@ -63,8 +63,8 @@ Test.describe('team stats', () => {
         TeamStats.tick(client, 'guild', 'server', members, t0);
         TeamStats.tick(client, 'guild', 'server', members, t0 + 10000);
         TeamStats.tick(client, 'guild', 'server', members, t0 + 10000 + 10 * 60000);
-        TeamStats.noteSession(client, 'guild', 'server', '2', 'ELMALO');
-        TeamStats.noteDeath(client, 'guild', 'server', '1', 'Hardy');
+        TeamStats.noteSession(client, 'guild', 'server', '2', 'ELMALO', new Date(t0));
+        TeamStats.noteDeath(client, 'guild', 'server', '1', 'Hardy', new Date(t0));
 
         const stats = client.instance.serverList.server.teamStats;
         Assert.strictEqual(stats.players['1'].onlineMs, 10000 + TeamStats.MAX_TICK_MS, 'a pause is no online time');
@@ -85,6 +85,27 @@ Test.describe('team stats', () => {
         Assert.strictEqual(finished.week, '2026-W47');
         Assert.strictEqual(client.instance.serverList.server.teamStats.week, '2026-W48');
         Assert.strictEqual(TeamStats.tick(client, 'guild', 'server', members, monday + 10000), null, 'only once');
+    });
+
+    Test.it('starts the new week on a session or death too and still reports the finished one', () => {
+        const client = fakeClient();
+        const members = [{ steamId: '1', name: 'Hardy', isOnline: true }];
+        const monday = new Date('2026-11-23T00:00:30Z').getTime();
+        TeamStats.tick(client, 'guild', 'server', members, monday - 60000);
+
+        TeamStats.noteDeath(client, 'guild', 'server', '1', 'Hardy', new Date(monday));
+        TeamStats.noteSession(client, 'guild', 'server', '2', 'ELMALO', new Date(monday + 1000));
+
+        const server = client.instance.serverList.server;
+        Assert.strictEqual(server.teamStats.week, '2026-W48');
+        Assert.strictEqual(server.teamStats.players['1'].deaths, 1, 'the death counts into the new week');
+        Assert.strictEqual(server.teamStats.players['2'].sessions, 1);
+
+        const finished = TeamStats.tick(client, 'guild', 'server', members, monday + 10000);
+        Assert.strictEqual(finished.week, '2026-W47');
+        Assert.strictEqual(finished.players['1'].deaths, 0);
+        Assert.strictEqual(server.teamStats.players['1'].deaths, 1, 'the poll keeps the new week');
+        Assert.strictEqual(TeamStats.tick(client, 'guild', 'server', members, monday + 20000), null, 'only once');
     });
 });
 
