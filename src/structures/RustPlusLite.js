@@ -23,6 +23,7 @@ const RustPlusLib = require('@liamcottle/rustplus.js');
 const Client = require('./clientRegistry.js');
 const Config = require('../../config');
 const RustPlusApi = require('../util/rustplusApi.js');
+const ReconnectBackoff = require('../util/reconnectBackoff.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 const RustPlusSocket = require('../util/rustplusSocket.js');
 const RustPlusTransport = require('../util/rustplusTransport.js');
@@ -120,9 +121,26 @@ class RustPlusLite extends RustPlusLib {
     async getTeamChatAsync(timeout = 10000) { return await this.apiRequestAsync('getTeamChat', {}, timeout); }
     async getClanInfoAsync(timeout = 10000) { return await this.apiRequestAsync('getClanInfo', {}, timeout); }
     async getClanChatAsync(timeout = 10000) { return await this.apiRequestAsync('getClanChat', {}, timeout); }
-    async getEntityInfoAsync(id, timeout = 10000) { return await this.apiRequestAsync('getEntityInfo', { entityId: id }, timeout); }
-    async checkSubscriptionAsync(id, timeout = 10000) { return await this.apiRequestAsync('checkSubscription', { entityId: id }, timeout); }
-    async setEntityValueAsync(id, value, timeout = 10000) { return await this.apiRequestAsync('setEntityValue', { entityId: id, value: value }, timeout); }
+    async getEntityInfoAsync(id, timeout = 10000) { return await this.entityRequestAsync('getEntityInfo', id, {}, timeout); }
+    async checkSubscriptionAsync(id, timeout = 10000) { return await this.entityRequestAsync('checkSubscription', id, {}, timeout); }
+    async setEntityValueAsync(id, value, timeout = 10000) { return await this.entityRequestAsync('setEntityValue', id, { value: value }, timeout); }
+
+    /*
+        The entity id is a field of AppRequest itself, not of the payload message (see RustPlus.getEntityInfoAsync):
+        nested in the payload it was dropped by the encoder and the server got a request for entity 0.
+    */
+    async entityRequestAsync(name, entityId, params = {}, timeout = 10000) {
+        try {
+            const request = Object.assign({ entityId: entityId }, RustPlusApi.buildRequest(name, params));
+
+            return await this.sendRequestAsync(request, timeout).catch((e) => {
+                return e;
+            });
+        }
+        catch (e) {
+            return e;
+        }
+    }
     async sendTeamMessageAsync(message, timeout = 10000) { return await this.apiRequestAsync('sendTeamMessage', { message: `${message}` }, timeout); }
     async sendClanMessageAsync(message, timeout = 10000) { return await this.apiRequestAsync('sendClanMessage', { message: `${message}` }, timeout); }
 
@@ -180,10 +198,13 @@ async function rustPlusLiteConnectedEvent(rustplusLite) {
     rustplusLite.log(Client.client.intlGet(null, 'connectedCap'),
         Client.client.intlGet(null, 'rustplusOperational'));
 
-    if (Client.client.rustplusReconnectTimers[rustplusLite.guildId]) {
-        clearTimeout(Client.client.rustplusReconnectTimers[rustplusLite.guildId]);
-        Client.client.rustplusReconnectTimers[rustplusLite.guildId] = null;
+    /* The leader connection works: its own reconnect timer is done, the next disconnect starts with the shortest delay. */
+    if (Client.client.rustplusLiteReconnectTimers[rustplusLite.guildId]) {
+        clearTimeout(Client.client.rustplusLiteReconnectTimers[rustplusLite.guildId]);
+        Client.client.rustplusLiteReconnectTimers[rustplusLite.guildId] = null;
     }
+
+    if (rustplusLite.rustplus) rustplusLite.rustplus.leaderReconnectAttempts = 0;
 }
 
 async function rustPlusLiteConnectingEvent(rustplusLite) {
@@ -205,9 +226,17 @@ async function rustPlusLiteDisconnectedEvent(rustplusLite) {
             Client.client.rustplusLiteReconnectTimers[rustplusLite.guildId] = null;
         }
 
+        /*
+            A leader whose socket keeps failing must not be asked every few seconds: the delay grows with each try. The
+            count lives on the main instance of the guild, which builds every leader connection.
+        */
+        const rustplus = rustplusLite.rustplus;
+        const attempt = (rustplus.leaderReconnectAttempts || 0) + 1;
+        rustplus.leaderReconnectAttempts = attempt;
+
         Client.client.rustplusLiteReconnectTimers[rustplusLite.guildId] = setTimeout(
-            rustplusLite.rustplus.updateLeaderRustPlusLiteInstance.bind(rustplusLite.rustplus),
-            Config.general.reconnectIntervalMs);
+            rustplus.updateLeaderRustPlusLiteInstance.bind(rustplus),
+            ReconnectBackoff(attempt, Config.general.reconnectIntervalMs, Config.general.reconnectIntervalMaxMs));
     }
 }
 
@@ -216,3 +245,6 @@ async function rustPlusLiteErrorEvent(rustplusLite, error) {
 }
 
 module.exports = RustPlusLite;
+/* exported for tests */
+module.exports.rustPlusLiteConnectedEvent = rustPlusLiteConnectedEvent;
+module.exports.rustPlusLiteDisconnectedEvent = rustPlusLiteDisconnectedEvent;

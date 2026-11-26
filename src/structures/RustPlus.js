@@ -104,6 +104,7 @@ class RustPlus extends RustPlusLib {
         this.persistentRuntimeStateRestored = false;
 
         this.leaderRustPlusInstance = null;
+        this.leaderReconnectAttempts = 0;           /* Failed leader connections in a row, see RustPlusLite. */
         this.uptimeServer = null;
         this.transportReconnectScheduled = false;   /* A dropped request already asked for a reconnect. */
         this.authRetryTimer = null;                 /* Retry of a connection whose login/token is not usable. */
