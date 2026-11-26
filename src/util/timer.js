@@ -18,21 +18,39 @@
 
 */
 
+/* setTimeout takes at most 2^31-1 ms (about 24.8 days) and fires a longer delay after 1 ms instead. */
+const MAX_TIMEOUT_MS = 2147483647;
+
 module.exports = {
+    MAX_TIMEOUT_MS: MAX_TIMEOUT_MS,
+
+    /*
+        A delay of 0 or less fires at once (on the next tick) instead of never: "!timer add 0s" used to leave an entry
+        that never fired. A delay above MAX_TIMEOUT_MS ("!timer add 30d") runs in steps of that size.
+    */
     timer: function (callback, delay, ...args) {
         let id, started = 0, remaining = delay, running = false;
 
+        const arm = (ms) => {
+            clearTimeout(id);
+            id = setTimeout(() => {
+                if (ms > MAX_TIMEOUT_MS) {
+                    arm(ms - MAX_TIMEOUT_MS);
+                    return;
+                }
+
+                /* Fired: getTimeLeft (pause + start) must not start it again. */
+                running = false;
+                remaining = 0;
+                callback(args);
+            }, Math.min(ms, MAX_TIMEOUT_MS));
+        };
+
         this.start = function () {
             started = Date.now();
-            if (remaining > 0) {
-                id = setTimeout(callback, remaining, args);
-                running = true;
-                return true;
-            }
-            else {
-                running = false;
-                return false;
-            }
+            running = true;
+            arm(Math.max(0, remaining));
+            return true;
         }
 
         this.stop = function () {
@@ -42,6 +60,7 @@ module.exports = {
         }
 
         this.pause = function () {
+            if (!running) return;
             running = false;
             clearTimeout(id);
             remaining -= Date.now() - started;

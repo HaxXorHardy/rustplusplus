@@ -81,3 +81,51 @@ Test.describe('Timer.secondsToCompactHours (short values)', () => {
         Assert.strictEqual(Timer.secondsToCompactHours(-1), '-');
     });
 });
+
+Test.describe('Timer.timer', () => {
+    Test.it('runs a delay above 2^31-1 ms in steps instead of firing at once', (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+        let fired = 0;
+        const delay = Timer.MAX_TIMEOUT_MS + 5000;
+        const timer = new Timer.timer(() => { fired += 1; }, delay);
+
+        timer.start();
+        t.mock.timers.tick(10);
+        Assert.strictEqual(fired, 0, 'not after 1 ms');
+
+        t.mock.timers.tick(Timer.MAX_TIMEOUT_MS);
+        Assert.strictEqual(fired, 0, 'not after the first step');
+
+        t.mock.timers.tick(5000);
+        Assert.strictEqual(fired, 1);
+    });
+
+    Test.it('fires a delay of 0 or less at once instead of leaving a dead entry', (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+        let fired = 0;
+
+        new Timer.timer(() => { fired += 1; }, 0).start();
+        new Timer.timer(() => { fired += 1; }, -100).start();
+        t.mock.timers.tick(0);
+
+        Assert.strictEqual(fired, 2);
+    });
+
+    Test.it('does not fire again when the time left is asked after it fired', (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+        let fired = 0;
+        const timer = new Timer.timer(() => { fired += 1; }, 10000);
+
+        timer.start();
+        t.mock.timers.tick(5000);
+        Assert.ok(timer.getTimeLeft() <= 5000);
+        t.mock.timers.tick(5000);
+        Assert.strictEqual(fired, 1);
+
+        t.mock.timers.tick(2000);
+        Assert.strictEqual(timer.getTimeLeft(), 0);
+        t.mock.timers.tick(1000);
+        Assert.strictEqual(fired, 1);
+        Assert.strictEqual(timer.getStateRunning(), false);
+    });
+});
