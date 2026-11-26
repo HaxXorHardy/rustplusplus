@@ -108,6 +108,22 @@ Test.describe('RustPlus.rebuildConnection', () => {
     });
 });
 
+Test.describe('RustPlus.rebuildConnection (terminate)', () => {
+    /* A graceful close() waits for the close frame of a dead relay and hung in CLOSING. */
+    Test.it('terminates the socket instead of closing it gracefully', () => {
+        const socket = fakeSocket();
+        socket.terminated = 0;
+        socket.terminate = () => { socket.terminated += 1; };
+
+        const rustplus = fakeRustPlus({ websocket: socket });
+
+        Assert.strictEqual(rustplus.rebuildConnection('terminate', { force: true }), true);
+        Assert.strictEqual(socket.terminated, 1);
+        Assert.strictEqual(socket.closed, 0);
+        Assert.strictEqual(rustplus.connectCalls, 0);
+    });
+});
+
 Test.describe('RustPlus.isResponseValid', () => {
     Test.it('logs a gone device as debug when the caller expects it', async () => {
         const rustplus = fakeRustPlus();

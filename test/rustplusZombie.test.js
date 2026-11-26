@@ -280,3 +280,37 @@ Test.describe('the first poll watchdog (issue #7)', () => {
         Assert.strictEqual(rustplus.operationalWatchdog, null);
     });
 });
+
+Test.describe('RustPlus.scheduleTransportReconnect (socket state)', () => {
+    /* A replaced CONNECTING/CLOSING socket closed late and was ignored: the disconnect cleanup never ran. */
+    Test.it('leaves a socket alone that is still connecting or already closing', (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+
+        for (const readyState of [0, 2]) {
+            Client.client = fakeClient();
+            const rustplus = fakeRustPlus({ websocket: { readyState: readyState } });
+            Client.client.rustplusInstances[GUILD_ID] = rustplus;
+
+            Assert.throws(() => rustplus.sendRequest({}, () => undefined), /Not connected to the Rust\+ relay/);
+            t.mock.timers.tick(5000);
+
+            Assert.strictEqual(rustplus.connectCalls, 0, `readyState ${readyState}`);
+            Assert.strictEqual(rustplus.transportReconnectScheduled, false);
+        }
+    });
+
+    Test.it('does not replace a socket that was opened while the reconnect waited', (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+
+        Client.client = fakeClient();
+        const socket = { readyState: 3 };
+        const rustplus = fakeRustPlus({ websocket: socket });
+        Client.client.rustplusInstances[GUILD_ID] = rustplus;
+
+        Assert.throws(() => rustplus.sendRequest({}, () => undefined));
+        socket.readyState = 1;
+        t.mock.timers.tick(2000);
+
+        Assert.strictEqual(rustplus.connectCalls, 0);
+    });
+});

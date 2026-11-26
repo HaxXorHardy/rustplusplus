@@ -751,14 +751,33 @@ class RustPlus extends RustPlusLib {
     scheduleTransportReconnect() {
         if (!this.isCurrentInstance() || this.transportReconnectScheduled) return;
 
+        /*
+            A socket that is still connecting or already closing ends on its own: the handshake timeout or its 'close'
+            runs the reconnect. Replacing it here ignored its late 'close', so the disconnect cleanup never ran and the
+            connect flow ran twice on one instance.
+        */
+        if (this.isSocketBusy()) return;
+
         this.transportReconnectScheduled = true;
 
         const timer = setTimeout(() => {
             this.transportReconnectScheduled = false;
+
+            /* A socket that was opened meanwhile (or is opening, closing) is not replaced either. */
+            if (this.isSocketBusy() || this.isSocketOpen()) return;
             if (this.isCurrentInstance()) this.connect();
         }, 2000);
 
         if (typeof timer.unref === 'function') timer.unref();
+    }
+
+    /* 0 = CONNECTING, 2 = CLOSING (the ws readyState values). */
+    isSocketBusy() {
+        return Boolean(this.websocket) && (this.websocket.readyState === 0 || this.websocket.readyState === 2);
+    }
+
+    isSocketOpen() {
+        return Boolean(this.websocket) && this.websocket.readyState === 1;
     }
 
     /*
@@ -789,13 +808,18 @@ class RustPlus extends RustPlusLib {
 
         const socket = this.websocket;
 
-        if (!socket || typeof socket.close !== 'function') {
+        if (!socket || (typeof socket.terminate !== 'function' && typeof socket.close !== 'function')) {
             this.connect();
             return true;
         }
 
+        /*
+            terminate() closes at once and always emits 'close'. A graceful close() waits for the close frame of the
+            relay - a dead relay never sends it, and the socket hung in CLOSING without ever reconnecting.
+        */
         try {
-            socket.close();
+            if (typeof socket.terminate === 'function') socket.terminate();
+            else socket.close();
         }
         catch (e) {
             this.log(Client.client.intlGet(null, 'warningCap'),
