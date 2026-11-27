@@ -310,3 +310,119 @@ Test.describe('CredentialsLoginHandler.startQr', () => {
         Assert.strictEqual(CredentialsLoginHandler.getFlow(client, interaction.user.id), null);
     });
 });
+
+/* A Steam session whose approval the test hands out, and that records polls and cancellations. */
+function controllableSteamLogin(sessions) {
+    return class {
+        constructor() {
+            this.cancelled = false;
+            this.polls = 0;
+            this.cookies = new Promise((resolve, reject) => {
+                this.approve = () => resolve(['steamLoginSecure=abc']);
+                this.rejectCookies = reject;
+            });
+            this.cookies.catch(() => undefined);
+            sessions.push(this);
+        }
+
+        async startQr() {
+            return 'https://s.team/q/1234567890';
+        }
+
+        forcePoll() {
+            this.polls += 1;
+        }
+
+        cancel() {
+            this.cancelled = true;
+            this.rejectCookies(new Error('Steam login was cancelled.'));
+        }
+
+        async wait() {
+            return await this.cookies;
+        }
+
+        getRefreshToken() {
+            return 'refresh-token';
+        }
+    };
+}
+
+/* Lets the handler run up to the point where it waits for Steam. */
+async function settle() {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+}
+
+Test.describe('CredentialsLoginHandler flows', () => {
+    Test.it('finishes a QR login once when "Done" is pressed while it waits for Steam', async (t) => {
+        const { client, replies } = fakeClient(t);
+        const sessions = [];
+        const calls = stubDependencies(t, { SteamLogin: controllableSteamLogin(sessions) });
+
+        const qrInteraction = fakeInteraction();
+        const qr = CredentialsLoginHandler.startQr(client, qrInteraction);
+        await settle();
+
+        const doneInteraction = fakeInteraction();
+        const done = CredentialsLoginHandler.confirm(client, doneInteraction);
+        const doneAgain = CredentialsLoginHandler.confirm(client, fakeInteraction());
+        await settle();
+
+        sessions[0].approve();
+        await Promise.all([qr, done, doneAgain]);
+
+        Assert.strictEqual(sessions[0].polls, 2, 'every press asks Steam right away');
+        Assert.strictEqual(calls.loginToRustPlus.length, 1, 'only one Rust+ token is minted');
+        Assert.strictEqual(calls.storeAuth.length, 1);
+
+        /* QR picture, the success of the QR message and the same outcome for both button presses. */
+        const successes = replies.filter((e) =>
+            String(e.embeds[0].toJSON().description).startsWith('credentialsLoginSuccess'));
+        Assert.strictEqual(successes.length, 3);
+    });
+
+    Test.it('cancels the open Steam login when a new login replaces it', async (t) => {
+        const { client, replies } = fakeClient(t);
+        const sessions = [];
+        const calls = stubDependencies(t, { SteamLogin: controllableSteamLogin(sessions) });
+
+        const first = CredentialsLoginHandler.startQr(client, fakeInteraction());
+        await settle();
+
+        const second = CredentialsLoginHandler.startQr(client, fakeInteraction());
+        await settle();
+
+        Assert.strictEqual(sessions[0].cancelled, true, 'the replaced session stops polling Steam');
+        Assert.strictEqual(sessions[1].cancelled, false);
+
+        await first;
+
+        /* The replaced login neither reports an error over the new one nor removes the new flow. */
+        Assert.ok(!replies.some((e) => String(e.embeds[0].toJSON().description).startsWith('credentialsLoginFailed')));
+        Assert.strictEqual(CredentialsLoginHandler.getFlow(client, USER_ID).flow, sessions[1]);
+
+        sessions[1].approve();
+        await second;
+
+        Assert.strictEqual(calls.storeAuth.length, 1);
+        Assert.strictEqual(CredentialsLoginHandler.getFlow(client, USER_ID), null);
+        Assert.strictEqual(sessions[1].cancelled, true, 'a finished login does not keep its session');
+    });
+
+    Test.it('leaves an open Steam login alone when a token login finishes', async (t) => {
+        const { client } = fakeClient(t);
+        const sessions = [];
+        stubDependencies(t, { SteamLogin: controllableSteamLogin(sessions) });
+
+        const qr = CredentialsLoginHandler.startQr(client, fakeInteraction());
+        await settle();
+
+        await CredentialsLoginHandler.token(client, fakeInteraction(),
+            makeToken(STEAM_ID, Math.floor(Date.now() / 1000) + 86400));
+
+        Assert.strictEqual(CredentialsLoginHandler.getFlow(client, USER_ID).flow, sessions[0]);
+
+        sessions[0].approve();
+        await qr;
+    });
+});

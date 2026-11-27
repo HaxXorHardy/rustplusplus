@@ -36,6 +36,24 @@ const RustPlusTransport = require('../util/rustplusTransport.js');
 
 const FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 
+/* flow -> { promise, interaction, cancelled }: the one completion of a login flow (see complete()). */
+const completions = new WeakMap();
+
+/* interaction -> { color, description } of the last reply, so a second button press can show the same outcome. */
+const lastReplies = new WeakMap();
+
+/* Stops the Steam session of an abandoned flow, so it neither keeps polling Steam nor finishes a login later. */
+function cancelFlow(flow) {
+    if (!flow || typeof flow.cancel !== 'function') return;
+
+    try {
+        flow.cancel();
+    }
+    catch (e) {
+        /* Nothing left to stop. */
+    }
+}
+
 function getFlow(client, userId) {
     if (client.steamLoginFlows === undefined) client.steamLoginFlows = {};
 
@@ -44,6 +62,7 @@ function getFlow(client, userId) {
 
     if (Date.now() - flow.createdAt > FLOW_TIMEOUT_MS) {
         delete client.steamLoginFlows[`${userId}`];
+        cancelFlow(flow.flow);
         return null;
     }
 
@@ -53,21 +72,30 @@ function getFlow(client, userId) {
 function storeFlow(client, userId, flow) {
     if (client.steamLoginFlows === undefined) client.steamLoginFlows = {};
 
+    /* A new login replaces the one that was still open. */
+    const previous = client.steamLoginFlows[`${userId}`];
+    if (previous && previous.flow !== flow) cancelFlow(previous.flow);
+
     client.steamLoginFlows[`${userId}`] = { flow: flow, createdAt: Date.now() };
 
-    const timer = setTimeout(() => {
-        if (client.steamLoginFlows && client.steamLoginFlows[`${userId}`] &&
-            client.steamLoginFlows[`${userId}`].flow === flow) {
-            delete client.steamLoginFlows[`${userId}`];
-        }
-    }, FLOW_TIMEOUT_MS + 1000);
+    const timer = setTimeout(() => deleteFlow(client, userId, flow), FLOW_TIMEOUT_MS + 1000);
 
     if (typeof timer.unref === 'function') timer.unref();
 }
 
-function deleteFlow(client, userId) {
-    if (client.steamLoginFlows !== undefined) delete client.steamLoginFlows[`${userId}`];
+/* Removes (and cancels) this flow. A newer flow of the same user is left alone. */
+function deleteFlow(client, userId, flow) {
+    const entry = client.steamLoginFlows ? client.steamLoginFlows[`${userId}`] : undefined;
+    if (entry && entry.flow === flow) delete client.steamLoginFlows[`${userId}`];
+
+    cancelFlow(flow);
     return true;
+}
+
+/* A new login of the user: the open flow (whatever it is) is cancelled and removed. */
+function replaceFlow(client, userId) {
+    const entry = client.steamLoginFlows ? client.steamLoginFlows[`${userId}`] : undefined;
+    if (entry) deleteFlow(client, userId, entry.flow);
 }
 
 function getErrorMessage(e) {
@@ -84,6 +112,8 @@ async function reply(client, interaction, color, description, components = [], f
         components: components,
         files: files
     };
+
+    if (interaction && typeof interaction === 'object') lastReplies.set(interaction, { color, description });
 
     return await client.interactionEditReply(interaction, content);
 }
@@ -159,7 +189,7 @@ function registerCredentials(guildId, steamId, discordUserId) {
 async function start(client, interaction, accountName, password) {
     const guildId = interaction.guildId;
 
-    deleteFlow(client, interaction.user.id);
+    replaceFlow(client, interaction.user.id);
 
     let flow = null;
     let guard = null;
@@ -184,7 +214,7 @@ async function start(client, interaction, accountName, password) {
                 `Rust+ login: Steam wants ${[].concat(guard.types).join(', ')}.`);
     }
     catch (e) {
-        deleteFlow(client, interaction.user.id);
+        deleteFlow(client, interaction.user.id, flow);
         return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginFailed', {
             error: getErrorMessage(e)
         }));
@@ -227,7 +257,7 @@ async function start(client, interaction, accountName, password) {
         return await reply(client, interaction, 0, description, components);
     }
     catch (e) {
-        deleteFlow(client, interaction.user.id);
+        deleteFlow(client, interaction.user.id, flow);
         return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginFailed', {
             error: getErrorMessage(e)
         }));
@@ -247,7 +277,7 @@ async function submitCode(client, interaction, code) {
         await entry.flow.submitCode(code);
     }
     catch (e) {
-        deleteFlow(client, interaction.user.id);
+        deleteFlow(client, interaction.user.id, entry.flow);
         return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginFailed', {
             error: getErrorMessage(e)
         }));
@@ -268,6 +298,7 @@ async function confirm(client, interaction) {
     /* Check with Steam immediately instead of waiting for the next poll of the app confirmation. */
     entry.flow.forcePoll();
 
+    /* The QR login (or an earlier press) already waits for Steam: this press only waits for that same completion. */
     return await complete(client, interaction, entry.flow);
 }
 
@@ -275,7 +306,7 @@ async function confirm(client, interaction) {
     Step 3 of every login: the account token is stored, the Discord user becomes its owner, the servers and paired
     devices of the account are adopted, their messages are posted and the active server reconnects.
 */
-async function finish(client, interaction, { steamId, token, servers, refreshToken = null }) {
+async function finish(client, interaction, { steamId, token, servers, refreshToken = null, flow = null }) {
     const guildId = interaction.guildId;
 
     try {
@@ -391,7 +422,8 @@ async function finish(client, interaction, { steamId, token, servers, refreshTok
         }));
     }
     finally {
-        deleteFlow(client, interaction.user.id);
+        /* Only the flow of this login ends here; a token login leaves an open Steam login of the user alone. */
+        if (flow !== null) deleteFlow(client, interaction.user.id, flow);
     }
 }
 
@@ -402,7 +434,7 @@ async function finish(client, interaction, { steamId, token, servers, refreshTok
 async function startQr(client, interaction) {
     const guildId = interaction.guildId;
 
-    deleteFlow(client, interaction.user.id);
+    replaceFlow(client, interaction.user.id);
 
     let flow = null;
     let qr = null;
@@ -421,7 +453,7 @@ async function startQr(client, interaction) {
         qr = await QrCode.toBuffer(url, { type: 'png', width: 320, margin: 1 });
     }
     catch (e) {
-        deleteFlow(client, interaction.user.id);
+        deleteFlow(client, interaction.user.id, flow);
         return await reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginQrFailed', {
             error: getErrorMessage(e)
         }));
@@ -473,8 +505,35 @@ async function token(client, interaction, rawToken) {
     });
 }
 
-/* Step 2 of the password and the QR login: Steam finished, the Rust+ account of the login is read. */
+/*
+    Step 2 of the password and the QR login: Steam finished, the Rust+ account of the login is read.
+
+    Runs once per flow: the QR login waits here on its own and the "Done" button (or a second press) comes on top. A
+    second run would mint a second Rust+ token and post the server messages twice, so a later caller waits for the
+    running completion and gets its outcome as reply.
+*/
 async function complete(client, interaction, flow, options = {}) {
+    const running = completions.get(flow);
+    if (running) {
+        await running.promise;
+        if (running.interaction === interaction) return;
+
+        const guildId = interaction.guildId;
+        const last = running.cancelled ? null : lastReplies.get(running.interaction);
+
+        return await (last ?
+            reply(client, interaction, last.color, last.description) :
+            reply(client, interaction, 1, client.intlGet(guildId, 'credentialsLoginExpired')));
+    }
+
+    const record = { promise: null, interaction: interaction, cancelled: false };
+    completions.set(flow, record);
+
+    record.promise = runComplete(client, interaction, flow, options, record);
+    return await record.promise;
+}
+
+async function runComplete(client, interaction, flow, options, record) {
     const guildId = interaction.guildId;
 
     try {
@@ -490,10 +549,20 @@ async function complete(client, interaction, flow, options = {}) {
             steamId: auth.steamId,
             token: auth.token,
             servers: data.servers,
-            refreshToken: flow.getRefreshToken()
+            refreshToken: flow.getRefreshToken(),
+            flow: flow
         });
     }
     catch (e) {
+        /*
+            The flow was replaced by a new login (or expired): its message may already show the new login, an error
+            reply would overwrite it.
+        */
+        if (flow.cancelled === true) {
+            record.cancelled = true;
+            return;
+        }
+
         const expired = options.qr === true && /timed out/i.test(getErrorMessage(e));
 
         return await reply(client, interaction, 1, expired ?
@@ -501,7 +570,7 @@ async function complete(client, interaction, flow, options = {}) {
             client.intlGet(guildId, 'credentialsLoginFailed', { error: getErrorMessage(e) }));
     }
     finally {
-        deleteFlow(client, interaction.user.id);
+        deleteFlow(client, interaction.user.id, flow);
     }
 }
 

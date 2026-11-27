@@ -300,6 +300,22 @@ Test.describe('RustPlusLogin.SteamLogin', () => {
         Assert.strictEqual(submitted, '12345');
     });
 
+    Test.it('cancels the Steam login and ends the wait for the cookies', async () => {
+        const flow = createFlow();
+        let cancelled = 0;
+        flow.session.cancelLoginAttempt = () => {
+            cancelled++;
+            return true;
+        };
+
+        flow.cancel();
+        flow.cancel();
+
+        Assert.strictEqual(cancelled, 1);
+        Assert.strictEqual(flow.cancelled, true);
+        await Assert.rejects(() => flow.wait(), /cancelled/);
+    });
+
     Test.it('forces a poll for the app confirmation without throwing', () => {
         const flow = createFlow();
 

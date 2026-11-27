@@ -74,7 +74,10 @@ class SteamLogin {
         this.session = new SteamSession.LoginSession(SteamSession.EAuthTokenPlatformType.WebBrowser);
         this.session.loginTimeout = timeoutMs;
 
+        this.cancelled = false;
+
         this.cookiesPromise = new Promise((resolve, reject) => {
+            this.rejectCookies = reject;
             this.session.on('authenticated', () => {
                 this.session.getWebCookies().then(resolve).catch(reject);
             });
@@ -150,6 +153,24 @@ class SteamLogin {
         catch (e) {
             /* The session is not polling (yet), the next scheduled poll picks the approval up. */
         }
+    }
+
+    /*
+        Ends an abandoned login (replaced by a new one, expired, finished): Steam is not polled anymore and a caller
+        that still waits for the cookies gets an error instead of waiting forever.
+    */
+    cancel() {
+        if (this.cancelled) return;
+        this.cancelled = true;
+
+        try {
+            this.session.cancelLoginAttempt();
+        }
+        catch (e) {
+            /* The session was never started. */
+        }
+
+        this.rejectCookies(new Error('Steam login was cancelled.'));
     }
 
     /* Resolves with the steamcommunity.com cookies once Steam finished the login. */
