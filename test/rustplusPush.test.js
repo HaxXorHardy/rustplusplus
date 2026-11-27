@@ -633,6 +633,33 @@ Test.describe('RustPlusPushNotifications', () => {
 
         Assert.ok(client.logs.some((text) => text.includes('unhandled notification') && text.includes('Devblog')));
     });
+
+    Test.it('leaves token fields out of the log of an unknown notification', async () => {
+        const client = fakeClient(serverInstance());
+
+        await RustPlusPushNotifications.handle(client, STEAM_ID, RustPlusPushNotifications.parse(
+            notification('news', 'New', 'text', { type: 'x', playerToken: '-98765', authToken: 'abc', ip: '1.2.3.4' })));
+
+        const line = client.logs.find((text) => text.includes('unhandled notification'));
+        Assert.ok(!line.includes('-98765') && !line.includes('abc'), line);
+        Assert.ok(line.includes('playerToken') && line.includes('1.2.3.4'), line);
+    });
+
+    Test.it('shows only https images of a raid alarm', async (t) => {
+        const sent = t.mock.method(DiscordMessages, 'sendMessage', async () => undefined);
+        const client = fakeClient(serverInstance());
+        const raid = (img) => RustPlusPushNotifications.parse(notification('alarm', 'You\'re getting raided!', 'x',
+            { id: SERVER_ID, name: 'Server', img: img }));
+
+        await RustPlusPushNotifications.handle(client, STEAM_ID, raid('http://example.com/a.png'));
+        await RustPlusPushNotifications.handle(client, STEAM_ID, raid('https://example.com/a.png'));
+
+        const thumbnail = (call) => call.arguments[1].embeds[0].data.thumbnail.url;
+        Assert.strictEqual(thumbnail(sent.mock.calls[0]), 'attachment://rocket.png');
+        Assert.strictEqual(sent.mock.calls[0].arguments[1].files.length, 1);
+        Assert.strictEqual(thumbnail(sent.mock.calls[1]), 'https://example.com/a.png');
+        Assert.strictEqual(sent.mock.calls[1].arguments[1].files.length, 0);
+    });
 });
 
 Test.describe('RustPlusPushListener', () => {

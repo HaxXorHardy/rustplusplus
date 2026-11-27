@@ -261,7 +261,18 @@ function invalidPairingField(body) {
 }
 
 function isValidUrl(url) {
-    return typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'));
+    return typeof url === 'string' && url.startsWith('https://');
+}
+
+/* The body of a push for the log: values of token-like fields (a playerToken of a new format) are left out. */
+function redactBody(body) {
+    const redacted = {};
+
+    for (const [key, value] of Object.entries(body || {})) {
+        redacted[key] = /token|secret|password|auth/i.test(key) ? '[redacted]' : value;
+    }
+
+    return redacted;
 }
 
 async function raidAlarm(client, guildId, serverKey, notification, deps = {}) {
@@ -591,11 +602,11 @@ async function handle(client, steamId, notification, deps = {}) {
     if (kind === 'death') return [{ kind: kind, handled: false }];
 
     if (kind === 'other') {
-        /* Logged in full: the formats of new kinds are only known from what arrives. */
+        /* Logged, token fields left out: the formats of new kinds are only known from what arrives. */
         client.log(client.intlGet(null, 'infoCap'),
             `Rust+ push: unhandled notification for ${steamId}: ${JSON.stringify({
                 channelId: notification.channelId, title: notification.title, message: notification.message,
-                body: notification.body
+                body: redactBody(notification.body)
             })}`);
 
         return [{ kind: kind, handled: false }];
