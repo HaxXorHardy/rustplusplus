@@ -42,6 +42,8 @@ module.exports = async (client, interaction) => {
             id: `${verifyId}`,
             user: `${interaction.user.username} (${interaction.user.id})`
         }));
+        /* Acknowledged, or Discord shows the user "This interaction failed" after 3 s. */
+        await client.interactionDeferUpdate(interaction);
         return;
     }
 

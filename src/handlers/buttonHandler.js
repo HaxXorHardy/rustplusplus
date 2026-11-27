@@ -43,6 +43,9 @@ const NOTIFICATION_BUTTON_PREFIXES = {
     VoiceNotification: 'voice',
 };
 
+/* Guilds whose ServerConnect click is still running (one connection per guild). */
+const serverConnectInFlight = new Set();
+
 module.exports = async (client, interaction) => {
     const instance = client.getInstance(interaction.guildId);
     const guildId = interaction.guildId;
@@ -56,6 +59,8 @@ module.exports = async (client, interaction) => {
             id: `${verifyId}`,
             user: `${interaction.user.username} (${interaction.user.id})`
         }));
+        /* Acknowledged, or Discord shows the user "This interaction failed" after 3 s. */
+        await client.interactionDeferUpdate(interaction);
         return;
     }
 
@@ -543,36 +548,49 @@ module.exports = async (client, interaction) => {
         */
         await client.interactionDeferUpdate(interaction);
 
-        client.resetRustplusVariables(guildId);
+        /* A second click while the first one still runs would create a second live connection for the guild. */
+        if (serverConnectInFlight.has(guildId)) return;
+        serverConnectInFlight.add(guildId);
 
-        if (instance.activeServer !== null) {
-            /*
-                Only the devices of the connected server are listed, the messages of the previous server have to go
-                before the new one is connected. Its server message stays, it is only rewritten below.
-            */
-            if (instance.activeServer !== ids.serverId) {
-                await RemoveServerDevices(client, guildId, instance.activeServer);
+        try {
+            client.resetRustplusVariables(guildId);
+
+            if (instance.activeServer !== null) {
+                /*
+                    Only the devices of the connected server are listed, the messages of the previous server have to
+                    go before the new one is connected. Its server message stays, it is only rewritten below.
+                */
+                if (instance.activeServer !== ids.serverId) {
+                    await RemoveServerDevices(client, guildId, instance.activeServer);
+                }
+
+                await DiscordMessages.sendServerMessage(guildId, instance.activeServer, null);
             }
 
-            await DiscordMessages.sendServerMessage(guildId, instance.activeServer, null);
+            instance.activeServer = ids.serverId;
+            client.setInstance(guildId, instance);
+
+            /*
+                Disconnect the previous instance if any. Read again: the awaits above take a while, the instance
+                captured at the start may have been replaced (reconnect, another connect) in the meantime.
+            */
+            const previousRustplus = client.rustplusInstances[guildId];
+            if (previousRustplus) {
+                previousRustplus.isDeleted = true;
+                previousRustplus.disconnect();
+            }
+
+            /* Create the rustplus instance */
+            const newRustplus = client.createRustplusInstance(
+                guildId, server.serverIp, server.appPort, server.steamId, server.playerToken);
+
+            await DiscordMessages.sendServerMessage(guildId, ids.serverId, null, interaction);
+
+            newRustplus.isNewConnection = true;
         }
-
-        instance.activeServer = ids.serverId;
-        client.setInstance(guildId, instance);
-
-        /* Disconnect previous instance is any */
-        if (rustplus) {
-            rustplus.isDeleted = true;
-            rustplus.disconnect();
+        finally {
+            serverConnectInFlight.delete(guildId);
         }
-
-        /* Create the rustplus instance */
-        const newRustplus = client.createRustplusInstance(
-            guildId, server.serverIp, server.appPort, server.steamId, server.playerToken);
-
-        await DiscordMessages.sendServerMessage(guildId, ids.serverId, null, interaction);
-
-        newRustplus.isNewConnection = true;
     }
     else if (interaction.customId.startsWith('ServerEdit')) {
         const ids = JSON.parse(interaction.customId.replace('ServerEdit', ''));
@@ -589,6 +607,12 @@ module.exports = async (client, interaction) => {
     else if (interaction.customId.startsWith('DeleteUnreachableDevices')) {
         const ids = JSON.parse(interaction.customId.replace('DeleteUnreachableDevices', ''));
         const server = instance.serverList[ids.serverId];
+
+        /* Deletes every unreachable device at once: at least as protected as the single-device delete buttons. */
+        if (!client.hasAdminPrivileges(interaction)) {
+            await client.interactionDeferUpdate(interaction);
+            return;
+        }
 
         if (!server) {
             await interaction.message.delete();
@@ -1093,6 +1117,9 @@ module.exports = async (client, interaction) => {
         const message = await DiscordMessages.sendStorageMonitorRecycleMessage(
             guildId, ids.serverId, ids.entityId, items);
 
+        /* The send fails (undefined) when the channel is gone or Discord refused it: nothing to delete then. */
+        if (!message) return;
+
         setTimeout(async () => {
             await DiscordTools.deleteMessageById(guildId, instance.channelId.storageMonitors, message.id);
         }, 30000);
@@ -1144,10 +1171,13 @@ module.exports = async (client, interaction) => {
         await client.interactionDeferUpdate(interaction);
 
         if (rustplus) {
-            /* A running "on/off for X minutes" of the group must not switch it back after the button. */
-            SmartSwitchGroupHandler.cancelGroupTimer(rustplus, ids.groupId);
-
             if (rustplus.serverId === ids.serverId) {
+                /*
+                    A running "on/off for X minutes" of the group must not switch it back after the button. Only for
+                    this server: group ids are per server, a button of another server must not cancel this one's timer.
+                */
+                SmartSwitchGroupHandler.cancelGroupTimer(rustplus, ids.groupId);
+
                 const active = (interaction.customId.startsWith('GroupTurnOn') ? true : false);
 
                 if (instance.generalSettings.smartSwitchNotifyInGameWhenChangedFromDiscord) {
