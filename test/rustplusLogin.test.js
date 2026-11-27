@@ -207,6 +207,47 @@ Test.describe('RustPlusLogin.renewAuth (revoked meanwhile)', () => {
         Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, TOKEN);
     });
 
+    Test.it('keeps the renewal when only the server list was written meanwhile', async (t) => {
+        useTempAuthDir(t);
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');
+        const servers = [{ id: 'uuid-1', name: 'Server One', playerToken: 1234 }];
+
+        /* What the history refresh does on every read. */
+        stubRenewal(t, () => {
+            const stored = RustPlusAuth.readAuth(STEAM_ID);
+            RustPlusAuth.writeAuth(STEAM_ID, Object.assign({}, stored, { servers: servers }));
+        });
+
+        const auth = await RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => true });
+
+        Assert.strictEqual(auth.token, NEW_TOKEN);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, NEW_TOKEN);
+        Assert.deepStrictEqual(RustPlusAuth.readAuth(STEAM_ID).servers, servers);
+    });
+
+    Test.it('discards the renewal when a new login stored another token meanwhile', async (t) => {
+        useTempAuthDir(t);
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');
+        stubRenewal(t, () => RustPlusLogin.storeAuth(STEAM_ID, 'bG9naW4tdG9rZW4tcGF5bG9hZC1wYXk.c2ln', [], 'new'));
+
+        await Assert.rejects(() => RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => true }),
+            (e) => e.code === RustPlusLogin.RENEWAL_DISCARDED);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, 'bG9naW4tdG9rZW4tcGF5bG9hZC1wYXk.c2ln');
+    });
+
+    Test.it('discards the renewal when the login was removed and stored again with the same token', async (t) => {
+        useTempAuthDir(t);
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');
+        stubRenewal(t, () => {
+            RustPlusAuth.removeAuth(STEAM_ID);
+            RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'other');
+        });
+
+        await Assert.rejects(() => RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => true }),
+            (e) => e.code === RustPlusLogin.RENEWAL_DISCARDED);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, TOKEN);
+    });
+
     Test.it('does not recreate a login that was revoked while the renewal ran', async (t) => {
         useTempAuthDir(t);
         RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');

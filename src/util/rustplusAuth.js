@@ -91,9 +91,9 @@ function readAuth(steamId) {
 }
 
 /*
-    Counts the changes of a stored login in this process (write or remove). A token renewal takes a while: it compares
-    the counter before it stores its result, so a login that was revoked (or replaced by a newer login) in the meantime
-    is not written back.
+    Counts the removals of a stored login in this process. A token renewal takes a while: it compares the counter (and
+    the stored token) before it stores its result, so a login that was revoked in the meantime is not written back,
+    even when a new login stored it again. Plain writes (e.g. the server list of the history refresh) do not count.
 */
 const generations = new Map();
 
@@ -111,7 +111,6 @@ function writeAuth(steamId, auth) {
     Fs.mkdirSync(authDir, { recursive: true });
     /* The account token is a credential: the file is not readable for other users of the host. */
     AtomicWriteFile(path, JSON.stringify(auth, null, 2), 'utf8', 0o600);
-    bumpAuthGeneration(steamId);
 }
 
 /* Removes the stored login of an account (its owner removed it in Discord). */

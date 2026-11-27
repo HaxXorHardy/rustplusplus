@@ -407,10 +407,13 @@ async function renewAuth(steamId, log = () => undefined, options = {}) {
 
     /*
         The renewal took a while: in the meantime the account may have been removed in Discord (the stored login was
-        revoked) or a new login stored a newer token. Writing the result back would recreate a revoked login and keep
-        renewing it, so it is discarded. Checked right before the synchronous write, nothing can run in between.
+        revoked) or a new login stored a different token. Writing the result back would recreate a revoked login and
+        keep renewing it, so it is discarded. A write that kept the token (the server list of the history refresh)
+        does not matter. Checked right before the synchronous write, nothing can run in between.
     */
-    if (RustPlusAuth.getAuthGeneration(`${steamId}`) !== generation || !isRegistered(`${steamId}`)) {
+    const current = RustPlusAuth.readAuth(`${steamId}`);
+    if (RustPlusAuth.getAuthGeneration(`${steamId}`) !== generation || current === null ||
+        current.token !== auth.token || !isRegistered(`${steamId}`)) {
         log(`Rust+ token: the renewed token of ${steamId} is discarded, the login was removed or replaced meanwhile`);
         throw renewalDiscardedError(steamId);
     }
