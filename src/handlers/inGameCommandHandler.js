@@ -29,7 +29,7 @@ module.exports = {
         const guildId = rustplus.guildId;
         const instance = client.getInstance(guildId);
 
-        const command = Alias.applyAliases(instance.aliases, chatMessage.message);
+        const command = Alias.applyAliases(instance.aliases, chatMessage.message, rustplus.generalSettings.prefix);
 
         const callerSteamId = chatMessage.steamId.toString();
         const callerName = chatMessage.name;

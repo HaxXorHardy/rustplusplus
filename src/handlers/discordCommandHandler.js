@@ -27,7 +27,7 @@ module.exports = {
         const guildId = rustplus.guildId;
         const instance = client.getInstance(guildId);
 
-        const command = Alias.applyAliases(instance.aliases, message.cleanContent);
+        const command = Alias.applyAliases(instance.aliases, message.cleanContent, rustplus.generalSettings.prefix);
 
         const callerName = message.author.username;
         const commandLowerCase = command.toLowerCase();

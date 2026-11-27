@@ -29,16 +29,27 @@ module.exports = {
     /*
         Replaces the start of a message by the value of an alias. Only a whole leading match counts (the message is
         the alias, or starts with the alias followed by a space), so ordinary chat containing the alias somewhere is
-        left alone. The value is inserted as it is: no $& or $1 patterns.
+        left alone. An alias defined without the command prefix also matches right after it ("!d" for the alias "d"),
+        the prefix then stays in front of the value. The value is inserted as it is: no $& or $1 patterns. Only the
+        first matching alias is applied.
     */
-    applyAliases(aliases, message) {
+    applyAliases(aliases, message, prefix = '') {
         if (typeof message !== 'string' || !Array.isArray(aliases)) return message;
 
-        const alias = aliases.find(e => e && typeof e.alias === 'string' && e.alias !== '' &&
-            (message === e.alias || message.startsWith(`${e.alias} `)));
-        if (!alias) return message;
+        const leads = (text, alias) => text === alias || text.startsWith(`${alias} `);
+        const hasPrefix = typeof prefix === 'string' && prefix !== '' && message.startsWith(prefix);
+        const afterPrefix = hasPrefix ? message.slice(prefix.length) : null;
 
-        return `${alias.value}${message.slice(alias.alias.length)}`;
+        for (const e of aliases) {
+            if (!e || typeof e.alias !== 'string' || e.alias === '') continue;
+
+            if (leads(message, e.alias)) return `${e.value}${message.slice(e.alias.length)}`;
+            if (hasPrefix && leads(afterPrefix, e.alias)) {
+                return `${prefix}${e.value}${afterPrefix.slice(e.alias.length)}`;
+            }
+        }
+
+        return message;
     },
 
     getSlashCommandDefinition(client, guildId) {

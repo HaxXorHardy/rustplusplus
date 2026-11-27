@@ -338,6 +338,26 @@ Test.describe('aliases', () => {
         Assert.strictEqual(Alias.applyAliases(aliases, 'two words'), '!time');
     });
 
+    Test.it('matches an alias defined without the prefix right after the prefix, keeping the prefix', () => {
+        const list = [{ index: 0, alias: 'd', value: 'door' }];
+        Assert.strictEqual(Alias.applyAliases(list, '!d', '!'), '!door');
+        Assert.strictEqual(Alias.applyAliases(list, '!d off', '!'), '!door off');
+        Assert.strictEqual(Alias.applyAliases(list, 'd', '!'), 'door');
+        Assert.strictEqual(Alias.applyAliases(list, '!dx', '!'), '!dx');
+        Assert.strictEqual(Alias.applyAliases(list, 'say !d', '!'), 'say !d');
+    });
+
+    Test.it('matches an alias defined with the prefix', () => {
+        const list = [{ index: 0, alias: '!d', value: '!door' }];
+        Assert.strictEqual(Alias.applyAliases(list, '!d', '!'), '!door');
+        Assert.strictEqual(Alias.applyAliases(list, '!d on', '!'), '!door on');
+        Assert.strictEqual(Alias.applyAliases(list, '!dx', '!'), '!dx');
+    });
+
+    Test.it('gg does not match inside ordinary chat', () => {
+        Assert.strictEqual(Alias.applyAliases(aliases, 'good game gg', '!'), 'good game gg');
+    });
+
     Test.it('inserts the value literally, no $& patterns', () => {
         Assert.strictEqual(Alias.applyAliases(aliases, 'p'), '!pop $&');
     });
@@ -347,7 +367,7 @@ Test.describe('aliases', () => {
         const client = {
             intlGet: (guildId, key) => en[key] || key,
             getInstance: () => ({
-                aliases: [{ index: 0, alias: 'gg', value: '.pop' }],
+                aliases: [{ index: 0, alias: 'gg', value: '.pop' }, { index: 1, alias: 'p', value: 'pop' }],
                 serverList: { serverId: { alarms: {}, switches: {}, switchGroups: {} } }
             }),
         };
@@ -367,6 +387,10 @@ Test.describe('aliases', () => {
         Assert.strictEqual(await run('nice gg'), false);
         Assert.strictEqual(await run('gg'), true);
         Assert.deepStrictEqual(sent, ['POP']);
+
+        /* An alias without the prefix, used after it: .p -> .pop */
+        Assert.strictEqual(await run('.p'), true);
+        Assert.deepStrictEqual(sent, ['POP', 'POP']);
     });
 
     Test.it('/alias add and remove need admin privileges, show does not', async () => {
