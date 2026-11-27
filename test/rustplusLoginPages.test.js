@@ -47,6 +47,17 @@ Test.describe('RustPlusLoginPages.parseAuthFromHtml', () => {
         Assert.deepStrictEqual(RustPlusLoginPages.parseAuthFromHtml(html), { steamId: STEAM_ID, token: TOKEN });
     });
 
+    Test.it('does not take a csrfToken or webapi_token for the account token', () => {
+        const csrf = 'c'.repeat(40);
+        const html = `<script>var cfg = {"csrfToken":"${csrf}","webapi_token":"${csrf}","mySteamId":"76561198999999999"};` +
+            `send({SteamId:"${STEAM_ID}",Token:"${TOKEN}"})</script>`;
+
+        Assert.deepStrictEqual(RustPlusLoginPages.parseAuthFromHtml(html), { steamId: STEAM_ID, token: TOKEN });
+
+        const onlyCsrf = `<script>var cfg = {"csrfToken":"${csrf}","g_steamID":"${STEAM_ID}"};</script>`;
+        Assert.strictEqual(RustPlusLoginPages.parseAuthFromHtml(onlyCsrf), null);
+    });
+
     Test.it('returns null when the page carries no account data', () => {
         Assert.strictEqual(RustPlusLoginPages.parseAuthFromHtml('<html><body>nope</body></html>'), null);
         Assert.strictEqual(RustPlusLoginPages.parseAuthFromHtml(''), null);
@@ -185,6 +196,18 @@ Test.describe('RustPlusLoginPages.CookieJar', () => {
         Assert.strictEqual(jar.header('https://login.steampowered.com/jwt/finalizelogin'), '');
     });
 
+    Test.it('ignores cookies for a domain the response host does not belong to', () => {
+        const jar = new RustPlusLoginPages.CookieJar();
+
+        jar.store('https://companion-rust.facepunch.com/login', 'evil=1; domain=steamcommunity.com');
+        jar.store('https://companion-rust.facepunch.com/login', 'tld=1; domain=.com');
+        jar.store('https://companion-rust.facepunch.com/login', 'other=1; domain=rust.facepunch.com');
+        jar.store('https://companion-rust.facepunch.com/login', 'parent=1; domain=.facepunch.com');
+
+        Assert.strictEqual(jar.header('https://steamcommunity.com/openid/login'), '');
+        Assert.strictEqual(jar.header('https://companion-rust.facepunch.com/'), 'parent=1');
+    });
+
     Test.it('replaces a cookie with the same name and domain', () => {
         const jar = new RustPlusLoginPages.CookieJar();
 
@@ -192,5 +215,37 @@ Test.describe('RustPlusLoginPages.CookieJar', () => {
         jar.store('https://companion-rust.facepunch.com/', 'a=2');
 
         Assert.strictEqual(jar.header('https://companion-rust.facepunch.com/'), 'a=2');
+    });
+});
+
+Test.describe('RustPlusLoginPages.request', () => {
+    Test.it('knows the hosts of the login flow', () => {
+        Assert.strictEqual(RustPlusLoginPages.isAllowedUrl('https://companion-rust.facepunch.com/signin-steam'), true);
+        Assert.strictEqual(RustPlusLoginPages.isAllowedUrl('https://steamcommunity.com/openid/login'), true);
+        Assert.strictEqual(RustPlusLoginPages.isAllowedUrl('http://steamcommunity.com/openid/login'), false);
+        Assert.strictEqual(RustPlusLoginPages.isAllowedUrl('https://steamcommunity.com.evil.example/'), false);
+        Assert.strictEqual(RustPlusLoginPages.isAllowedUrl('https://evil.example/?steamcommunity.com'), false);
+        Assert.strictEqual(RustPlusLoginPages.isAllowedUrl('not-a-url'), false);
+    });
+
+    Test.it('does not send the Steam cookies to another host', async (t) => {
+        const Axios = require('axios');
+        const original = Axios.request;
+        let requested = 0;
+        Axios.request = async () => {
+            requested += 1;
+            return { status: 200, headers: {}, data: '' };
+        };
+        t.after(() => { Axios.request = original; });
+
+        const jar = new RustPlusLoginPages.CookieJar();
+        jar.store('https://steamcommunity.com/', 'steamLoginSecure=secret; domain=.steamcommunity.com');
+
+        await Assert.rejects(() => RustPlusLoginPages.request('GET', 'https://evil.example/collect', jar),
+            /refusing to follow a redirect to https:\/\/evil\.example/);
+        Assert.strictEqual(requested, 0);
+
+        await RustPlusLoginPages.request('GET', 'https://steamcommunity.com/openid/login', jar);
+        Assert.strictEqual(requested, 1);
     });
 });

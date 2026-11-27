@@ -34,6 +34,24 @@ const Querystring = require('querystring');
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
     'Chrome/126.0.0.0 Safari/537.36';
 
+/* The hosts the login flow has to reach: the Rust+ login and Steam's OpenID. Nothing else is requested. */
+const ALLOWED_HOSTS = ['companion-rust.facepunch.com', 'steamcommunity.com'];
+
+function domainMatches(host, domain) {
+    return host === domain || host.endsWith(`.${domain}`);
+}
+
+/* An https url on one of the hosts of the login flow. A redirect anywhere else is not followed. */
+function isAllowedUrl(url) {
+    try {
+        const target = new URL(url);
+        return target.protocol === 'https:' && ALLOWED_HOSTS.includes(target.hostname.toLowerCase());
+    }
+    catch (e) {
+        return false;
+    }
+}
+
 /* Minimal cookie jar: the login flow talks to facepunch.com and steamcommunity.com. */
 class CookieJar {
     constructor() {
@@ -56,7 +74,10 @@ class CookieJar {
             .map((e) => e.trim())
             .find((e) => e.toLowerCase().startsWith('domain='));
         const domain = domainAttribute ?
-            domainAttribute.split('=')[1].trim().replace(/^\./, '') : host;
+            `${domainAttribute.split('=')[1]}`.trim().replace(/^\./, '').toLowerCase() : host;
+
+        /* Like a browser: a host may only set cookies for itself or a parent domain (never a TLD or another site). */
+        if (!domain.includes('.') || !domainMatches(host, domain)) return;
 
         this.cookies = this.cookies.filter((e) => !(e.name === name && e.domain === domain));
         this.cookies.push({ name, value, domain });
@@ -73,6 +94,18 @@ class CookieJar {
 
 /* GET/POST without following redirects, so the login flow can be followed step by step. */
 async function request(method, url, jar, { data = null, headers = {} } = {}) {
+    /* The Steam cookies of the account go along with the requests: only the hosts of the flow get them. */
+    if (!isAllowedUrl(url)) {
+        let shown = 'an invalid url';
+        try {
+            shown = new URL(url).origin;
+        }
+        catch (e) {
+            /* keep the placeholder */
+        }
+        throw new Error(`Rust+ login: refusing to follow a redirect to ${shown}.`);
+    }
+
     const host = new URL(url).hostname;
     const cookie = jar.header(url);
 
@@ -146,9 +179,10 @@ function parseAuthFromHtml(html) {
     /* Unescape the payload of an inline script and drop the braces, so both variants parse the same way. */
     const text = `${html}`.replace(/\\"/g, '"').replace(/\\'/g, "'");
 
-    const steamId = /["']?SteamId["']?\s*:\s*["']?(\d{17})["']?/i.exec(text) ||
+    /* The key stands on its own: "csrfToken", "webapi_token" or "mySteamId" are other values. */
+    const steamId = /(?<![\w$-])["']?SteamId["']?\s*:\s*["']?(\d{17})["']?/i.exec(text) ||
         /[?&]steamId=(\d{17})/i.exec(text);
-    const token = /["']?Token["']?\s*:\s*["']([^"']{20,})["']/i.exec(text) ||
+    const token = /(?<![\w$-])["']?Token["']?\s*:\s*["']([^"']{20,})["']/i.exec(text) ||
         /[?&]token=([^&"'\s]{20,})/i.exec(text);
 
     if (steamId && token) return { steamId: steamId[1], token: token[1] };
@@ -302,6 +336,8 @@ function buildOpenIdLoginFields(url) {
 
 module.exports = {
     USER_AGENT: USER_AGENT,
+    ALLOWED_HOSTS: ALLOWED_HOSTS,
+    isAllowedUrl: isAllowedUrl,
     CookieJar: CookieJar,
     request: request,
     postForm: postForm,
