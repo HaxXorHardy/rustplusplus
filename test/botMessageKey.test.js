@@ -37,3 +37,13 @@ Test.describe('own chat messages', () => {
         Assert.notStrictEqual(Message.botMessageKey('199 (< 200)'), Message.botMessageKey('199 (< 2000)'));
     });
 });
+
+/* A connection whose first poll failed is operational without a team: the broadcast ended in a TypeError. */
+Test.describe('teamChanged broadcast', () => {
+    Test.it('is ignored while the team was not built yet', async () => {
+        const rustplus = { team: null, updateLeaderRustPlusLiteInstance: () => { throw new Error('called'); } };
+        const message = { broadcast: { teamChanged: { teamInfo: { leaderSteamId: '1', members: [] } } } };
+
+        await Message.messageBroadcastTeamChanged(rustplus, {}, message);
+    });
+});

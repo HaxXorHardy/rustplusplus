@@ -49,6 +49,7 @@ module.exports = {
     name: 'message',
     botMessageKey: botMessageKey,
     /* exported for tests */
+    messageBroadcastTeamChanged: (...args) => messageBroadcastTeamChanged(...args),
     messageBroadcastEntityChangedStorageMonitor: (...args) => messageBroadcastEntityChangedStorageMonitor(...args),
     /* The alarm push reports a trigger the socket missed through the same path (util/rustplusPushNotifications.js). */
     messageBroadcastEntityChangedSmartAlarm: (...args) => messageBroadcastEntityChangedSmartAlarm(...args),
@@ -99,6 +100,12 @@ async function messageBroadcast(rustplus, client, message) {
 }
 
 async function messageBroadcastTeamChanged(rustplus, client, message) {
+    /*
+        The team is built by the first poll that is answered. A connection whose first poll failed is operational
+        without one, and the broadcast ended in a TypeError. The next answered poll builds the team.
+    */
+    if (!rustplus.team) return;
+
     TeamHandler.handler(rustplus, client, message.broadcast.teamChanged.teamInfo);
     const changed = rustplus.team.isLeaderSteamIdChanged(message.broadcast.teamChanged.teamInfo);
     rustplus.team.updateTeam(message.broadcast.teamChanged.teamInfo);
