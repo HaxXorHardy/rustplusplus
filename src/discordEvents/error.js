@@ -20,8 +20,11 @@
 
 module.exports = {
     name: 'error',
+    /*
+        Log only: discord.js reconnects the gateway on its own after a WebSocket error. Exiting here turned every
+        recoverable hiccup into a restart, and the async log write of the error was lost with the process.
+    */
     async execute(client, error) {
         client.log(client.intlGet(null, 'errorCap'), error, 'error');
-        process.exit(1);
     },
 }
