@@ -24,13 +24,13 @@ COPY stubs /app/stubs
 RUN npm ci --omit=dev
 COPY . /app
 
-# Run as the unprivileged `node` user of the base image. The code stays owned by root (read-only for the bot); the
-# directories the bot writes to are created and owned by `node` before VOLUME, so a fresh named volume starts
-# writable. A bind mount keeps the owner of the host directory: one created by an earlier (root) container has to be
-# chowned on the host (uid/gid 1000). data/ holds the static SQLite database, which SQLite may need to lock.
+# The bot runs as the unprivileged `node` user of the base image. The code stays owned by root (read-only for the
+# bot); the directories the bot writes to are created and owned by `node` before VOLUME, so a fresh volume starts
+# writable. data/ holds the static SQLite database, which SQLite may need to lock.
 RUN mkdir -p /app/credentials /app/instances /app/logs /app/maps /app/runtime \
-    && chown -R node:node /app/credentials /app/instances /app/logs /app/maps /app/runtime /app/data
-USER node
+    && chown -R node:node /app/credentials /app/instances /app/logs /app/maps /app/runtime /app/data \
+    && chmod 755 /app/docker-entrypoint.sh \
+    && command -v setpriv
 
 VOLUME [ "/app/credentials" ]
 VOLUME [ "/app/instances" ]
@@ -38,5 +38,8 @@ VOLUME [ "/app/logs" ]
 VOLUME [ "/app/maps" ]
 VOLUME [ "/app/runtime" ]
 
-# node itself is the process that receives SIGTERM (npm did not forward it), see installProcessHandlers().
+# The container starts as root only for the entrypoint: it hands volumes of an older (root) image over to `node` and
+# drops to it with setpriv. exec keeps node the process that receives SIGTERM (npm did not forward it), see
+# installProcessHandlers().
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "index.js"]

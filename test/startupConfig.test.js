@@ -64,10 +64,34 @@ Test.describe('startup configuration', () => {
         const dockerfile = Fs.readFileSync(Path.join(ROOT, 'Dockerfile'), 'utf8');
         const dockerLines = dockerfile.split(/\r?\n/);
         Assert.ok(dockerLines.includes('CMD ["node", "index.js"]'), 'CMD must start node directly');
-        Assert.ok(dockerLines.includes('USER node'), 'the image must run as the node user');
-        Assert.ok(dockerfile.indexOf('USER node') < dockerfile.indexOf('VOLUME ['), 'USER must come before VOLUME');
+        Assert.ok(dockerLines.includes('ENTRYPOINT ["/app/docker-entrypoint.sh"]'), 'the entrypoint drops root');
+        /* Volumes of the older root image keep their owner: the entrypoint has to start as root to fix them. */
+        Assert.ok(!dockerLines.includes('USER node'), 'USER node would leave root-owned volumes unwritable');
+        Assert.match(dockerfile, /chmod 755 \/app\/docker-entrypoint\.sh/);
         Assert.match(dockerfile, /--no-install-recommends/);
         Assert.match(dockerfile, /rm -rf \/var\/lib\/apt\/lists/);
+    });
+
+    Test.it('hands root-owned volumes to node and execs the command as node', () => {
+        const script = Fs.readFileSync(Path.join(ROOT, 'docker-entrypoint.sh'), 'utf8');
+
+        Assert.ok(script.startsWith('#!/bin/sh\n'), 'shebang with LF line endings');
+        Assert.doesNotMatch(script, /\r/, 'the script must use LF line endings');
+        Assert.match(script, /^set -eu$/m);
+        for (const dir of ['credentials', 'instances', 'logs', 'maps', 'runtime']) {
+            Assert.ok(script.includes(`/app/${dir}`), dir);
+        }
+        /* chown only when needed, a normal start must not walk the whole tree. */
+        Assert.match(script, /stat -c %u "\$dir"/);
+        Assert.match(script, /chown -R node:node "\$dir"/);
+        Assert.match(script, /exec setpriv --reuid=node --regid=node --init-groups "\$@"/);
+        Assert.match(script, /^exec "\$@"$/m);
+    });
+
+    Test.it('checks out shell scripts with LF line endings', () => {
+        const attributes = Fs.readFileSync(Path.join(ROOT, '.gitattributes'), 'utf8');
+
+        Assert.match(attributes, /^\*\.sh text eol=lf$/m);
     });
 
     Test.it('keeps the local scraper output out of the build context', () => {
