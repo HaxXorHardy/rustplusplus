@@ -37,6 +37,29 @@ module.exports = {
         return !Object.values(instance.channelId).includes(interaction.channelId);
     },
 
+    /*
+        Runs a button, select menu or modal handler. A throw is logged instead of becoming an unhandled rejection,
+        and an interaction the handler did not answer yet is acknowledged so the user does not see it fail.
+    */
+    async runComponentHandler(client, interaction, handler) {
+        try {
+            await handler(client, interaction);
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'errorCap'), e, 'error');
+
+            if (!interaction.deferred && !interaction.replied) {
+                try {
+                    await interaction.deferUpdate();
+                }
+                catch (deferError) {
+                    client.log(client.intlGet(null, 'errorCap'),
+                        `${client.intlGet(null, 'couldNotDeferInteraction')} ${deferError}`, 'error');
+                }
+            }
+        }
+    },
+
     async execute(client, interaction) {
         /* Only guild interactions carry an instance; a DM holds nothing but link buttons (credentials expiry). */
         const instance = interaction.guildId ? client.getInstance(interaction.guildId) : undefined;
@@ -52,10 +75,10 @@ module.exports = {
         }
 
         if (interaction.isButton()) {
-            require('../handlers/buttonHandler')(client, interaction);
+            await module.exports.runComponentHandler(client, interaction, require('../handlers/buttonHandler'));
         }
         else if (interaction.isStringSelectMenu()) {
-            require('../handlers/selectMenuHandler')(client, interaction);
+            await module.exports.runComponentHandler(client, interaction, require('../handlers/selectMenuHandler'));
         }
         else if (interaction.type === Discord.InteractionType.ApplicationCommand) {
             const command = interaction.client.commands.get(interaction.commandName);
@@ -75,7 +98,7 @@ module.exports = {
             }
         }
         else if (interaction.type === Discord.InteractionType.ModalSubmit) {
-            require('../handlers/modalHandler')(client, interaction);
+            await module.exports.runComponentHandler(client, interaction, require('../handlers/modalHandler'));
         }
         else {
             client.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'unknownInteraction'), 'error');
