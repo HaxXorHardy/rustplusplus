@@ -22,6 +22,9 @@ const Bootstrap = require('./src/bootstrap.js');
 
 const client = Bootstrap.start();
 
+/* SIGTERM/SIGINT shut the bot down cleanly, an uncaught exception is logged and exits with 1. */
+Bootstrap.installProcessHandlers(client);
+
 process.on('unhandledRejection', error => {
     /* Always with the stack: without it the cause of a rejection cannot be found (see the storage monitor custom id). */
     client.log(client.intlGet(null, 'errorCap'), client.intlGet(null, 'unhandledRejection', {

@@ -46,6 +46,14 @@ const RustPlus = require('../structures/RustPlus');
 const RustPlusTransport = require('../util/rustplusTransport.js');
 const Version = require('../../package.json').version;
 
+/* Delay of the first login retry, it doubles with every failed attempt up to the maximum. */
+const LOGIN_RETRY_BASE_MS = 5000;
+const LOGIN_RETRY_MAX_MS = 5 * 60 * 1000;
+/* Connection errors of node and undici: the network or DNS is down, Discord is not reachable for now. */
+const RETRYABLE_NETWORK_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ENOTFOUND', 'EAI_AGAIN',
+    'ETIMEDOUT', 'ENETUNREACH', 'EHOSTUNREACH', 'EPIPE', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET',
+    'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT']);
+
 class DiscordBot extends Discord.Client {
     constructor(props) {
         super(props);
@@ -197,24 +205,64 @@ class DiscordBot extends Discord.Client {
                 'Debug mode is enabled (RPP_DEBUG=true), verbose logging is active.');
         }
 
-        this.login(Config.discord.token).catch(error => {
-            const formattedError = this.logger.formatError(error);
-            switch (error.code) {
-                case 502: {
-                    this.log(this.intlGet(null, 'errorCap'),
-                        this.intlGet(null, 'badGateway', { error: formattedError }), 'error')
-                } break;
+        return this.loginWithRetry();
+    }
 
-                case 503: {
-                    this.log(this.intlGet(null, 'errorCap'),
-                        this.intlGet(null, 'serviceUnavailable', { error: formattedError }), 'error')
-                } break;
-
-                default: {
-                    this.log(this.intlGet(null, 'errorCap'), error, 'error');
-                } break;
+    /*
+        Log in, and keep trying while Discord or the network is down (5xx, 429, connection errors), with a delay that
+        doubles up to five minutes. Any other failure - above all an invalid token - rejects: the caller ends the
+        process, so the restart policy of the container acts instead of an idle bot that never logs in.
+    */
+    async loginWithRetry(sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
+        for (let attempt = 1; ; attempt++) {
+            try {
+                return await this.login(Config.discord.token);
             }
-        });
+            catch (error) {
+                const formattedError = this.logger.formatError(error);
+                const status = error ? (error.status ?? error.code) : undefined;
+
+                if (status === 502) {
+                    this.log(this.intlGet(null, 'errorCap'),
+                        this.intlGet(null, 'badGateway', { error: formattedError }), 'error');
+                }
+                else if (status === 503) {
+                    this.log(this.intlGet(null, 'errorCap'),
+                        this.intlGet(null, 'serviceUnavailable', { error: formattedError }), 'error');
+                }
+                else {
+                    this.log(this.intlGet(null, 'errorCap'), error, 'error');
+                }
+
+                if (!DiscordBot.isRetryableLoginError(error)) throw error;
+
+                const delayMs = LOGIN_RETRY_BASE_MS * Math.pow(2, Math.min(attempt - 1, 10));
+                const waitMs = Math.min(delayMs, LOGIN_RETRY_MAX_MS);
+                this.log(this.intlGet(null, 'warningCap'),
+                    `The Discord login failed (attempt ${attempt}), next attempt in ${Math.round(waitMs / 1000)} s.`,
+                    'warn');
+                await sleep(waitMs);
+            }
+        }
+    }
+
+    /*
+        True for a failure that goes away on its own: Discord answers 5xx or 429, or the network is down. An invalid
+        token (401, TokenInvalid/TokenMissing), disallowed intents and anything unknown are not retried.
+    */
+    static isRetryableLoginError(error) {
+        if (!error) return false;
+
+        const status = typeof error.status === 'number' ? error.status :
+            (typeof error.code === 'number' ? error.code : null);
+        if (status !== null) return status >= 500 || status === 429;
+
+        if (typeof error.code === 'string' && RETRYABLE_NETWORK_CODES.has(error.code)) return true;
+
+        const cause = error.cause;
+        if (cause && typeof cause.code === 'string' && RETRYABLE_NETWORK_CODES.has(cause.code)) return true;
+
+        return error.name === 'AbortError' || error.name === 'TimeoutError' || error.name === 'ConnectTimeoutError';
     }
 
     log(title, text, level = 'info') {
