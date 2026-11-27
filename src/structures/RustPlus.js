@@ -2545,34 +2545,40 @@ class RustPlus extends RustPlusLib {
                 name = command.slice(`${commandLeaderEn} `.length).trim();
             }
 
-            for (const player of this.team.players) {
-                if (player.name.includes(name)) {
-                    if (this.team.leaderSteamId === player.steamId) {
-                        return Client.client.intlGet(this.guildId, 'leaderAlreadyLeader', {
-                            name: player.name
-                        });
-                    }
-                    else {
-                        if (this.generalSettings.leaderCommandOnlyForPaired) {
-                            if (!Object.keys(serverListLite).includes(player.steamId)) {
-                                return Client.client.intlGet(this.guildId, 'playerNotPairedWithServer', {
-                                    name: player.name
-                                });
-                            }
-                        }
+            /*
+                The whole name (case ignored) of exactly one teammate: a part of a name ("a") or a name two players
+                share must not hand the leadership to whoever comes first.
+            */
+            const nameLowerCase = name.toLowerCase();
+            const matches = name === '' ? [] :
+                this.team.players.filter(e => typeof e.name === 'string' && e.name.toLowerCase() === nameLowerCase);
 
-                        if (this.team.leaderSteamId === this.playerId) {
-                            await this.team.changeLeadership(player.steamId);
-                        }
-                        else {
-                            this.leaderRustPlusInstance.promoteToLeaderAsync(player.steamId);
-                        }
+            if (matches.length === 1) {
+                const player = matches[0];
+                if (this.team.leaderSteamId === player.steamId) {
+                    return Client.client.intlGet(this.guildId, 'leaderAlreadyLeader', {
+                        name: player.name
+                    });
+                }
 
-                        return Client.client.intlGet(this.guildId, 'leaderTransferred', {
+                if (this.generalSettings.leaderCommandOnlyForPaired) {
+                    if (!Object.keys(serverListLite).includes(player.steamId)) {
+                        return Client.client.intlGet(this.guildId, 'playerNotPairedWithServer', {
                             name: player.name
                         });
                     }
                 }
+
+                if (this.team.leaderSteamId === this.playerId) {
+                    await this.team.changeLeadership(player.steamId);
+                }
+                else {
+                    this.leaderRustPlusInstance.promoteToLeaderAsync(player.steamId);
+                }
+
+                return Client.client.intlGet(this.guildId, 'leaderTransferred', {
+                    name: player.name
+                });
             }
 
             return Client.client.intlGet(this.guildId, 'couldNotIdentifyMember', {

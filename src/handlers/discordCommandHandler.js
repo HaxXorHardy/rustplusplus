@@ -18,6 +18,7 @@
 
 */
 
+const Alias = require('../commands/alias.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
 const DiscordTools = require('../discordTools/discordTools');
 
@@ -26,10 +27,7 @@ module.exports = {
         const guildId = rustplus.guildId;
         const instance = client.getInstance(guildId);
 
-        let command = message.cleanContent;
-        for (const alias of instance.aliases) {
-            command = command.replace(alias.alias, alias.value);
-        }
+        const command = Alias.applyAliases(instance.aliases, message.cleanContent);
 
         const callerName = message.author.username;
         const commandLowerCase = command.toLowerCase();
@@ -90,7 +88,19 @@ module.exports = {
         }
         else if (commandLowerCase.startsWith(`${prefix}${client.intlGet('en', 'commandSyntaxLeader')}`) ||
             commandLowerCase.startsWith(`${prefix}${client.intlGet(guildId, 'commandSyntaxLeader')}`)) {
-            response = await rustplus.getCommandLeader(command, null);
+            /*
+                The name form hands the team leadership to someone, and anyone who can write in the commands channel
+                can send it: admins only (RPP_NEED_ADMIN_PRIVILEGES), like the other actions that change things.
+            */
+            const isNameForm =
+                commandLowerCase.startsWith(`${prefix}${client.intlGet('en', 'commandSyntaxLeader')} `) ||
+                commandLowerCase.startsWith(`${prefix}${client.intlGet(guildId, 'commandSyntaxLeader')} `);
+            if (isNameForm && !(message.member && client.hasAdminPrivileges(message))) {
+                response = client.intlGet(guildId, 'missingPermission');
+            }
+            else {
+                response = await rustplus.getCommandLeader(command, null);
+            }
         }
         else if ((commandLowerCase.startsWith(`${prefix}${client.intlGet('en', 'commandSyntaxMarker')} `) ||
             commandLowerCase === `${prefix}${client.intlGet('en', 'commandSyntaxMarkers')}`) ||

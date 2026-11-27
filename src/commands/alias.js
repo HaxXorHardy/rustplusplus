@@ -26,6 +26,21 @@ const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 module.exports = {
     name: 'alias',
 
+    /*
+        Replaces the start of a message by the value of an alias. Only a whole leading match counts (the message is
+        the alias, or starts with the alias followed by a space), so ordinary chat containing the alias somewhere is
+        left alone. The value is inserted as it is: no $& or $1 patterns.
+    */
+    applyAliases(aliases, message) {
+        if (typeof message !== 'string' || !Array.isArray(aliases)) return message;
+
+        const alias = aliases.find(e => e && typeof e.alias === 'string' && e.alias !== '' &&
+            (message === e.alias || message.startsWith(`${e.alias} `)));
+        if (!alias) return message;
+
+        return `${alias.value}${message.slice(alias.alias.length)}`;
+    },
+
     getSlashCommandDefinition(client, guildId) {
         return new Builder.SlashCommandBuilder()
             .setName('alias')
@@ -61,11 +76,14 @@ module.exports = {
         await interaction.deferReply({ ephemeral: true });
 
         switch (interaction.options.getSubcommand()) {
+            /* An alias rewrites the commands of everyone in team chat and the commands channel: admins only. */
             case 'add': {
+                if (!await client.requireAdminPrivileges(interaction)) return;
                 await addAlias(client, interaction);
             } break;
 
             case 'remove': {
+                if (!await client.requireAdminPrivileges(interaction)) return;
                 await removeAlias(client, interaction);
             } break;
 

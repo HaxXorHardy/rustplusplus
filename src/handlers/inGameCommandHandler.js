@@ -18,6 +18,7 @@
 
 */
 
+const Alias = require('../commands/alias.js');
 const MapEvents = require('../util/mapEvents.js');
 const SmartAlarmHandler = require('./smartAlarmHandler.js');
 const SmartSwitchGroupHandler = require('./smartSwitchGroupHandler.js');
@@ -28,10 +29,7 @@ module.exports = {
         const guildId = rustplus.guildId;
         const instance = client.getInstance(guildId);
 
-        let command = chatMessage.message;
-        for (const alias of instance.aliases) {
-            command = command.replace(alias.alias, alias.value);
-        }
+        const command = Alias.applyAliases(instance.aliases, chatMessage.message);
 
         const callerSteamId = chatMessage.steamId.toString();
         const callerName = chatMessage.name;
