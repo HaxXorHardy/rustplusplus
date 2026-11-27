@@ -301,11 +301,15 @@ async function fetchSyncData(token) {
         throw error;
     }
 
+    /*
+        An unreadable payload is an error, not an empty account: an empty list would replace the stored server list
+        and make every server look unpaired.
+    */
     try {
         return RustPlusSync.parseSyncPayload(response.data.payload);
     }
     catch (e) {
-        return { currentServerId: null, servers: [] };
+        throw new Error(`Sync response could not be read: ${e && e.message ? e.message : e}`);
     }
 }
 
@@ -317,12 +321,16 @@ function storeAuth(steamId, token, servers, refreshToken = null) {
     const existing = RustPlusAuth.readAuth(`${steamId}`);
     const steamRefreshToken = refreshToken || (existing ? existing.steamRefreshToken : null) || null;
 
+    /* An empty list (no account state, or it could not be read) does not wipe the servers that are known. */
+    const hasServers = Array.isArray(servers) && servers.length !== 0;
+    const keptServers = (existing && Array.isArray(existing.servers)) ? existing.servers : [];
+
     const auth = {
         steamId: `${steamId}`,
         token: token,
         tokenExpiresAt: RustPlusTransport.getAuthTokenExpiry(token),
         updatedAt: new Date().toISOString(),
-        servers: servers,
+        servers: hasServers ? servers : keptServers,
     };
 
     if (steamRefreshToken !== null) auth.steamRefreshToken = steamRefreshToken;
@@ -360,7 +368,18 @@ async function renewAuth(steamId, log = () => undefined, options = {}) {
         throw new Error(`The Steam refresh token belongs to ${renewed.steamId}, not ${steamId}.`);
     }
 
-    const servers = await module.exports.fetchSyncData(renewed.token);
+    /*
+        The new token is already issued (and the old one possibly invalidated): a failed read of the account state
+        must not throw it away. It is stored with the known server list instead.
+    */
+    let servers = { servers: [] };
+    try {
+        servers = await module.exports.fetchSyncData(renewed.token);
+    }
+    catch (e) {
+        log(`Rust+ token: the account state could not be read (${e && e.message ? e.message : e}), ` +
+            'the known server list is kept');
+    }
 
     /*
         The renewal took a while: in the meantime the account may have been removed in Discord (the stored login was

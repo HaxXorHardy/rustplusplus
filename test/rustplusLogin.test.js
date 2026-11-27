@@ -72,6 +72,16 @@ Test.describe('RustPlusLogin.storeAuth', () => {
         Assert.strictEqual(auth.steamRefreshToken, 'first-refresh-token');
     });
 
+    Test.it('keeps the known servers when the new list is empty', () => {
+        const servers = [{ id: 'uuid-1', name: 'Server One', playerToken: 1234 }];
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, servers, 'refresh');
+
+        const auth = RustPlusLogin.storeAuth(STEAM_ID, TOKEN, []);
+
+        Assert.deepStrictEqual(auth.servers, servers);
+        Assert.deepStrictEqual(RustPlusAuth.readAuth(STEAM_ID).servers, servers);
+    });
+
     Test.it('does not write an empty refresh token', () => {
         const auth = RustPlusLogin.storeAuth(STEAM_ID, TOKEN, []);
 
@@ -99,6 +109,28 @@ Test.describe('RustPlusLogin.renewAuth', () => {
 
         /* The steam-session setter validates the token, so a broken file fails fast. */
         await Assert.rejects(() => RustPlusLogin.renewAuth(steamId), /Invalid JWT/);
+    });
+});
+
+Test.describe('RustPlusLogin.fetchSyncData', () => {
+    const Axios = require('axios');
+
+    function stubPost(t, response) {
+        const original = Axios.post;
+        Axios.post = async () => response;
+        t.after(() => { Axios.post = original; });
+    }
+
+    Test.it('throws on a payload it cannot read instead of reporting no servers', async (t) => {
+        stubPost(t, { status: 200, data: { payload: '%%% not a payload %%%' } });
+
+        await Assert.rejects(() => RustPlusLogin.fetchSyncData('token'), /could not be read/);
+    });
+
+    Test.it('reports an account without state as empty', async (t) => {
+        stubPost(t, { status: 204, data: '' });
+
+        Assert.deepStrictEqual(await RustPlusLogin.fetchSyncData('token'), { currentServerId: null, servers: [] });
     });
 });
 
@@ -142,6 +174,18 @@ Test.describe('RustPlusLogin.renewAuth (revoked meanwhile)', () => {
 
         Assert.strictEqual(auth.token, NEW_TOKEN);
         Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, NEW_TOKEN);
+    });
+
+    Test.it('keeps the renewed token when the account state cannot be read', async (t) => {
+        useTempAuthDir(t);
+        const servers = [{ id: 'uuid-1', name: 'Server One', playerToken: 1234 }];
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, servers, 'refresh');
+        stubRenewal(t, () => { throw new Error('Sync response could not be read'); });
+
+        const auth = await RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => true });
+
+        Assert.strictEqual(auth.token, NEW_TOKEN);
+        Assert.deepStrictEqual(RustPlusAuth.readAuth(STEAM_ID).servers, servers);
     });
 
     Test.it('discards the token of an account no guild lists anymore', async (t) => {
