@@ -744,11 +744,9 @@ module.exports = {
             embeds: [DiscordEmbeds.getEmbed({
                 color: color,
                 description: `**${message.name}**: ${message.message}`
-            })]
-        }
-
-        if (message.message.includes('@everyone')) {
-            content.content = '@everyone';
+            })],
+            /* Chat text from the game must never ping the guild (@everyone, @here, roles, users). */
+            allowedMentions: { parse: [] }
         }
 
         await module.exports.sendMessage(guildId, content, null, instance.channelId.teamchat);
@@ -766,11 +764,9 @@ module.exports = {
             embeds: [DiscordEmbeds.getEmbed({
                 color: color,
                 description: `**${message.name}**: ${message.message}`
-            })]
-        }
-
-        if (message.message.includes('@everyone')) {
-            content.content = '@everyone';
+            })],
+            /* Chat text from the game must never ping the guild (@everyone, @here, roles, users). */
+            allowedMentions: { parse: [] }
         }
 
         await module.exports.sendMessage(guildId, content, null, instance.channelId.clanchat);
