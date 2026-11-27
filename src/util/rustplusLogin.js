@@ -34,6 +34,7 @@ const Axios = require('axios');
 const Querystring = require('querystring');
 const SteamSession = require('steam-session');
 
+const CredentialRevocation = require('./credentialRevocation.js');
 const RustPlusAuth = require('./rustplusAuth.js');
 const RustPlusLoginPages = require('./rustplusLoginPages.js');
 const RustPlusSync = require('./rustplusSync.js');
@@ -55,6 +56,9 @@ const request = RustPlusLoginPages.request;
 const RUSTPLUS_BASE = 'https://companion-rust.facepunch.com';
 const RUSTPLUS_LOGIN_URL = `${RUSTPLUS_BASE}/login`;
 const RUSTPLUS_SYNC_URL = `${RUSTPLUS_BASE}/api/syncData`;
+
+/* Error code of a renewal whose result was thrown away (the login was revoked or replaced while it ran). */
+const RENEWAL_DISCARDED = 'RUSTPLUS_RENEWAL_DISCARDED';
 
 /*
     Step 1: Steam login through steam-session. The caller asks for the Steam Guard code (email/TOTP) or waits for
@@ -330,8 +334,13 @@ function storeAuth(steamId, token, servers, refreshToken = null) {
 /*
     Fetches a new account token with the stored Steam refresh token: a new LoginSession gets the refresh token,
     asks Steam for fresh community cookies and runs the Rust+ login again. No password, no Steam Guard.
+
+    options.isRegistered(steamId): does a guild still list the account? Defaults to the guild credential files.
 */
-async function renewAuth(steamId, log = () => undefined) {
+async function renewAuth(steamId, log = () => undefined, options = {}) {
+    const isRegistered = options.isRegistered || ((id) => CredentialRevocation.isRegisteredInAnyGuild(id));
+    const generation = RustPlusAuth.getAuthGeneration(`${steamId}`);
+
     const auth = RustPlusAuth.readAuth(`${steamId}`);
     if (auth === null) throw new Error('No stored Rust+ login for this account.');
 
@@ -345,19 +354,36 @@ async function renewAuth(steamId, log = () => undefined) {
     session.refreshToken = auth.steamRefreshToken;
 
     const cookies = await session.getWebCookies();
-    const renewed = await loginToRustPlus(cookies, log);
+    const renewed = await module.exports.loginToRustPlus(cookies, log);
 
     if (`${renewed.steamId}` !== `${steamId}`) {
         throw new Error(`The Steam refresh token belongs to ${renewed.steamId}, not ${steamId}.`);
     }
 
-    const servers = await fetchSyncData(renewed.token);
+    const servers = await module.exports.fetchSyncData(renewed.token);
+
+    /*
+        The renewal took a while: in the meantime the account may have been removed in Discord (the stored login was
+        revoked) or a new login stored a newer token. Writing the result back would recreate a revoked login and keep
+        renewing it, so it is discarded. Checked right before the synchronous write, nothing can run in between.
+    */
+    if (RustPlusAuth.getAuthGeneration(`${steamId}`) !== generation || !isRegistered(`${steamId}`)) {
+        log(`Rust+ token: the renewed token of ${steamId} is discarded, the login was removed or replaced meanwhile`);
+        throw renewalDiscardedError(steamId);
+    }
 
     log(`Rust+ token: renewed for ${renewed.steamId}`);
     return storeAuth(`${steamId}`, renewed.token, servers.servers, session.refreshToken);
 }
 
+function renewalDiscardedError(steamId) {
+    const error = new Error(`The stored login of ${steamId} was removed or replaced during the renewal.`);
+    Object.assign(error, { code: RENEWAL_DISCARDED });
+    return error;
+}
+
 module.exports = {
+    RENEWAL_DISCARDED: RENEWAL_DISCARDED,
     SteamLogin: SteamLogin,
     loginToRustPlus: loginToRustPlus,
     fetchSyncData: fetchSyncData,

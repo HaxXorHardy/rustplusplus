@@ -104,6 +104,21 @@ Test.describe('TokenRecovery.reportRejected', () => {
     });
 });
 
+Test.describe('TokenRecovery discarded renewal', () => {
+    Test.it('treats a login that was revoked during the renewal as skipped, not as a failure', async (t) => {
+        const client = fakeClient();
+
+        stubRenew(t, async () => {
+            throw Object.assign(new Error('removed meanwhile.'), { code: RustPlusLogin.RENEWAL_DISCARDED });
+        });
+        TokenRecovery.reset();
+
+        await TokenRecovery.reportRejected(client, 'guild', '1', 'first');
+        Assert.strictEqual(await TokenRecovery.reportRejected(client, 'guild', '1', 'second'), 'skipped');
+        Assert.ok(!client.logs.some((e) => e.level === 'warn'), 'no warning to log in again');
+    });
+});
+
 Test.describe('TokenRecovery backoff', () => {
     Test.it('stops logging in after three renewals without a working connection', async (t) => {
         t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });

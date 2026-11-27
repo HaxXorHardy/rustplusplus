@@ -390,6 +390,12 @@ async function renew(client, steamId, reason, options = {}) {
             return 'renewed';
         }
         catch (e) {
+            /* The login was removed in Discord (or replaced by a new login) while the renewal ran: not a failure. */
+            if (e && e.code === RustPlusLogin.RENEWAL_DISCARDED) {
+                client.log(client.intlGet(null, 'infoCap'), `${e.message} The renewed token was discarded.`, 'debug');
+                return 'skipped';
+            }
+
             if (options.proactive) state.lastProactiveFailMs = Date.now();
             else state.renewals += 1;
 

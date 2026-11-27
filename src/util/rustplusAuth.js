@@ -90,17 +90,36 @@ function readAuth(steamId) {
     }
 }
 
+/*
+    Counts the changes of a stored login in this process (write or remove). A token renewal takes a while: it compares
+    the counter before it stores its result, so a login that was revoked (or replaced by a newer login) in the meantime
+    is not written back.
+*/
+const generations = new Map();
+
+function getAuthGeneration(steamId) {
+    return generations.get(`${steamId}`) || 0;
+}
+
+function bumpAuthGeneration(steamId) {
+    generations.set(`${steamId}`, getAuthGeneration(steamId) + 1);
+}
+
 function writeAuth(steamId, auth) {
     const path = getAuthFilePath(steamId);
 
     Fs.mkdirSync(authDir, { recursive: true });
     /* The account token is a credential: the file is not readable for other users of the host. */
     AtomicWriteFile(path, JSON.stringify(auth, null, 2), 'utf8', 0o600);
+    bumpAuthGeneration(steamId);
 }
 
 /* Removes the stored login of an account (its owner removed it in Discord). */
 function removeAuth(steamId) {
     if (!isValidSteamId(steamId)) return;
+
+    /* Also when nothing is stored: a renewal that is running must not write the login back. */
+    bumpAuthGeneration(steamId);
     try {
         Fs.unlinkSync(getAuthFilePath(steamId));
     }
@@ -204,6 +223,7 @@ module.exports = {
     setAuthDir: setAuthDir,
     isValidSteamId: isValidSteamId,
     getAuthFilePath: getAuthFilePath,
+    getAuthGeneration: getAuthGeneration,
     readAuth: readAuth,
     writeAuth: writeAuth,
     removeAuth: removeAuth,

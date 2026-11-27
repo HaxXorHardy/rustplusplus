@@ -102,6 +102,69 @@ Test.describe('RustPlusLogin.renewAuth', () => {
     });
 });
 
+Test.describe('RustPlusLogin.renewAuth (revoked meanwhile)', () => {
+    const SteamSession = require('steam-session');
+    const STEAM_ID = '76561198000000004';
+    const NEW_TOKEN = 'bmV3LXRva2VuLXBheWxvYWQtcGF5bG9hZA.c2lnbmF0dXJl';
+
+    /* No network: Steam, the Rust+ login and the account state are replaced, renewAuth itself stays real. */
+    function stubRenewal(t, onSync = () => undefined) {
+        const original = {
+            LoginSession: SteamSession.LoginSession,
+            loginToRustPlus: RustPlusLogin.loginToRustPlus,
+            fetchSyncData: RustPlusLogin.fetchSyncData,
+        };
+
+        SteamSession.LoginSession = class {
+            async getWebCookies() {
+                return ['steamLoginSecure=abc'];
+            }
+        };
+        RustPlusLogin.loginToRustPlus = async () => ({ steamId: STEAM_ID, token: NEW_TOKEN });
+        RustPlusLogin.fetchSyncData = async () => {
+            onSync();
+            return { currentServerId: null, servers: [] };
+        };
+
+        t.after(() => {
+            SteamSession.LoginSession = original.LoginSession;
+            RustPlusLogin.loginToRustPlus = original.loginToRustPlus;
+            RustPlusLogin.fetchSyncData = original.fetchSyncData;
+        });
+    }
+
+    Test.it('stores the renewed token of an account that is still registered', async (t) => {
+        useTempAuthDir(t);
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');
+        stubRenewal(t);
+
+        const auth = await RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => true });
+
+        Assert.strictEqual(auth.token, NEW_TOKEN);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, NEW_TOKEN);
+    });
+
+    Test.it('discards the token of an account no guild lists anymore', async (t) => {
+        useTempAuthDir(t);
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');
+        stubRenewal(t);
+
+        await Assert.rejects(() => RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => false }),
+            (e) => e.code === RustPlusLogin.RENEWAL_DISCARDED);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).token, TOKEN);
+    });
+
+    Test.it('does not recreate a login that was revoked while the renewal ran', async (t) => {
+        useTempAuthDir(t);
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'refresh');
+        stubRenewal(t, () => RustPlusAuth.removeAuth(STEAM_ID));
+
+        await Assert.rejects(() => RustPlusLogin.renewAuth(STEAM_ID, undefined, { isRegistered: () => true }),
+            (e) => e.code === RustPlusLogin.RENEWAL_DISCARDED);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID), null);
+    });
+});
+
 Test.describe('RustPlusLogin.SteamLogin', () => {
     const SteamSession = require('steam-session');
     const Guard = SteamSession.EAuthSessionGuardType;
