@@ -2,6 +2,8 @@ services:
   rustplusbot:
     image: ghcr.io/haxxorhardy/rustplusplus:master
     container_name: rustplusbot
+    # A tiny init as PID 1 forwards SIGTERM to node and reaps the ffmpeg/graphicsmagick child processes.
+    init: true
     environment:
       - RPP_DISCORD_TOKEN=TOKEN
       - RPP_DISCORD_CLIENT_ID=CLIENT_ID

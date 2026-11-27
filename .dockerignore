@@ -24,6 +24,15 @@ scripts/quality-review.ps1
 scripts/review.cmd
 *.log
 
+# Local scraper output (gitignored, so CI images never had it): scripts/rustlabs/ holds a Chromium profile with
+# cookies and must never reach an image layer.
+scripts/rustlabs/
+scripts/items.json
+data/items/
+scorecard.png
+__pycache__/
+*.pyc
+
 # Not needed in the image
 docs/
 node_modules/

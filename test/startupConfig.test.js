@@ -58,6 +58,23 @@ Test.describe('startup configuration', () => {
         Assert.match(dockerfile, /npm ci --omit=dev/);
         Assert.doesNotMatch(dockerfile, /ts-node/);
     });
+
+    /* npm as PID 1 did not forward SIGTERM: docker stop killed the bot after 10 s without a clean shutdown. */
+    Test.it('runs node directly as the unprivileged node user', () => {
+        const dockerfile = Fs.readFileSync(Path.join(ROOT, 'Dockerfile'), 'utf8');
+        const dockerLines = dockerfile.split(/\r?\n/);
+        Assert.ok(dockerLines.includes('CMD ["node", "index.js"]'), 'CMD must start node directly');
+        Assert.ok(dockerLines.includes('USER node'), 'the image must run as the node user');
+        Assert.ok(dockerfile.indexOf('USER node') < dockerfile.indexOf('VOLUME ['), 'USER must come before VOLUME');
+        Assert.match(dockerfile, /--no-install-recommends/);
+        Assert.match(dockerfile, /rm -rf \/var\/lib\/apt\/lists/);
+    });
+
+    Test.it('keeps the local scraper output out of the build context', () => {
+        const dockerignore = Fs.readFileSync(Path.join(ROOT, '.dockerignore'), 'utf8').split(/\r?\n/);
+
+        Assert.ok(dockerignore.includes('scripts/rustlabs/'));
+    });
 });
 
 Test.describe('integer environment variables', () => {
