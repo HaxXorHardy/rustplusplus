@@ -167,6 +167,46 @@ function failPendingRequests(rustplus) {
     }
 }
 
+/*
+    The request of the library (sendRequestAsync of rustplus.js) with one change: a request that times out removes its
+    callback from seqCallbacks. The library left it there, so every request a server never answered stayed in the table
+    for the lifetime of the socket.
+*/
+function sendRequestAsync(rustplus, data, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+        let seq = null;
+
+        const callback = (message) => {
+            clearTimeout(timer);
+
+            if (message.response.error) reject(message.response.error);
+            else resolve(message.response);
+        };
+
+        function forget() {
+            const callbacks = rustplus.seqCallbacks;
+            if (seq !== null && callbacks && callbacks[seq] === callback) delete callbacks[seq];
+        }
+
+        const timer = setTimeout(() => {
+            forget();
+            reject(new Error('Timeout reached while waiting for response'));
+        }, timeoutMs);
+
+        try {
+            rustplus.sendRequest(data, callback);
+            seq = rustplus.seq;
+        }
+        catch (e) {
+            /* The library registers the callback before it sends: a failed send must not leave it behind. */
+            seq = rustplus.seq;
+            forget();
+            clearTimeout(timer);
+            reject(e);
+        }
+    });
+}
+
 function connectAuthenticatedSocket(rustplus, serverGuid, authToken, options) {
     const settings = Object.assign({
         WebSocketImpl: WebSocket,
@@ -364,6 +404,7 @@ module.exports = {
     CONNECT_TIMEOUT_MS: CONNECT_TIMEOUT_MS,
     RELAY_CLOSED_CODE: RELAY_CLOSED_CODE,
     failPendingRequests: failPendingRequests,
+    sendRequestAsync: sendRequestAsync,
     connectAuthenticatedSocket: connectAuthenticatedSocket,
     describeClose: describeClose,
     describeUptime: describeUptime,

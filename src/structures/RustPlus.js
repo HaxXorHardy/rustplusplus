@@ -741,6 +741,11 @@ class RustPlus extends RustPlusLib {
         return super.sendRequest(data, callback);
     }
 
+    /* A timed-out request removes its callback, see util/rustplusSocket.js. */
+    sendRequestAsync(data, timeoutMilliseconds = 10000) {
+        return RustPlusSocket.sendRequestAsync(this, data, timeoutMilliseconds);
+    }
+
     /*
         Reconnect once when a request had to be dropped, the polling loop keeps running meanwhile.
 

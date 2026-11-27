@@ -315,6 +315,36 @@ Test.describe('Rust+ socket close diagnostics', () => {
         Assert.ok(line.text.includes('the heartbeat was not answered'), line.text);
     });
 
+    /* The library left the callback of every unanswered request in seqCallbacks. */
+    Test.it('removes the callback of a request that timed out', async () => {
+        const rustplus = { seq: 0, seqCallbacks: [] };
+        rustplus.sendRequest = (data, callback) => { rustplus.seq += 1; rustplus.seqCallbacks[rustplus.seq] = callback; };
+
+        await Assert.rejects(RustPlusSocket.sendRequestAsync(rustplus, {}, 10), /Timeout reached/);
+        Assert.strictEqual(rustplus.seqCallbacks[1], undefined);
+
+        /* An answered request resolves with the response, an AppError rejects. */
+        const answered = RustPlusSocket.sendRequestAsync(rustplus, {}, 1000);
+        rustplus.seqCallbacks[2]({ response: { seq: 2, info: {} } });
+        Assert.deepStrictEqual(await answered, { seq: 2, info: {} });
+
+        const refused = RustPlusSocket.sendRequestAsync(rustplus, {}, 1000);
+        rustplus.seqCallbacks[3]({ response: { seq: 3, error: { error: 'not_found' } } });
+        await Assert.rejects(refused, (e) => e.error === 'not_found');
+    });
+
+    Test.it('removes the callback of a request whose send failed', async () => {
+        const rustplus = { seq: 0, seqCallbacks: [] };
+        rustplus.sendRequest = (data, callback) => {
+            rustplus.seq += 1;
+            rustplus.seqCallbacks[rustplus.seq] = callback;
+            throw new Error('send failed');
+        };
+
+        await Assert.rejects(RustPlusSocket.sendRequestAsync(rustplus, {}, 1000), /send failed/);
+        Assert.strictEqual(rustplus.seqCallbacks[1], undefined);
+    });
+
     Test.it('keeps the reason of the relay and cuts it', () => {
         Assert.strictEqual(RustPlusSocket.describeClose(1001, ''), 'code 1001');
         Assert.strictEqual(RustPlusSocket.describeClose(1001, 'Server shutting down'),

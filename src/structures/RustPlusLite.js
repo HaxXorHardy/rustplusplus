@@ -82,6 +82,11 @@ class RustPlusLite extends RustPlusLib {
         return RustPlusSocket.connectAuthenticatedSocket(this, this.serverGuid, this.authToken);
     }
 
+    /* A timed-out request removes its callback, see util/rustplusSocket.js. */
+    sendRequestAsync(data, timeoutMilliseconds = 10000) {
+        return RustPlusSocket.sendRequestAsync(this, data, timeoutMilliseconds);
+    }
+
     log(title, text, level = 'info') {
         this.logger.log(`${title} LITE`, text, level);
     }
