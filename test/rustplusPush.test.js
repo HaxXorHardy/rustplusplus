@@ -606,6 +606,25 @@ Test.describe('RustPlusPushNotifications', () => {
         Assert.deepStrictEqual(result, [{ kind: 'raidAlarm', guildId: 'guild', handled: false }]);
     });
 
+    Test.it('pings @everyone for a raid alarm, but not for one whose push is out of date', async (t) => {
+        const sent = t.mock.method(DiscordMessages, 'sendMessage', async () => undefined);
+        const now = Date.now();
+        const raid = (ageMs) => RustPlusPushNotifications.parse(Object.assign(notification('alarm',
+            'You\'re getting raided!', 'Your base is under attack', { id: SERVER_ID, name: 'Server' }), { sent: `${now - ageMs}` }));
+
+        const client = fakeClient(serverInstance());
+        const fresh = await RustPlusPushNotifications.handle(client, STEAM_ID, raid(10 * 1000), { now: () => now });
+        Assert.strictEqual(fresh[0].handled, true, client.logs.join('\n'));
+        Assert.strictEqual(sent.mock.callCount(), 1);
+        Assert.strictEqual(sent.mock.calls[0].arguments[1].content, '@everyone');
+
+        const late = await RustPlusPushNotifications.handle(client, STEAM_ID,
+            raid((RustPlusPushNotifications.ALARM_PUSH_MAX_AGE_S + 60) * 1000), { now: () => now });
+        Assert.strictEqual(late[0].handled, false);
+        Assert.strictEqual(sent.mock.callCount(), 1);
+        Assert.ok(client.logs.some((text) => text.includes('raid alarm') && text.includes('not reported')));
+    });
+
     Test.it('logs a notification it does not know in full', async () => {
         const client = fakeClient(serverInstance());
 

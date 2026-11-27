@@ -264,9 +264,19 @@ function isValidUrl(url) {
     return typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'));
 }
 
-async function raidAlarm(client, guildId, serverKey, notification) {
+async function raidAlarm(client, guildId, serverKey, notification, deps = {}) {
     const instance = client.getInstance(guildId);
     const { title, message, body } = notification;
+
+    /* Like a smart alarm: a push FCM queued during a reconnect is no raid to ping @everyone for anymore. */
+    const nowMs = deps.now ? deps.now() : Date.now();
+    const ageSeconds = Math.floor(nowMs / 1000) - alarmTime(notification, nowMs);
+    if (ageSeconds > ALARM_PUSH_MAX_AGE_S) {
+        client.log(client.intlGet(null, 'warningCap'),
+            `Rust+ push: the raid alarm "${title}" for ${guildId} was sent ${Math.round(ageSeconds / 60)} min ago and ` +
+            'arrived only now, it is not reported.', 'warn');
+        return false;
+    }
 
     const files = [];
     if (!isValidUrl(body.img)) {
@@ -604,7 +614,7 @@ async function handle(client, steamId, notification, deps = {}) {
         let handled = false;
 
         try {
-            if (kind === 'raidAlarm') handled = await raidAlarm(client, guildId, serverKey, notification);
+            if (kind === 'raidAlarm') handled = await raidAlarm(client, guildId, serverKey, notification, deps);
             else if (kind === 'smartAlarm') handled = await smartAlarm(client, guildId, serverKey, notification, deps);
             else if (kind === 'teamLogin') handled = await teamLogin(client, guildId, serverKey, notification);
         }
