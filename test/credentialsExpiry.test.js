@@ -138,6 +138,23 @@ Test.describe('CredentialsExpiryHandler', () => {
         Assert.deepStrictEqual(messages, []);
     });
 
+    Test.it('checks only the accounts a guild lists', async (t) => {
+        const { client, messages, logged } = stubAuth(t, { token: 'abc', tokenExpiresAt: nowSeconds() + DAY });
+        const OTHER_GUILD_ID = '1474484924093432004';
+
+        client.guilds.cache.set(OTHER_GUILD_ID, {});
+        InstanceUtils.readCredentialsFile = (guildId) => (guildId === GUILD_ID ? {
+            hoster: STEAM_ID,
+            [STEAM_ID]: { discord_user_id: USER_ID, login: 'rustplus', updated_at: new Date().toISOString() },
+        } : { hoster: null });
+
+        await CredentialsExpiryHandler.handler(client, false);
+
+        Assert.strictEqual(messages.length, 1);
+        Assert.ok(!logged.some((entry) => String(entry.text).includes('credentialsExpiryUserNotFound')),
+            'the other guild does not look for an owner of an account it does not list');
+    });
+
     Test.it('logs a login without a resolvable owner instead of failing', async (t) => {
         const { client, messages, logged } = stubAuth(t, { token: 'abc', tokenExpiresAt: nowSeconds() + DAY });
         DiscordTools.getUserById = async () => null;

@@ -28,6 +28,7 @@ const Config = require('../../config');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const CredentialOwner = require('../util/credentialOwner.js');
+const InstanceUtils = require('../util/instanceUtils.js');
 const RustPlusAuth = require('../util/rustplusAuth.js');
 
 const STATE_EXPIRED = 'expired';
@@ -72,9 +73,28 @@ function markNotified(client, key) {
     client.credentialsExpiryNotified[key] = true;
 }
 
+/* The steam accounts registered in the guild (the keys of its credentials file, without the hoster). */
+function getGuildSteamIds(guildId) {
+    let credentials = null;
+    try {
+        credentials = InstanceUtils.readCredentialsFile(guildId);
+    }
+    catch (e) {
+        return [];
+    }
+
+    if (!credentials || typeof credentials !== 'object') return [];
+    return Object.keys(credentials).filter((key) => key !== 'hoster');
+}
+
 async function handleGuild(client, guildId, now, warningSeconds) {
-    /* Every stored login of the guild is checked, the token file is the only source of the token state. */
-    for (const steamId of RustPlusAuth.listSteamIds()) {
+    /*
+        Only the logins of accounts this guild lists are checked, the token file is the only source of the token state.
+        The other guilds' accounts have no owner here and would only log "owner not found" every hour.
+    */
+    const guildSteamIds = getGuildSteamIds(guildId);
+
+    for (const steamId of RustPlusAuth.listSteamIds().filter((id) => guildSteamIds.includes(`${id}`))) {
         const auth = RustPlusAuth.readAuth(steamId);
         if (auth === null) continue;
 
