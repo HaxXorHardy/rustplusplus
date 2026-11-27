@@ -50,6 +50,31 @@ function optionalField(interaction, customId) {
     }
 }
 
+/* A custom timer is at most a week; anything longer, negative or not a whole number is ignored. */
+const MAX_TIMER_SECONDS = 7 * 24 * 60 * 60;
+
+/* Seconds of a custom timer field, or null when the text is not a positive whole number up to a week. */
+function parseTimerSeconds(text) {
+    if (typeof text !== 'string' || !/^\d+$/.test(text.trim())) return null;
+    const seconds = Number(text.trim());
+    if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > MAX_TIMER_SECONDS) return null;
+    return seconds;
+}
+
+/* An answer after the form was acknowledged (deferred before a slow call) has to be a follow-up. */
+async function replyOrFollowUp(client, interaction, content) {
+    if (!interaction.deferred && !interaction.replied) return client.interactionReply(interaction, content);
+
+    try {
+        return await interaction.followUp(content);
+    }
+    catch (e) {
+        client.log(client.intlGet(null, 'errorCap'),
+            client.intlGet(null, 'interactionReplyFailed', { error: e }), 'error');
+    }
+    return undefined;
+}
+
 /* On (true) or off (false) of the group timer form: the choice, or the text of a form opened before 1.51.8. */
 function groupTimerState(client, guildId, interaction) {
     try {
@@ -81,6 +106,8 @@ module.exports = async (client, interaction) => {
             id: `${verifyId}`,
             user: `${interaction.user.username} (${interaction.user.id})`
         }));
+        /* Acknowledged, or Discord shows the user "This interaction failed" after 3 s. */
+        await client.interactionDeferUpdate(interaction);
         return;
     }
 
@@ -109,14 +136,16 @@ module.exports = async (client, interaction) => {
     if (interaction.customId.startsWith('CustomTimersEdit')) {
         const ids = JSON.parse(interaction.customId.replace('CustomTimersEdit', ''));
         const server = instance.serverList[ids.serverId];
-        const cargoShipEgressTime = parseInt(interaction.fields.getTextInputValue('CargoShipEgressTime'));
-        const oilRigCrateUnlockTime = parseInt(interaction.fields.getTextInputValue('OilRigCrateUnlockTime'));
-        const deepSeaMinWipeCooldown = parseInt(interaction.fields.getTextInputValue('DeepSeaMinWipeCooldownTime'));
-        const deepSeaMaxWipeCooldown = parseInt(interaction.fields.getTextInputValue('DeepSeaMaxWipeCooldownTime'));
-        const deepSeaWipeDuration = parseInt(interaction.fields.getTextInputValue('DeepSeaWipeDurationTime'));
+        const cargoShipEgressTime = parseTimerSeconds(interaction.fields.getTextInputValue('CargoShipEgressTime'));
+        const oilRigCrateUnlockTime = parseTimerSeconds(interaction.fields.getTextInputValue('OilRigCrateUnlockTime'));
+        const deepSeaMinWipeCooldown =
+            parseTimerSeconds(interaction.fields.getTextInputValue('DeepSeaMinWipeCooldownTime'));
+        const deepSeaMaxWipeCooldown =
+            parseTimerSeconds(interaction.fields.getTextInputValue('DeepSeaMaxWipeCooldownTime'));
+        const deepSeaWipeDuration = parseTimerSeconds(interaction.fields.getTextInputValue('DeepSeaWipeDurationTime'));
 
         if (!server) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -147,6 +176,12 @@ module.exports = async (client, interaction) => {
         const server = instance.serverList[ids.serverId];
         const battlemetricsId = interaction.fields.getTextInputValue('ServerBattlemetricsId');
 
+        /* The server was removed while the form was open. */
+        if (!server) {
+            await client.interactionDeferUpdate(interaction);
+            return;
+        }
+
         if (battlemetricsId !== server.battlemetricsId) {
             if (battlemetricsId === '') {
                 server.battlemetricsId = null;
@@ -163,6 +198,8 @@ module.exports = async (client, interaction) => {
                 server.battlemetricsId = battlemetricsId;
             }
             else {
+                /* Acknowledged first: the Battlemetrics requests can take longer than Discord's 3 s. */
+                await client.interactionDeferUpdate(interaction);
                 const bmInstance = new Battlemetrics(battlemetricsId);
                 await bmInstance.setup();
                 if (bmInstance.lastUpdateSuccessful) {
@@ -197,7 +234,7 @@ module.exports = async (client, interaction) => {
         }
 
         if (!server || (server && !server.switches.hasOwnProperty(ids.entityId))) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -227,7 +264,7 @@ module.exports = async (client, interaction) => {
         const groupCommand = interaction.fields.getTextInputValue('GroupCommand');
 
         if (!server || (server && !server.switchGroups.hasOwnProperty(ids.groupId))) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -321,7 +358,7 @@ module.exports = async (client, interaction) => {
         const smartAlarmCommand = interaction.fields.getTextInputValue('SmartAlarmCommand');
 
         if (!server || (server && !server.alarms.hasOwnProperty(ids.entityId))) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -349,7 +386,7 @@ module.exports = async (client, interaction) => {
         const storageMonitorName = interaction.fields.getTextInputValue('StorageMonitorName');
 
         if (!server || (server && !server.storageMonitors.hasOwnProperty(ids.entityId))) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -389,7 +426,7 @@ module.exports = async (client, interaction) => {
         const trackerClanTag = interaction.fields.getTextInputValue('TrackerClanTag');
 
         if (!tracker) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -408,6 +445,8 @@ module.exports = async (client, interaction) => {
                 tracker.title = bmInstance.server_name;
             }
             else {
+                /* Acknowledged first: the Battlemetrics requests can take longer than Discord's 3 s. */
+                await client.interactionDeferUpdate(interaction);
                 const bmInstance = new Battlemetrics(trackerBattlemetricsId);
                 await bmInstance.setup();
                 if (bmInstance.lastUpdateSuccessful) {
@@ -434,7 +473,7 @@ module.exports = async (client, interaction) => {
         const input = (optionalField(interaction, 'TrackerAddPlayerId') || '').trim();
 
         if (!tracker) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -476,7 +515,7 @@ module.exports = async (client, interaction) => {
             client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userModalInteractionSuccess', {
                 id: `${verifyId}`
             }));
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -490,12 +529,18 @@ module.exports = async (client, interaction) => {
 
         let id = parsedInput.value;
         let isSteamId64 = parsedInput.type === 'steamId';
+
+        /* Acknowledged first: the Steam profile is scraped below, which can take longer than Discord's 3 s. */
+        if (parsedInput.type === 'steamVanityUrl' || isSteamId64) {
+            await client.interactionDeferUpdate(interaction);
+        }
+
         if (parsedInput.type === 'steamVanityUrl') {
             const resolvedSteamId = await Scrape.scrapeSteamIdFromVanity(client, parsedInput.value);
             if (!resolvedSteamId) {
                 if (added.length !== 0) await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
                 const str = client.intlGet(interaction.guildId, 'trackerPlayerInputInvalid');
-                await client.interactionReply(interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
+                await replyOrFollowUp(client, interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
                 return;
             }
 
@@ -508,7 +553,7 @@ module.exports = async (client, interaction) => {
         if ((isSteamId64 && tracker.players.some(e => e.steamId === id)) ||
             (!isSteamId64 && tracker.players.some(e => e.playerId === id))) {
             if (added.length !== 0) await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -555,7 +600,7 @@ module.exports = async (client, interaction) => {
         const input = (optionalField(interaction, 'TrackerRemovePlayerId') || '').trim();
 
         if (!tracker) {
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -589,7 +634,7 @@ module.exports = async (client, interaction) => {
             client.log(client.intlGet(null, 'infoCap'), client.intlGet(null, 'userModalInteractionSuccess', {
                 id: `${verifyId}`
             }));
-            interaction.deferUpdate();
+            await client.interactionDeferUpdate(interaction);
             return;
         }
 
@@ -598,6 +643,8 @@ module.exports = async (client, interaction) => {
         let isSteamId64 = parsedInput.valid ? parsedInput.type === 'steamId' : false;
         let useRawRemoval = !parsedInput.valid;
         if (parsedInput.valid && parsedInput.type === 'steamVanityUrl') {
+            /* Acknowledged first: resolving the vanity URL can take longer than Discord's 3 s. */
+            await client.interactionDeferUpdate(interaction);
             const resolvedSteamId = await Scrape.scrapeSteamIdFromVanity(client, parsedInput.value);
             if (resolvedSteamId) {
                 id = resolvedSteamId;
@@ -627,7 +674,7 @@ module.exports = async (client, interaction) => {
                 await DiscordMessages.sendTrackerMessage(interaction.guildId, ids.trackerId);
             }
             const str = client.intlGet(interaction.guildId, 'trackerPlayerInputInvalid');
-            await client.interactionReply(interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
+            await replyOrFollowUp(client, interaction, DiscordEmbeds.getActionInfoEmbed(1, str));
             return;
         }
 
@@ -645,5 +692,7 @@ module.exports = async (client, interaction) => {
         id: `${verifyId}`
     }));
 
-    interaction.deferUpdate();
+    await client.interactionDeferUpdate(interaction);
 }
+
+module.exports.parseTimerSeconds = parseTimerSeconds;
