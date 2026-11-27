@@ -69,4 +69,17 @@ Test.describe('stored logins of removed credentials', () => {
         Assert.strictEqual(CredentialRevocation.revokeIfUnregistered('111', deps), false);
         Assert.deepStrictEqual(deps.calls, []);
     });
+
+    Test.it('lists the owners of an account over every guild', (t) => {
+        const dir = credentialsDir(t, {
+            'g1.json': { hoster: '111', 111: { discord_user_id: 'u1' } },
+            'g2.json': { 111: { discord_user_id: 'u2' }, 222: { discord_user_id: 'u3' } },
+            'g3.json': { 111: { discord_user_id: 'u1' } },
+            'g4.json': '{ broken',
+        });
+
+        Assert.deepStrictEqual(CredentialRevocation.getOwners('111', dir), ['u1', 'u2']);
+        Assert.deepStrictEqual(CredentialRevocation.getOwners('333', dir), []);
+        Assert.deepStrictEqual(CredentialRevocation.getOwners('111', Path.join(dir, 'missing')), []);
+    });
 });

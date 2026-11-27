@@ -54,6 +54,37 @@ function isRegisteredInAnyGuild(steamId, credentialsDir = CREDENTIALS_DIR) {
 }
 
 /*
+    The Discord users that registered the account, over every guild. The login file is shared by all guilds, so a
+    login in one guild has to know whether the stored file belongs to somebody else.
+*/
+function getOwners(steamId, credentialsDir = CREDENTIALS_DIR) {
+    const owners = [];
+    let files;
+    try {
+        files = Fs.readdirSync(credentialsDir).filter((file) => file.endsWith('.json'));
+    }
+    catch (e) {
+        return owners;
+    }
+
+    for (const file of files) {
+        try {
+            const credentials = JSON.parse(Fs.readFileSync(Path.join(credentialsDir, file), 'utf8'));
+            if (!credentials || !Object.prototype.hasOwnProperty.call(credentials, `${steamId}`)) continue;
+
+            const entry = credentials[`${steamId}`];
+            const owner = (entry && entry.discord_user_id) ? `${entry.discord_user_id}` : null;
+            if (owner !== null && !owners.includes(owner)) owners.push(owner);
+        }
+        catch (e) {
+            /* Unreadable file, nothing to learn from it. */
+        }
+    }
+
+    return owners;
+}
+
+/*
     Removes the stored login, the push registration and the push listener of an account that no guild lists anymore.
     Returns whether it was removed.
 */
@@ -73,6 +104,7 @@ function revokeIfUnregistered(steamId, deps = {}) {
 }
 
 module.exports = {
+    getOwners,
     isRegisteredInAnyGuild,
     revokeIfUnregistered,
 };

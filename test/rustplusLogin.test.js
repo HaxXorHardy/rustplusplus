@@ -72,6 +72,15 @@ Test.describe('RustPlusLogin.storeAuth', () => {
         Assert.strictEqual(auth.steamRefreshToken, 'first-refresh-token');
     });
 
+    Test.it('drops the stored refresh token when it must not be carried over', () => {
+        RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], 'owner-refresh-token');
+
+        const auth = RustPlusLogin.storeAuth(STEAM_ID, TOKEN, [], null, { keepRefreshToken: false });
+
+        Assert.strictEqual('steamRefreshToken' in auth, false);
+        Assert.strictEqual(RustPlusAuth.readAuth(STEAM_ID).steamRefreshToken, undefined);
+    });
+
     Test.it('keeps the known servers when the new list is empty', () => {
         const servers = [{ id: 'uuid-1', name: 'Server One', playerToken: 1234 }];
         RustPlusLogin.storeAuth(STEAM_ID, TOKEN, servers, 'refresh');

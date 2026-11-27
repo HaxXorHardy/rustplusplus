@@ -22,6 +22,7 @@ const Discord = require('discord.js');
 const QrCode = require('qrcode');
 
 const Constants = require('../util/constants.js');
+const CredentialRevocation = require('../util/credentialRevocation.js');
 const DiscordButtons = require('../discordTools/discordButtons.js');
 const DiscordEmbeds = require('../discordTools/discordEmbeds.js');
 const DiscordMessages = require('../discordTools/discordMessages.js');
@@ -285,8 +286,17 @@ async function finish(client, interaction, { steamId, token, servers, refreshTok
             }));
         }
 
+        /*
+            The login file is shared by every guild. A pasted token brings no refresh token of its own: when another
+            Discord user registered the account (in any guild), their stored refresh token is not carried over to
+            this login.
+        */
+        const foreign = refreshToken === null && CredentialRevocation.getOwners(steamId)
+            .some((owner) => owner !== `${interaction.member.user.id}`);
+
         /* The refresh token allows renewing the account token later without a Steam Guard prompt. */
-        const stored = RustPlusLogin.storeAuth(steamId, token, servers, refreshToken);
+        const stored = RustPlusLogin.storeAuth(steamId, token, servers, refreshToken,
+            { keepRefreshToken: !foreign });
 
         /* A fresh login ends the backoff of a token that kept being rejected. */
         TokenRecovery.markHealthy(steamId);

@@ -317,9 +317,12 @@ async function fetchSyncData(token) {
     Stores token, refresh token and server list in credentials/rustplusAuth/<steamId>.json. An already stored
     refresh token is kept when none is passed in (Steam does not rotate it on every login).
 */
-function storeAuth(steamId, token, servers, refreshToken = null) {
+function storeAuth(steamId, token, servers, refreshToken = null, options = {}) {
     const existing = RustPlusAuth.readAuth(`${steamId}`);
-    const steamRefreshToken = refreshToken || (existing ? existing.steamRefreshToken : null) || null;
+
+    /* options.keepRefreshToken false: the stored refresh token belongs to another owner and must not be carried over. */
+    const keep = options.keepRefreshToken !== false;
+    const steamRefreshToken = refreshToken || ((keep && existing) ? existing.steamRefreshToken : null) || null;
 
     /* An empty list (no account state, or it could not be read) does not wipe the servers that are known. */
     const hasServers = Array.isArray(servers) && servers.length !== 0;

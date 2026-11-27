@@ -28,6 +28,7 @@ const Assert = require('node:assert');
 const Test = require('node:test');
 
 const Client = require('../src/structures/clientRegistry.js');
+const CredentialRevocation = require('../src/util/credentialRevocation.js');
 const CredentialsLoginHandler = require('../src/handlers/credentialsLoginHandler.js');
 const DiscordMessages = require('../src/discordTools/discordMessages.js');
 const InstanceUtils = require('../src/util/instanceUtils.js');
@@ -111,12 +112,17 @@ function stubDependencies(t, options = {}) {
         if (options.fetchSyncDataError) throw new Error(options.fetchSyncDataError);
         return { servers: options.servers || [] };
     };
-    RustPlusLogin.storeAuth = (steamId, token, servers, refreshToken) => {
-        calls.storeAuth.push({ steamId, token, servers, refreshToken });
+    RustPlusLogin.storeAuth = (steamId, token, servers, refreshToken, storeOptions = {}) => {
+        calls.storeAuth.push({ steamId, token, servers, refreshToken, keepRefreshToken: storeOptions.keepRefreshToken });
 
-        /* The real storeAuth keeps a refresh token that is already stored. */
-        return { steamId, token, steamRefreshToken: refreshToken || options.existingRefreshToken || null };
+        /* The real storeAuth keeps a refresh token that is already stored (unless told not to). */
+        const kept = storeOptions.keepRefreshToken === false ? null : options.existingRefreshToken;
+        return { steamId, token, steamRefreshToken: refreshToken || kept || null };
     };
+
+    /* The owners of the account over every guild (never the real credentials folder). */
+    original.getOwners = CredentialRevocation.getOwners;
+    CredentialRevocation.getOwners = () => options.owners || [];
     RustPlusSync.applySyncServers = () => ({ servers: 1, created: 0, devices: 0, skipped: [] });
     RustPlusHistory.fetchHistory = async () => [];
     RustPlusHistory.applyPairingEntries = () => ({ devices: 0 });
@@ -141,6 +147,7 @@ function stubDependencies(t, options = {}) {
         InstanceUtils.readCredentialsFile = original.readCredentialsFile;
         InstanceUtils.writeCredentialsFile = original.writeCredentialsFile;
         DiscordMessages.sendServerMessage = original.sendServerMessage;
+        CredentialRevocation.getOwners = original.getOwners;
     });
 
     return calls;
@@ -229,6 +236,27 @@ Test.describe('CredentialsLoginHandler.token', () => {
 
         const description = String(replies[0].embeds[0].toJSON().description);
         Assert.ok(!description.includes('credentialsLoginTokenHint'));
+    });
+
+    Test.it('does not carry over the refresh token of another owner of the account', async (t) => {
+        const { client, replies } = fakeClient(t);
+        const token = makeToken(STEAM_ID, Math.floor(Date.now() / 1000) + 86400);
+        const calls = stubDependencies(t, { existingRefreshToken: 'other-owner-refresh', owners: ['someone-else'] });
+
+        await CredentialsLoginHandler.token(client, fakeInteraction(), token);
+
+        Assert.strictEqual(calls.storeAuth[0].keepRefreshToken, false);
+        Assert.ok(String(replies[0].embeds[0].toJSON().description).includes('credentialsLoginTokenHint'));
+    });
+
+    Test.it('keeps the own refresh token on a token login of the same owner', async (t) => {
+        const { client } = fakeClient(t);
+        const token = makeToken(STEAM_ID, Math.floor(Date.now() / 1000) + 86400);
+        const calls = stubDependencies(t, { existingRefreshToken: 'own-refresh', owners: [USER_ID] });
+
+        await CredentialsLoginHandler.token(client, fakeInteraction(), token);
+
+        Assert.strictEqual(calls.storeAuth[0].keepRefreshToken, true);
     });
 });
 
