@@ -74,17 +74,18 @@ module.exports = {
 
         await interaction.deferReply({ ephemeral: true });
 
+        /* Awaited: a throw must reach the command error handler, not become an unhandled rejection. */
         switch (interaction.options.getSubcommand()) {
             case 'remove': {
-                removeCredentials(client, interaction, verifyId);
+                await removeCredentials(client, interaction, verifyId);
             } break;
 
             case 'show': {
-                showCredentials(client, interaction, verifyId);
+                await showCredentials(client, interaction, verifyId);
             } break;
 
             case 'set_hoster': {
-                setHosterCredentials(client, interaction, verifyId);
+                await setHosterCredentials(client, interaction, verifyId);
             } break;
 
             default: {
@@ -93,12 +94,23 @@ module.exports = {
     },
 };
 
+/*
+    Whether the credentials file has an account entry of that steam id. Own keys only (not "toString" and the like),
+    and never the "hoster" key, which holds the steam id of the hoster and is no account.
+*/
+function hasCredentialEntry(credentials, steamId) {
+    return typeof steamId === 'string' && steamId !== 'hoster' &&
+        Object.prototype.hasOwnProperty.call(credentials, steamId);
+}
+
 async function removeCredentials(client, interaction, verifyId) {
     const guildId = interaction.guildId;
     const credentials = InstanceUtils.readCredentialsFile(guildId);
     let steamId = interaction.options.getString('steam_id');
 
-    if (steamId && (steamId in credentials) && credentials[steamId].discord_user_id !== interaction.member.user.id) {
+    /* An entry without an owner (null) can only be removed by an admin. */
+    if (hasCredentialEntry(credentials, steamId) && (!credentials[steamId] ||
+        credentials[steamId].discord_user_id !== interaction.member.user.id)) {
         if (!await client.requireAdminPrivileges(interaction)) return;
     }
 
@@ -106,14 +118,14 @@ async function removeCredentials(client, interaction, verifyId) {
         for (const credential of Object.keys(credentials)) {
             if (credential === 'hoster') continue;
 
-            if (credentials[credential].discord_user_id === interaction.member.user.id) {
+            if (credentials[credential] && credentials[credential].discord_user_id === interaction.member.user.id) {
                 steamId = credential;
                 break;
             }
         }
     }
 
-    if (!(steamId in credentials)) {
+    if (!hasCredentialEntry(credentials, steamId)) {
         const str = client.intlGet(guildId, 'credentialsDoNotExist', {
             steamId: steamId ? steamId : client.intlGet(guildId, 'unknown')
         });
@@ -162,7 +174,8 @@ async function setHosterCredentials(client, interaction, verifyId) {
             credentials[e].discord_user_id === interaction.member.user.id);
     }
 
-    if (!(steamId in credentials)) {
+    /* A null entry holds no login, it cannot host. */
+    if (!hasCredentialEntry(credentials, steamId) || !credentials[steamId]) {
         const str = client.intlGet(guildId, 'credentialsDoNotExist', {
             steamId: steamId ? steamId : client.intlGet(guildId, 'unknown')
         });
