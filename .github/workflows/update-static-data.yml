@@ -70,13 +70,13 @@ jobs:
       # out of the ~5 GB Rust dedicated server depot. That depot is downloadable anonymously,
       # so this needs no Steam credentials. The version is pinned for reproducible runs, and the archive is checked
       # against a pinned SHA-256 before anything in it runs. The release publishes no checksum, so
-      # DEPOT_DOWNLOADER_SHA256 has to be filled in from a verified download of the archive
-      # (sha256sum DepotDownloader-linux-x64.zip) and updated together with the version. Without it the step fails.
+      # DEPOT_DOWNLOADER_SHA256 is the hash of the archive as GitHub served it on 2026-11-28 (33442357 bytes, uploaded
+      # 2025-05-09). Update it together with the version (sha256sum DepotDownloader-linux-x64.zip). Without it the step fails.
       - name: Install DepotDownloader
         if: github.event_name == 'schedule' || inputs.items
         env:
           DEPOT_DOWNLOADER_VERSION: DepotDownloader_3.4.0
-          DEPOT_DOWNLOADER_SHA256: ""
+          DEPOT_DOWNLOADER_SHA256: a999dec66b4850fc961bd50366696d23c2d0fad7b18790e6a5647b2f19097a53
         run: |
           set -euo pipefail
           if [ -z "${DEPOT_DOWNLOADER_SHA256}" ]; then
