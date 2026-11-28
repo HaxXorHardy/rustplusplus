@@ -27,6 +27,16 @@ module.exports = {
     checkChanges: function (rustplus, client, time) {
         if (rustplus.time.timeTillActive) return;
 
+        /*
+            The real time since the last call, not one polling interval: a skipped or slow poll made the measured
+            time till day/night too short.
+        */
+        const nowMs = Date.now();
+        const lastMs = rustplus.timeHandlerLastMs;
+        rustplus.timeHandlerLastMs = nowMs;
+        const elapsedSeconds = (Number.isFinite(lastMs) && nowMs > lastMs) ?
+            (nowMs - lastMs) / 1000 : client.pollingIntervalMs / 1000;
+
         const prevTime = rustplus.time.time;
         const newTime = time.time;
 
@@ -60,7 +70,7 @@ module.exports = {
                 (newTime >= time.sunrise && newTime < time.sunset);
 
             for (const id in rustplus.startTimeObject) {
-                rustplus.startTimeObject[id] += (client.pollingIntervalMs / 1000);
+                rustplus.startTimeObject[id] += elapsedSeconds;
             }
 
             if (a || b) {
@@ -115,14 +125,14 @@ module.exports = {
 
         if (newTime >= time.sunrise && newTime < time.sunset) { /* It's Day */
             for (const id in rustplus.time.timeTillNight) {
-                rustplus.time.timeTillNight[id] += (client.pollingIntervalMs / 1000);
+                rustplus.time.timeTillNight[id] += elapsedSeconds;
             }
 
             rustplus.time.timeTillNight[newTime] = 0;
         }
         else { /* It's Night */
             for (const id in rustplus.time.timeTillDay) {
-                rustplus.time.timeTillDay[id] += (client.pollingIntervalMs / 1000);
+                rustplus.time.timeTillDay[id] += elapsedSeconds;
             }
 
             rustplus.time.timeTillDay[newTime] = 0;
