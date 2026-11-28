@@ -127,25 +127,56 @@ function timeZoneOf(schedule, fallback = null) {
 }
 
 /*
-    The transitions since the last check: [{ index, value }] - the state the group switches to now. lastInside holds
-    the state of each window between the checks (in memory); the first check of a window only records it.
+    The change since the last check, without recording it: { change: { index, value } | null, next }. change is the
+    one state the group switches to now - several windows that begin or end in the same check (adjacent or
+    overlapping windows) make one change: a window that begins wins; when windows only end, a window that is still
+    running decides, otherwise the group goes back from the state of the window that ended. next is the state of
+    each window now; the caller records it in lastInside (Object.assign) once the change was made, so a change that
+    failed comes again on the next check. The first check of a window only records it.
 */
-function transitions(schedule, lastInside, date = new Date(), fallbackZone = null) {
-    if (!schedule || !Array.isArray(schedule.windows)) return [];
+function pendingTransition(schedule, lastInside, date = new Date(), fallbackZone = null) {
+    const next = {};
+    if (!schedule || !Array.isArray(schedule.windows)) return { change: null, next: next };
 
     const minute = minuteOfDay(timeZoneOf(schedule, fallbackZone), date);
-    const result = [];
+    let begun = null;
+    let ended = null;
 
     schedule.windows.forEach((window, index) => {
         const now = inside(window, minute);
         const before = lastInside[index];
-        lastInside[index] = now;
+        next[index] = now;
 
         if (before === undefined || before === now) return;
-        result.push({ index: index, value: now ? window.value : !window.value });
+        if (now) begun = index;
+        else if (ended === null) ended = index;
     });
 
-    return result;
+    let change = null;
+    if (begun !== null) {
+        change = { index: begun, value: schedule.windows[begun].value };
+    }
+    else if (ended !== null) {
+        let running = null;
+        schedule.windows.forEach((window, index) => { if (next[index]) running = index; });
+
+        change = running !== null ?
+            { index: running, value: schedule.windows[running].value } :
+            { index: ended, value: !schedule.windows[ended].value };
+    }
+
+    return { change: change, next: next };
+}
+
+/*
+    The transitions since the last check: [] or [{ index, value }] - the state the group switches to now (see
+    pendingTransition). lastInside holds the state of each window between the checks (in memory) and is updated.
+*/
+function transitions(schedule, lastInside, date = new Date(), fallbackZone = null) {
+    const { change, next } = pendingTransition(schedule, lastInside, date, fallbackZone);
+    Object.assign(lastInside, next);
+
+    return change === null ? [] : [change];
 }
 
 module.exports = {
@@ -154,5 +185,6 @@ module.exports = {
     inside: inside,
     minuteOfDay: minuteOfDay,
     timeZoneOf: timeZoneOf,
+    pendingTransition: pendingTransition,
     transitions: transitions,
 };

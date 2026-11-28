@@ -67,4 +67,45 @@ Test.describe('switch group schedules', () => {
         Assert.deepStrictEqual(Schedule.transitions(schedule, state, at('2026-11-19T06:00:00Z')),
             [{ index: 0, value: true }], 'the window ends: back on');
     });
+
+    Test.it('makes one change per check for adjacent windows, the window that begins wins', () => {
+        /* The "on" window begins when the "off" window ends: the group must stay on, not go off. */
+        const schedule = Schedule.parse('UTC: 18:00-22:00 off, 22:00-23:00 on').schedule;
+        const state = {};
+
+        Schedule.transitions(schedule, state, at('2026-11-18T21:59:00Z'));
+        Assert.deepStrictEqual(Schedule.transitions(schedule, state, at('2026-11-18T22:00:00Z')),
+            [{ index: 1, value: true }]);
+
+        /* In the other order of the list as well. */
+        const reversed = Schedule.parse('UTC: 22:00-23:00 on, 18:00-22:00 off').schedule;
+        const other = {};
+        Schedule.transitions(reversed, other, at('2026-11-18T21:59:00Z'));
+        Assert.deepStrictEqual(Schedule.transitions(reversed, other, at('2026-11-18T22:00:00Z')),
+            [{ index: 0, value: true }]);
+    });
+
+    Test.it('the end of a window inside another one keeps the state of the one that still runs', () => {
+        const schedule = Schedule.parse('UTC: 18:00-23:00 on, 19:00-20:00 on').schedule;
+        const state = {};
+
+        Schedule.transitions(schedule, state, at('2026-11-18T19:30:00Z'));
+        Assert.deepStrictEqual(Schedule.transitions(schedule, state, at('2026-11-18T20:00:00Z')),
+            [{ index: 0, value: true }], 'still on, not off');
+    });
+
+    Test.it('pendingTransition does not record the change until the caller does', () => {
+        const schedule = Schedule.parse('UTC: 22:00-06:00 off').schedule;
+        const state = {};
+
+        Schedule.transitions(schedule, state, at('2026-11-18T21:59:00Z'));
+        const first = Schedule.pendingTransition(schedule, state, at('2026-11-18T22:00:00Z'));
+        Assert.deepStrictEqual(first.change, { index: 0, value: false });
+
+        const again = Schedule.pendingTransition(schedule, state, at('2026-11-18T22:01:00Z'));
+        Assert.deepStrictEqual(again.change, { index: 0, value: false }, 'still due');
+
+        Object.assign(state, again.next);
+        Assert.strictEqual(Schedule.pendingTransition(schedule, state, at('2026-11-18T22:02:00Z')).change, null);
+    });
 });
