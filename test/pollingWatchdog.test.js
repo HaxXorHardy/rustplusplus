@@ -146,7 +146,7 @@ Test.describe('pollingHandler', () => {
 
         Assert.strictEqual(rustplus.consecutiveFailedPolls, 0);
         Assert.strictEqual(rustplus.disconnects, 0);
-    });
+    });
     /*
         A cycle that hangs (a request that is never answered, a Discord call waiting on a rate limit) froze the loop:
         isPolling stayed true and every further tick was skipped - measured 15 minutes without a poll and without one
@@ -187,5 +187,48 @@ Test.describe('pollingHandler', () => {
         t.mock.timers.tick(60 * 1000);
 
         Assert.strictEqual(rustplus.disconnects, 1, 'the second overlong cycle rebuilds the connection');
+    });
+
+    /* The late answers of a released cycle must not run the handlers (twice the team announcements). */
+    Test.it('a cycle released by the watchdog stops at its next await', async () => {
+        const client = fakeClient();
+        const rustplus = fakeRustplus(client, { valid: true });
+        let release = null;
+        rustplus.getTeamInfoAsync = () => new Promise((resolve) => { release = () => resolve({ teamInfo: {} }); });
+        let handlers = 0;
+        const original = PollingHandler.handlers;
+        PollingHandler.handlers = async () => { handlers += 1; };
+
+        try {
+            rustplus.pollCycleId = 1;
+            const cycle = PollingHandler.poll(rustplus, client);
+            while (release === null) await Promise.resolve();
+
+            /* The watchdog released it and a newer cycle started. */
+            rustplus.pollCycleId = 2;
+            release();
+
+            Assert.strictEqual(await cycle, false);
+            Assert.strictEqual(handlers, 0);
+        }
+        finally {
+            PollingHandler.handlers = original;
+        }
+    });
+
+    Test.it('a released cycle that ends late does not count for the health of the connection', async () => {
+        const client = fakeClient({});
+        const rustplus = fakeRustplus(client);
+        client.rustplusInstances[rustplus.guildId] = rustplus;
+        rustplus.consecutiveFailedPolls = 3;
+        rustplus.getInfoAsync = async () => {
+            /* A newer cycle started meanwhile. */
+            rustplus.pollCycleId += 1;
+            return { error: 'not_found' };
+        };
+
+        await PollingHandler.pollingHandler(rustplus, client);
+
+        Assert.strictEqual(rustplus.consecutiveFailedPolls, 3);
     });
 });

@@ -281,6 +281,9 @@ module.exports = {
             recordPollCycle(rustplus, client, Date.now() - startedMs);
         }
 
+        /* A cycle the watchdog gave up: a newer one counts for the health of the connection. */
+        if (rustplus.pollCycleId !== cycleId) return;
+
         if (success) rustplus.pollWatchdogHits = 0;
 
         updatePollHealth(rustplus, client, success);
@@ -293,14 +296,26 @@ module.exports = {
             again and several failed polls in a row rebuild the connection (updatePollHealth).
         */
         const options = { timeoutIsWarning: true };
+
+        /*
+            After the watchdog released a hung cycle a newer one runs: the late answers of this one must not overwrite
+            the team and time state (twice the online/offline/death announcements), so it stops at the next await.
+        */
+        const cycleId = rustplus.pollCycleId;
+        const stale = () => rustplus.isDeleted || rustplus.pollCycleId !== cycleId;
+
         let info = await rustplus.getInfoAsync();
         if (!(await rustplus.isResponseValid(info, options))) return false;
+        if (stale()) return false;
         let mapMarkers = await rustplus.getMapMarkersAsync();
         if (!(await rustplus.isResponseValid(mapMarkers, options))) return false;
+        if (stale()) return false;
         let teamInfo = await rustplus.getTeamInfoAsync();
         if (!(await rustplus.isResponseValid(teamInfo, options))) return false;
+        if (stale()) return false;
         let time = await rustplus.getTimeAsync();
         if (!(await rustplus.isResponseValid(time, options))) return false;
+        if (stale()) return false;
 
         if (rustplus.isFirstPoll) {
             rustplus.info = new Info(info.info);
@@ -311,6 +326,7 @@ module.exports = {
         }
 
         await module.exports.handlers(rustplus, client, info, mapMarkers, teamInfo, time);
+        if (stale()) return false;
 
         rustplus.isFirstPoll = false;
 
@@ -318,9 +334,15 @@ module.exports = {
     },
 
     handlers: async function (rustplus, client, info, mapMarkers, teamInfo, time) {
+        /* A cycle released by the watchdog stops between the handlers (see poll). */
+        const cycleId = rustplus.pollCycleId;
+        const stale = () => rustplus.isDeleted || rustplus.pollCycleId !== cycleId;
+
         await runHandler(rustplus, client, 'the team', () => TeamHandler.handler(rustplus, client, teamInfo.teamInfo));
+        if (stale()) return;
         rustplus.team.updateTeam(teamInfo.teamInfo);
         await runHandler(rustplus, client, 'the team message', () => InformationHandler.refreshTeam(rustplus));
+        if (stale()) return;
 
         /* Online time of the week; when the week changed the finished one is reported. */
         await runHandler(rustplus, client, 'the team stats', async () => {
@@ -330,17 +352,23 @@ module.exports = {
                     .catch(() => undefined);
             }
         });
+        if (stale()) return;
 
         await runHandler(rustplus, client, 'the smart switches',
             () => SmartSwitchHandler.handler(rustplus, client, time.time));
+        if (stale()) return;
         await runHandler(rustplus, client, 'the switch groups',
             () => SmartSwitchGroupHandler.handler(rustplus, client, time.time));
+        if (stale()) return;
         await runHandler(rustplus, client, 'the raid report', () => RaidHandler.handler(rustplus, client));
+        if (stale()) return;
         await runHandler(rustplus, client, 'the time', () => TimeHandler.handler(rustplus, client, time.time));
+        if (stale()) return;
         /* Vending machine subscriptions: the API sends no vending machines anymore (util/mapEvents.js). */
         if (MapEvents.enabled()) {
             await runHandler(rustplus, client, 'the vending machines',
                 () => VendingMachines.handler(rustplus, client, mapMarkers.mapMarkers));
+            if (stale()) return;
         }
 
         rustplus.time.updateTime(time.time);
@@ -353,6 +381,7 @@ module.exports = {
             cycle (all poll-based updates) before.
         */
         await runHandler(rustplus, client, 'the smart alarms', () => SmartAlarmHandler.handler(rustplus, client));
+        if (stale()) return;
 
         /*
             The camera watch runs detached: a check needs a photo's worth of frames (seconds), the poll must not wait for
