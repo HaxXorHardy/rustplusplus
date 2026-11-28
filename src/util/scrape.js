@@ -32,6 +32,12 @@ const REQUEST_HEADERS = {
     'Accept-Language': 'en-US,en;q=0.9'
 };
 
+/* A Steam profile page is a few hundred kB: a larger answer is not a profile and is not read into memory. */
+const MAX_CONTENT_LENGTH = 5 * 1024 * 1024;
+
+/* Rate limited (429) or a temporary failure of Steam or its proxy (500, 502, 503, 504): worth another attempt. */
+const RETRYABLE_STATUSES = [429, 500, 502, 503, 504];
+
 /* Patterns used to extract the full size Steam avatar from a profile page. Steam moved the avatar out of
    an <img> tag into the OpenGraph/Twitter meta tags / image_src link, so support the new layout first and
    fall back to the legacy <img> layout for older/alternative pages. */
@@ -47,14 +53,18 @@ module.exports = {
         for (let attempt = 1; attempt <= Constants.SCRAPE_MAX_ATTEMPTS; attempt += 1) {
             let response = {};
             try {
-                response = await Axios.get(url, { headers: REQUEST_HEADERS, timeout: Constants.SCRAPE_TIMEOUT_MS });
+                response = await Axios.get(url, {
+                    headers: REQUEST_HEADERS,
+                    timeout: Constants.SCRAPE_TIMEOUT_MS,
+                    maxContentLength: MAX_CONTENT_LENGTH,
+                });
             }
             catch (e) {
                 response = e.response || {};
             }
 
-            /* Steam rate limits (HTTP 429) or is temporarily unavailable (HTTP 503); retry with backoff. */
-            const retryable = response.status === 429 || response.status === 503;
+            /* Steam rate limits or is temporarily unavailable; retry with backoff. */
+            const retryable = RETRYABLE_STATUSES.includes(response.status);
             if (!retryable || attempt === Constants.SCRAPE_MAX_ATTEMPTS) {
                 return response;
             }
