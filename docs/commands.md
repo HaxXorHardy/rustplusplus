@@ -70,8 +70,6 @@ Subcommand | Options | Description | Required
 &nbsp; | `index` | The index of the alias to remove. | `True`
 `show` | &nbsp; | Show all registered aliases. | &nbsp;
 
-`add` and `remove` need the Administrator permission, `show` is open to everyone with the bot role.
-
 ![Discord Slash Command alias Image](images/slash_commands/alias.png)
 
 
@@ -594,12 +592,12 @@ In-Game Command | Description
 
 ## **leader**
 
-> **Give/Take the Team Leadership.** Calling the leader command alone will give the caller leadership. You can also give the leadership to a team member by writing the exact name of the team member after the command. Sent from the Discord `commands` channel, the command needs the Administrator permission.
+> **Give/Take the Team Leadership.** Calling the leader command alone will give the caller leadership. You can also give the leadership to a team member by writing the name or part of the name after the command (the first team member whose name contains it).
 <br>`This command only works if the leader command is switched on in the settings channel and the current leader is an account paired with the bot.`
 
 Subcommand | Description | Required
 ---------- | ----------- | --------
-`<team_member_name>` | The exact name of a team member (`!leader <name>`). | `False`
+`<team_member_name>` | The name or part of the name of a team member (`!leader <name>`). | `False`
 
 ![In-Game Command leader Image](images/ingame_commands/leader_ingame.png)
 
