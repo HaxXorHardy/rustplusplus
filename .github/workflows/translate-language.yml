@@ -52,13 +52,13 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
 
@@ -68,10 +68,13 @@ jobs:
           pip install "requests>=2.31,<3"
 
       # The API key must never run together with a translation script from an untrusted PR.
+      # Event data (branch names) only reaches the shell through env, never through ${{ }} in a script.
       - name: Extract translation script from base branch
         if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git show "origin/${{ github.base_ref }}:scripts/translate_language_json.py" \
+          git show "origin/${BASE_REF}:scripts/translate_language_json.py" \
             > "$RUNNER_TEMP/translate_language_json.py"
 
       - name: Use translation script from checked out branch
@@ -89,6 +92,11 @@ jobs:
           BRANCH: i18n/update-translations
           BASE: ${{ github.ref_name }}
         run: |
+          # The state of the bot branch at the start: the force pushes below may only replace exactly this (empty =
+          # the branch must not exist), a maintainer push in between makes them fail instead of being overwritten.
+          sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
           existing=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json url --jq '.[0].url')
           echo "url=$existing" >> "$GITHUB_OUTPUT"
           if [ -z "$existing" ]; then
@@ -137,6 +145,8 @@ jobs:
         # Direct pushes to the default branch are off the table: a manual run on master once committed nothing but a
         # re-sorted key order. A run on master goes through a pull request instead (next step).
         if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name != github.event.repository.default_branch)
+        env:
+          PUSH_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -150,7 +160,7 @@ jobs:
 
           git diff --cached --stat
           git commit -m "chore(i18n): update translations"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
+          git push origin "HEAD:refs/heads/${PUSH_REF}"
 
       - name: Open a pull request for missing translations
         # Without an open pull request: an empty placeholder commit on the bot branch so one can exist. With one: its
@@ -163,9 +173,11 @@ jobs:
           BASE: ${{ github.ref_name }}
           MISSING: ${{ steps.translate.outputs.missing }}
           EXISTING: ${{ steps.botpr.outputs.url }}
+          LEASE: ${{ steps.botpr.outputs.sha }}
+          SHA: ${{ github.sha }}
         run: |
           {
-            echo "$MISSING translation(s) missing on \`$BASE\` after ${{ github.sha }}, not covered by this pull request yet."
+            echo "$MISSING translation(s) missing on \`$BASE\` after $SHA, not covered by this pull request yet."
             echo
             echo '```'
             grep '^\[' "$RUNNER_TEMP/translate.log"
@@ -176,7 +188,7 @@ jobs:
 
           if [ -n "$EXISTING" ]; then
             gh pr edit "$EXISTING" --body-file "$RUNNER_TEMP/body.md"
-            gh pr comment "$EXISTING" --body "New keys after ${{ github.sha }}: $MISSING translation(s) are now missing from this pull request. Start the workflow manually on \`$BASE\` to add them."
+            gh pr comment "$EXISTING" --body "New keys after $SHA: $MISSING translation(s) are now missing from this pull request. Start the workflow manually on \`$BASE\` to add them."
             echo "Updated the open pull request: $EXISTING"
             exit 0
           fi
@@ -185,21 +197,24 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
           git commit --allow-empty -m "chore(i18n): translations pending"
-          git push --force origin "HEAD:refs/heads/$BRANCH"
+          git push --force-with-lease="refs/heads/$BRANCH:$LEASE" origin "HEAD:refs/heads/$BRANCH"
 
           gh pr create --head "$BRANCH" --base "$BASE" \
             --title "chore(i18n): update translations" \
             --body-file "$RUNNER_TEMP/body.md"
 
       - name: Open a pull request with the translations
-        # The bot branch is rebuilt from the default branch on every run, so the force push only replaces its own
-        # earlier output (including the placeholder). An open pull request for it is reused instead of opening a
-        # second one.
+        # The bot branch is rebuilt from the default branch on every run (starting from the language files of the open
+        # pull request, so fixes made there are kept). The lease only replaces the branch state read at the start of
+        # the run: a push to the branch while the run is translating makes this push fail instead of erasing it. An
+        # open pull request for it is reused instead of opening a second one.
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true' && github.ref_name == github.event.repository.default_branch
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: i18n/update-translations
           BASE: ${{ github.ref_name }}
+          LEASE: ${{ steps.botpr.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -214,9 +229,9 @@ jobs:
           git diff --cached --stat
           git switch -c "$BRANCH"
           git commit -m "chore(i18n): update translations"
-          git push --force origin "HEAD:refs/heads/$BRANCH"
+          git push --force-with-lease="refs/heads/$BRANCH:$LEASE" origin "HEAD:refs/heads/$BRANCH"
 
-          body="Translations generated by the [translate workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) from \`src/languages/en.json\` on \`$BASE\`."
+          body="Translations generated by the [translate workflow run]($RUN_URL) from \`src/languages/en.json\` on \`$BASE\`."
           existing=$(gh pr list --head "$BRANCH" --base "$BASE" --state open --json url --jq '.[0].url')
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --body "$body"
