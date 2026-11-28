@@ -105,6 +105,8 @@ Make sure you use the correct values for `RPP_DISCORD_CLIENT_ID` as well as `RPP
 
 Do not put a volume on `/app/data`: it holds the game data of the image (`staticData.sqlite`), an empty volume hides it and the bot does not start.
 
+The bot runs as the user `node` (uid 1000). On start the image hands the volume directories over to `node` when they belong to another user, e.g. root after an older image. `docker exec` still runs as root, so use `docker exec -u node rpp ...` for commands that write files.
+
 ## **Thanks to**
 
 **liamcottle**@GitHub - for the [rustplus.js](https://github.com/liamcottle/rustplus.js) library.
