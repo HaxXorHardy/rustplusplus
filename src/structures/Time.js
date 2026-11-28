@@ -36,6 +36,10 @@ class Time {
         this._timeTillNight = new Object();
         this._timeTillActive = false;
 
+        /* The day/night turns applied by the automation, per key (pendingDayNightTurn). */
+        this._appliedDayNight = {};
+        this._dayNightAtStart = this.isDay() ? 'day' : 'night';
+
         this.loadTimeTillConfig();
     }
 
@@ -75,6 +79,28 @@ class Time {
     isNight() { return !this.isDay(); }
     isTurnedDay(time) { return (this.isNight() && time.time >= time.sunrise && time.time < time.sunset); }
     isTurnedNight(time) { return (this.isDay() && !(time.time >= time.sunrise && time.time < time.sunset)); }
+
+    /*
+        The day/night turn the automation of key ('switches', 'groups') has not applied yet: 'day', 'night' or null.
+        isTurnedDay/isTurnedNight only see the one poll at the edge: a handler that was skipped then (the previous
+        run still going) or that failed lost the turn until the next one. Until markDayNightApplied the turn stays
+        pending. A key starts from the time of the first poll, so a connect does not switch anything by itself.
+    */
+    pendingDayNightTurn(key, time) {
+        if (!this._appliedDayNight) this._appliedDayNight = {};
+        if (!Object.prototype.hasOwnProperty.call(this._appliedDayNight, key)) {
+            this._appliedDayNight[key] = this._dayNightAtStart !== undefined ? this._dayNightAtStart :
+                (this.isDay() ? 'day' : 'night');
+        }
+
+        const now = (time.time >= time.sunrise && time.time < time.sunset) ? 'day' : 'night';
+        return now === this._appliedDayNight[key] ? null : now;
+    }
+
+    markDayNightApplied(key, phase) {
+        if (!this._appliedDayNight) this._appliedDayNight = {};
+        this._appliedDayNight[key] = phase;
+    }
 
     loadTimeTillConfig() {
         let instance = this.client.getInstance(this.rustplus.guildId);

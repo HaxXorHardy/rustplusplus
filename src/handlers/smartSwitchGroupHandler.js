@@ -32,8 +32,29 @@ const SWITCH_CONCURRENCY = 4;
 /* A switch that did not answer is tried once more after this pause. */
 const RETRY_DELAY_MS = 2000;
 
-/* `${guildId}:${serverId}:${groupId}:${schedule}` -> inside/outside of each window at the last check */
+/*
+    `${guildId}:${serverId}:${groupId}:${schedule}` -> { lastInside: inside/outside of each window at the last
+    recorded check, attempts: tries of the change that is due }
+*/
 const scheduleStates = new Map();
+
+/* A schedule change that leaves switches unanswered is tried on this many polls, then recorded anyway. */
+const SCHEDULE_ATTEMPTS = 3;
+
+/* The group as it is now, or undefined when it (or the server) was deleted. */
+function currentGroup(client, guildId, serverId, groupId) {
+    const server = client.getInstance(guildId).serverList[serverId];
+    return server && server.switchGroups ? server.switchGroups[groupId] : undefined;
+}
+
+/* Did a switch of the group not answer (a timeout, not not_found, which makes it unreachable)? */
+function hasUnansweredSwitches(client, guildId, serverId, result) {
+    if (!result || !Array.isArray(result.failed)) return false;
+
+    const server = client.getInstance(guildId).serverList[serverId];
+    const switches = server && server.switches ? server.switches : {};
+    return result.failed.some((entityId) => switches[entityId] && switches[entityId].reachable !== false);
+}
 
 /* group.autoDayNight */
 const { AUTO_OFF, AUTO_DAY, AUTO_NIGHT } = SwitchGroupState;
@@ -60,40 +81,90 @@ module.exports = {
 
         if (!rustplus.time) return;
 
-        let turned = null;
-        if (rustplus.time.isTurnedDay(time)) turned = 'day';
-        else if (rustplus.time.isTurnedNight(time)) turned = 'night';
+        /*
+            The turn counts as applied only after this round went through: a round that was skipped (the previous one
+            still running) or that failed is done on the next poll instead of waiting for the next turn.
+        */
+        const turned = rustplus.time.pendingDayNightTurn('groups', time);
         if (turned === null) return;
 
-        for (const [groupId, group] of Object.entries(server.switchGroups)) {
-            const mode = module.exports.getAutoDayNight(group);
-            if (mode === AUTO_OFF) continue;
+        for (const groupId of Object.keys(server.switchGroups)) {
+            /* A group may be deleted while another one is switched. One that fails does not stop the others. */
+            const group = currentGroup(client, guildId, serverId, groupId);
+            if (!group) continue;
 
-            const active = (mode === AUTO_DAY) === (turned === 'day');
-            rustplus.log(client.intlGet(null, 'infoCap'),
-                `Switch group ${groupId} (${group.name}) is turned ${active ? 'on' : 'off'}, it became ${turned}.`);
+            try {
+                const mode = module.exports.getAutoDayNight(group);
+                if (mode === AUTO_OFF) continue;
 
-            await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, active);
+                const active = (mode === AUTO_DAY) === (turned === 'day');
+                rustplus.log(client.intlGet(null, 'infoCap'),
+                    `Switch group ${groupId} (${group.name}) is turned ${active ? 'on' : 'off'}, it became ${turned}.`);
+
+                await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, active);
+            }
+            catch (e) {
+                rustplus.log(client.intlGet(null, 'warningCap'),
+                    `Switch group ${groupId} could not be switched at ${turned}: ${e && e.message ? e.message : e}`,
+                    'warn');
+            }
         }
+
+        rustplus.time.markDayNightApplied('groups', turned);
     },
 
-    /* Real-time schedules (group.schedule, util/switchGroupSchedule.js): act on the begin and end of a window. */
+    /*
+        Real-time schedules (group.schedule, util/switchGroupSchedule.js): act on the begin and end of a window. The
+        new state of the windows is recorded only after the group was switched: a change that threw or that left
+        switches unanswered (not not_found) comes again on the next poll, up to SCHEDULE_ATTEMPTS times.
+    */
     runSchedules: async function (client, rustplus, server, date = new Date()) {
         const guildId = rustplus.guildId;
         const serverId = rustplus.serverId;
 
-        for (const [groupId, group] of Object.entries(server.switchGroups)) {
-            if (!group.schedule) continue;
+        for (const groupId of Object.keys(server.switchGroups)) {
+            /* A group may be deleted while another one is switched. One that fails does not stop the others. */
+            const group = currentGroup(client, guildId, serverId, groupId);
+            if (!group || !group.schedule) continue;
 
             const key = `${guildId}:${serverId}:${groupId}:${JSON.stringify(group.schedule)}`;
-            if (!scheduleStates.has(key)) scheduleStates.set(key, {});
+            if (!scheduleStates.has(key)) scheduleStates.set(key, { lastInside: {}, attempts: 0 });
+            const state = scheduleStates.get(key);
 
-            const zone = GuildSettings.timeZone(guildId);
-            for (const change of SwitchGroupSchedule.transitions(group.schedule, scheduleStates.get(key), date, zone)) {
+            try {
+                const zone = GuildSettings.timeZone(guildId);
+                const { change, next } = SwitchGroupSchedule.pendingTransition(group.schedule, state.lastInside, date,
+                    zone);
+                if (change === null) {
+                    Object.assign(state.lastInside, next);
+                    continue;
+                }
+
                 rustplus.log(client.intlGet(null, 'infoCap'),
                     `Switch group ${groupId} (${group.name}) is turned ${change.value ? 'on' : 'off'} by its schedule.`);
 
-                await module.exports.setGroup(client, rustplus, guildId, serverId, groupId, change.value);
+                state.attempts += 1;
+                const result = await module.exports.setGroup(client, rustplus, guildId, serverId, groupId,
+                    change.value);
+
+                if (!hasUnansweredSwitches(client, guildId, serverId, result) ||
+                    state.attempts >= SCHEDULE_ATTEMPTS) {
+                    Object.assign(state.lastInside, next);
+                    state.attempts = 0;
+                }
+            }
+            catch (e) {
+                if (state.attempts >= SCHEDULE_ATTEMPTS) {
+                    /* Given up: the window state is recorded, the next transition is acted on again. */
+                    const zone = GuildSettings.timeZone(guildId);
+                    Object.assign(state.lastInside,
+                        SwitchGroupSchedule.pendingTransition(group.schedule, state.lastInside, date, zone).next);
+                    state.attempts = 0;
+                }
+
+                rustplus.log(client.intlGet(null, 'warningCap'),
+                    `The schedule of switch group ${groupId} could not switch it: ${e && e.message ? e.message : e}`,
+                    'warn');
             }
         }
     },
@@ -192,7 +263,28 @@ module.exports = {
             });
         }
 
-        return await turnAndReport(rustplus, active, options.interaction || null);
+        /*
+            The timer is started before the switching so the group message shows it, but it stays only when the group
+            was switched: when no switch answered (or the switching threw) nothing is switched back later.
+        */
+        const keepTimer = (result) => !result || result.switched.length !== 0 || result.failed.length === 0;
+        const dropTimer = async () => {
+            if (seconds === null) return;
+            module.exports.cancelGroupTimer(rustplus, groupId);
+            await DiscordMessages.sendSmartSwitchGroupMessage(guildId, serverId, groupId).catch(() => undefined);
+        };
+
+        let result;
+        try {
+            result = await turnAndReport(rustplus, active, options.interaction || null);
+        }
+        catch (e) {
+            await dropTimer();
+            throw e;
+        }
+
+        if (!keepTimer(result)) await dropTimer();
+        return result;
     },
 
     /* Turn everything off when anything is on, otherwise turn it on. */

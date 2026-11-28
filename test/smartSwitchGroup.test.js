@@ -78,6 +78,17 @@ function setup(t, count, answers = {}) {
     return { instance, rustplus, client, calls };
 }
 
+const Time = require('../src/structures/Time.js');
+
+/* A stored in-game time (sunrise 7, sunset 19) without the instance file the constructor reads. */
+function timeAt(hour) {
+    const time = Object.create(Time.prototype);
+    time.updateTime({ dayLengthMinutes: 60, timeScale: 1, sunrise: 7, sunset: 19, time: hour });
+    return time;
+}
+const DAY = { sunrise: 7, sunset: 19, time: 8 };
+const NIGHT = { sunrise: 7, sunset: 19, time: 20 };
+
 const fast = { deps: { retryDelayMs: 0 } };
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const actives = (instance) => Object.values(instance.serverList.server.switches).map((s) => s.active);
@@ -253,20 +264,107 @@ Test.describe('switch group: timer, toggle and automation', () => {
         groups[2] = { name: 'Night', switches: ['2'], autoDayNight: SmartSwitchGroupHandler.AUTO_NIGHT };
         groups[3] = { name: 'Manual', switches: ['3'] };
 
-        let turned = 'day';
-        rustplus.time = { isTurnedDay: () => turned === 'day', isTurnedNight: () => turned === 'night' };
+        /* Stored time: night. */
+        rustplus.time = timeAt(5);
 
-        await SmartSwitchGroupHandler.handler(rustplus, client, {});
+        await SmartSwitchGroupHandler.handler(rustplus, client, DAY);
         Assert.deepStrictEqual(actives(instance), [true, false, false], 'day: day group on, night group off');
 
-        turned = 'night';
-        await SmartSwitchGroupHandler.handler(rustplus, client, {});
+        await SmartSwitchGroupHandler.handler(rustplus, client, NIGHT);
         Assert.deepStrictEqual(actives(instance), [false, true, false]);
 
-        turned = null;
         instance.serverList.server.switches['1'].active = true;
-        await SmartSwitchGroupHandler.handler(rustplus, client, {});
+        await SmartSwitchGroupHandler.handler(rustplus, client, NIGHT);
         Assert.strictEqual(instance.serverList.server.switches['1'].active, true, 'nothing when the time did not turn');
+    });
+
+    Test.it('day/night automation catches up a turn whose round was skipped', async (t) => {
+        const { instance, rustplus, client } = setup(t, 1);
+        instance.serverList.server.switchGroups[1].autoDayNight = SmartSwitchGroupHandler.AUTO_DAY;
+
+        /* A poll at night ran the handler; the poll at sunrise skipped it, but the stored time moved on to day. */
+        rustplus.time = timeAt(5);
+        await SmartSwitchGroupHandler.handler(rustplus, client, { sunrise: 7, sunset: 19, time: 6 });
+        rustplus.time.updateTime(DAY);
+
+        await SmartSwitchGroupHandler.handler(rustplus, client, DAY);
+        Assert.deepStrictEqual(actives(instance), [true], 'switched on the next poll');
+    });
+
+    Test.it('day/night automation goes on with the next group when one is deleted or fails', async (t) => {
+        const { instance, rustplus, client } = setup(t, 1);
+        const groups = instance.serverList.server.switchGroups;
+        instance.serverList.server.switches['2'] = { name: 'sw2', active: false, reachable: true };
+        groups[1].autoDayNight = SmartSwitchGroupHandler.AUTO_DAY;
+        groups[2] = { name: 'Other', switches: ['2'], autoDayNight: SmartSwitchGroupHandler.AUTO_DAY };
+
+        /* Switching group 1 deletes group 2 and its switch request throws. */
+        const turn = rustplus.turnSmartSwitchAsync;
+        rustplus.turnSmartSwitchAsync = async (entityId, value) => {
+            if (entityId === '1') {
+                delete groups[2];
+                throw new Error('boom');
+            }
+            return turn(entityId, value);
+        };
+        groups[3] = { name: 'Third', switches: ['3'], autoDayNight: SmartSwitchGroupHandler.AUTO_DAY };
+        instance.serverList.server.switches['3'] = { name: 'sw3', active: false, reachable: true };
+
+        rustplus.time = timeAt(5);
+        await Assert.doesNotReject(SmartSwitchGroupHandler.handler(rustplus, client, DAY));
+
+        Assert.strictEqual(instance.serverList.server.switches['3'].active, true, 'the third group is still switched');
+        Assert.strictEqual(rustplus.time.pendingDayNightTurn('groups', DAY), null, 'the turn is applied');
+    });
+
+    Test.it('a schedule change that no switch answered comes again on the next poll', async (t) => {
+        const timeout = new Error('Timeout reached while waiting for response');
+        const { instance, rustplus, client, calls } = setup(t, 1, { 1: [timeout, timeout] });
+        instance.serverList.server.switchGroups[1].schedule = { timeZone: 'UTC',
+            windows: [{ from: 22 * 60, to: 23 * 60, value: true }] };
+        const server = instance.serverList.server;
+
+        await SmartSwitchGroupHandler.runSchedules(client, rustplus, server, new Date('2026-11-18T21:59:00Z'));
+        await SmartSwitchGroupHandler.runSchedules(client, rustplus, server, new Date('2026-11-18T22:00:00Z'));
+        Assert.deepStrictEqual(actives(instance), [false], 'no answer');
+
+        await SmartSwitchGroupHandler.runSchedules(client, rustplus, server, new Date('2026-11-18T22:00:10Z'));
+        Assert.deepStrictEqual(actives(instance), [true], 'tried again and switched');
+        Assert.strictEqual(calls.requests['1'], 3);
+
+        await SmartSwitchGroupHandler.runSchedules(client, rustplus, server, new Date('2026-11-18T22:00:20Z'));
+        Assert.strictEqual(calls.requests['1'], 3, 'recorded, not switched again');
+    });
+
+    Test.it('a schedule goes on with the next group when one throws', async (t) => {
+        const { instance, rustplus, client } = setup(t, 1);
+        const groups = instance.serverList.server.switchGroups;
+        instance.serverList.server.switches['2'] = { name: 'sw2', active: false, reachable: true };
+        const windows = [{ from: 22 * 60, to: 23 * 60, value: true }];
+        groups[1].schedule = { timeZone: 'UTC', windows: windows };
+        groups[2] = { name: 'Other', switches: ['2'], schedule: { timeZone: 'UTC', windows: windows } };
+        const server = instance.serverList.server;
+
+        await SmartSwitchGroupHandler.runSchedules(client, rustplus, server, new Date('2026-11-19T21:59:00Z'));
+        t.mock.method(SmartSwitchGroupHandler, 'TurnOnOffGroup', async (c, r, g, s, groupId, value) => {
+            if (groupId === '1') throw new Error('boom');
+            instance.serverList.server.switches['2'].active = value;
+            return { switched: ['2'], failed: [] };
+        });
+
+        await Assert.doesNotReject(
+            SmartSwitchGroupHandler.runSchedules(client, rustplus, server, new Date('2026-11-19T22:00:00Z')));
+        Assert.strictEqual(instance.serverList.server.switches['2'].active, true);
+    });
+
+    Test.it('a timer is dropped when no switch of the group answered', async (t) => {
+        const gone = () => ({ error: 'not_found' });
+        const { rustplus, client } = setup(t, 1, { 1: [gone(), gone()] });
+
+        await SmartSwitchGroupHandler.setGroup(client, rustplus, 'guild', 'server', '1', true,
+            Object.assign({ seconds: 60 }, fast));
+
+        Assert.strictEqual(SwitchTimeouts.getEnd('guild', 'server', 'group-1'), null, 'nothing to switch back');
     });
 
     Test.it('an alarm turns its groups on, and off again after the set time', async (t) => {
