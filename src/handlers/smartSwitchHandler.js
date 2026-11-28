@@ -25,6 +25,63 @@ const Timer = require('../util/timer');
 const SwitchTimeouts = require('../util/switchTimeouts.js');
 const UnreachableDevices = require('../util/unreachableDevices.js');
 
+/* A switch-back of a timer that did not answer is tried again after these pauses, then given up. */
+const SWITCH_BACK_RETRY_DELAYS_MS = [15 * 1000, 30 * 1000, 60 * 1000, 120 * 1000];
+
+/*
+    Switch one switch for its automation (day/night, auto on/off, proximity, online). A switch that did not answer keeps
+    its previous state, so the automation tries again (the level-triggered modes on the next poll) instead of showing
+    a state the switch is not in. A switch deleted in the meantime is left alone.
+*/
+async function autoTurn(rustplus, client, entityId, active, changedSwitches) {
+    const guildId = rustplus.guildId;
+    const serverId = rustplus.serverId;
+    const switchOf = () => {
+        const server = client.getInstance(guildId).serverList[serverId];
+        return server && server.switches ? server.switches[entityId] : undefined;
+    };
+
+    let entity = switchOf();
+    if (!entity) return;
+
+    const prevActive = entity.active;
+    entity.active = active;
+    client.setInstance(guildId, client.getInstance(guildId));
+
+    rustplus.interactionSwitches.push(entityId);
+
+    const response = await rustplus.turnSmartSwitchAsync(entityId, active);
+    const switched = await rustplus.isResponseValid(response);
+
+    entity = switchOf();
+    if (!entity) {
+        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
+        return;
+    }
+
+    if (!switched) {
+        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
+        if (UnreachableDevices.isNotFound(response)) {
+            if (entity.reachable) {
+                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
+                entity = switchOf();
+                if (!entity) return;
+            }
+            entity.reachable = false;
+        }
+        entity.active = prevActive;
+
+        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
+    }
+    else {
+        entity.reachable = true;
+    }
+    client.setInstance(guildId, client.getInstance(guildId));
+
+    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId).catch(() => undefined);
+    changedSwitches.push(entityId);
+}
+
 module.exports = {
     handler: async function (rustplus, client, time) {
         const instance = client.getInstance(rustplus.guildId);
@@ -40,6 +97,12 @@ module.exports = {
             rustplus.smartSwitchIntervalCounter += 1;
         }
 
+        /* The switch may be deleted while a request or a Discord call is awaited. */
+        const switchOf = (entityId) => {
+            const server = client.getInstance(guildId).serverList[serverId];
+            return server && server.switches ? server.switches[entityId] : undefined;
+        };
+
         /* Go through all Smart Switches and see if some of them do not answer on request. */
         const changedSwitches = [];
         if (rustplus.smartSwitchIntervalCounter === 0) {
@@ -49,6 +112,7 @@ module.exports = {
 
                 const info = await rustplus.getEntityInfoAsync(entityId);
                 const answered = await rustplus.isResponseValid(info, { expectNotFound: true });
+                if (!switchOf(entityId)) continue;
 
                 /* No answer is no not_found: the switch is asked again on the next round. */
                 if (!answered && !UnreachableDevices.isNotFound(info)) continue;
@@ -56,10 +120,12 @@ module.exports = {
                 if (!answered) {
                     UnreachableDevices.markUnreachable(rustplus, entityId);
 
-                    if (instance.serverList[serverId].switches[entityId].reachable) {
+                    if (switchOf(entityId).reachable) {
                         await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                        instance.serverList[serverId].switches[entityId].reachable = false;
-                        client.setInstance(guildId, instance);
+                        if (!switchOf(entityId)) continue;
+
+                        switchOf(entityId).reachable = false;
+                        client.setInstance(guildId, client.getInstance(guildId));
 
                         DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId).catch(() => undefined);
                         changedSwitches.push(entityId);
@@ -68,9 +134,9 @@ module.exports = {
                 else {
                     UnreachableDevices.markReachable(rustplus, entityId);
 
-                    if (!instance.serverList[serverId].switches[entityId].reachable) {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                        client.setInstance(guildId, instance);
+                    if (!switchOf(entityId).reachable) {
+                        switchOf(entityId).reachable = true;
+                        client.setInstance(guildId, client.getInstance(guildId));
 
                         DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId).catch(() => undefined);
                         changedSwitches.push(entityId);
@@ -79,176 +145,42 @@ module.exports = {
             }
         }
 
-        /* Go through all Smart Switches and see if the auto day/night setting is on and if it just became day/night */
-        if (rustplus.time.isTurnedDay(time)) {
+        /*
+            Go through all Smart Switches and see if the auto day/night setting is on and if it became day/night. The
+            turn counts as applied only after the round went through: a round that was skipped (the previous one still
+            running) or that failed is done on the next poll instead of waiting for the next turn.
+        */
+        const turned = rustplus.time.pendingDayNightTurn('switches', time);
+        if (turned !== null) {
             for (const [entityId, content] of Object.entries(instance.serverList[serverId].switches)) {
-                if (content.autoDayNightOnOff === 1) {
-                    instance.serverList[serverId].switches[entityId].active = true;
-                    client.setInstance(guildId, instance);
+                let active = null;
+                if (content.autoDayNightOnOff === 1) active = (turned === 'day');       /* AUTO-DAY */
+                else if (content.autoDayNightOnOff === 2) active = (turned === 'night'); /* AUTO-NIGHT */
+                if (active === null) continue;
 
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchOnAsync(entityId);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
+                try {
+                    await autoTurn(rustplus, client, entityId, active, changedSwitches);
                 }
-                else if (content.autoDayNightOnOff === 2) {
-                    instance.serverList[serverId].switches[entityId].active = false;
-                    client.setInstance(guildId, instance);
-
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchOffAsync(entityId);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
+                catch (e) {
+                    rustplus.log(client.intlGet(null, 'warningCap'),
+                        `Switch ${entityId} could not be switched at ${turned}: ${e && e.message ? e.message : e}`,
+                        'warn');
                 }
             }
-        }
-        else if (rustplus.time.isTurnedNight(time)) {
-            for (const [entityId, content] of Object.entries(instance.serverList[serverId].switches)) {
-                if (content.autoDayNightOnOff === 1) {
-                    instance.serverList[serverId].switches[entityId].active = false;
-                    client.setInstance(guildId, instance);
 
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchOffAsync(entityId);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
-                }
-                else if (content.autoDayNightOnOff === 2) {
-                    instance.serverList[serverId].switches[entityId].active = true;
-                    client.setInstance(guildId, instance);
-
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchOnAsync(entityId);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
-                }
-            }
+            rustplus.time.markDayNightApplied('switches', turned);
         }
 
         for (const [entityId, content] of Object.entries(instance.serverList[serverId].switches)) {
             if (content.autoDayNightOnOff === 3) { /* AUTO-ON */
                 if (content.active) continue;
 
-                instance.serverList[serverId].switches[entityId].active = true;
-                client.setInstance(guildId, instance);
-
-                rustplus.interactionSwitches.push(entityId);
-
-                const response = await rustplus.turnSmartSwitchOnAsync(entityId);
-                if (!(await rustplus.isResponseValid(response))) {
-                    /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                    if (UnreachableDevices.isNotFound(response)) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                        }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
-                    }
-
-                    rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                }
-                else {
-                    instance.serverList[serverId].switches[entityId].reachable = true;
-                }
-                client.setInstance(guildId, instance);
-
-                DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                changedSwitches.push(entityId);
+                await autoTurn(rustplus, client, entityId, true, changedSwitches);
             }
             else if (content.autoDayNightOnOff === 4) { /* AUTO-OFF */
                 if (!content.active) continue;
 
-                instance.serverList[serverId].switches[entityId].active = false;
-                client.setInstance(guildId, instance);
-
-                rustplus.interactionSwitches.push(entityId);
-
-                const response = await rustplus.turnSmartSwitchOffAsync(entityId);
-                if (!(await rustplus.isResponseValid(response))) {
-                    /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                    if (UnreachableDevices.isNotFound(response)) {
-                        if (instance.serverList[serverId].switches[entityId].reachable) {
-                            await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                        }
-                        instance.serverList[serverId].switches[entityId].reachable = false;
-                    }
-
-                    rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                }
-                else {
-                    instance.serverList[serverId].switches[entityId].reachable = true;
-                }
-                client.setInstance(guildId, instance);
-
-                DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                changedSwitches.push(entityId);
+                await autoTurn(rustplus, client, entityId, false, changedSwitches);
             }
             else if (content.autoDayNightOnOff === 5 && content.location !== null) { /* AUTO-ON-PROXIMITY */
                 let shouldBeOn = false;
@@ -259,30 +191,7 @@ module.exports = {
                 }
 
                 if ((shouldBeOn && !content.active) || (!shouldBeOn && content.active)) {
-                    instance.serverList[serverId].switches[entityId].active = shouldBeOn;
-                    client.setInstance(guildId, instance);
-
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
+                    await autoTurn(rustplus, client, entityId, shouldBeOn, changedSwitches);
                 }
             }
             else if (content.autoDayNightOnOff === 6 && content.location !== null) { /* AUTO-OFF-PROXIMITY */
@@ -294,30 +203,7 @@ module.exports = {
                 }
 
                 if ((shouldBeOn && !content.active) || (!shouldBeOn && content.active)) {
-                    instance.serverList[serverId].switches[entityId].active = shouldBeOn;
-                    client.setInstance(guildId, instance);
-
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
+                    await autoTurn(rustplus, client, entityId, shouldBeOn, changedSwitches);
                 }
             }
             else if (content.autoDayNightOnOff === 7) { /* AUTO-ON-ANY-ONLINE */
@@ -327,30 +213,7 @@ module.exports = {
                 }
 
                 if ((shouldBeOn && !content.active) || (!shouldBeOn && content.active)) {
-                    instance.serverList[serverId].switches[entityId].active = shouldBeOn;
-                    client.setInstance(guildId, instance);
-
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
+                    await autoTurn(rustplus, client, entityId, shouldBeOn, changedSwitches);
                 }
             }
             else if (content.autoDayNightOnOff === 8) { /* AUTO-OFF-ANY-ONLINE */
@@ -360,30 +223,7 @@ module.exports = {
                 }
 
                 if ((shouldBeOn && !content.active) || (!shouldBeOn && content.active)) {
-                    instance.serverList[serverId].switches[entityId].active = shouldBeOn;
-                    client.setInstance(guildId, instance);
-
-                    rustplus.interactionSwitches.push(entityId);
-
-                    const response = await rustplus.turnSmartSwitchAsync(entityId, shouldBeOn);
-                    if (!(await rustplus.isResponseValid(response))) {
-                        /* Only not_found means the switch is gone, a timeout or a closed socket says nothing about it. */
-                        if (UnreachableDevices.isNotFound(response)) {
-                            if (instance.serverList[serverId].switches[entityId].reachable) {
-                                await DiscordMessages.sendSmartSwitchNotFoundMessage(guildId, serverId, entityId);
-                            }
-                            instance.serverList[serverId].switches[entityId].reachable = false;
-                        }
-
-                        rustplus.interactionSwitches = rustplus.interactionSwitches.filter(e => e !== entityId);
-                    }
-                    else {
-                        instance.serverList[serverId].switches[entityId].reachable = true;
-                    }
-                    client.setInstance(guildId, instance);
-
-                    DiscordMessages.sendSmartSwitchMessage(guildId, serverId, entityId);
-                    changedSwitches.push(entityId);
+                    await autoTurn(rustplus, client, entityId, shouldBeOn, changedSwitches);
                 }
             }
         }
@@ -520,35 +360,69 @@ module.exports = {
         });
 
         const record = { kind: 'switch', id: `${entityId}`, value: !active, inGame: true };
-        SwitchTimeouts.schedule(guildId, serverId, entityId, timeSeconds * 1000, record, async function () {
-            const instance = client.getInstance(guildId);
-            if (!instance.serverList[serverId] || !instance.serverList[serverId].switches.hasOwnProperty(entityId)) {
-                return;
-            }
-
-            /* The connection may have been rebuilt since the timer started: the current one switches. */
-            const rustplus = SwitchTimeouts.currentInstance(client, guildId, serverId);
-            if (rustplus === null) return;
-
-            try {
-                const switched = await module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, !active);
-                if (!switched) return;
-
-                const str = client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
-                    device: instance.serverList[serverId].switches[entityId].name,
-                    status: !active ? onCap : offCap
-                });
-
-                rustplus.sendInGameMessage(str);
-            }
-            catch (e) {
-                client.log(client.intlGet(null, 'warningCap'),
-                    `The timer of switch ${entityId} could not switch: ${e && e.message ? e.message : e}`, 'warn');
-            }
-        });
+        SwitchTimeouts.schedule(guildId, serverId, entityId, timeSeconds * 1000, record,
+            () => module.exports.switchBack(client, guildId, serverId, entityId, !active, true));
 
         rustplus.sendInGameMessage(str);
         return true;
+    },
+
+    SWITCH_BACK_RETRY_DELAYS_MS: SWITCH_BACK_RETRY_DELAYS_MS,
+
+    /*
+        The end of an "on/off for X" timer of a switch (also a restored one, handlers/switchTimerRestore.js): switch it
+        to value on the connection that is current now. A switch that did not answer (a timeout, a closed socket) is
+        tried again after SWITCH_BACK_RETRY_DELAYS_MS, as a timer of its own (it shows in Discord, is cancelled by a
+        new command and survives a restart); one the server does not know (not_found) is given up. inGame: announce
+        the switch-back in the team chat. Returns whether it switched.
+    */
+    switchBack: async function (client, guildId, serverId, entityId, value, inGame, attempt = 0) {
+        const switchOf = () => {
+            const server = client.getInstance(guildId).serverList[serverId];
+            return server && server.switches ? server.switches[entityId] : undefined;
+        };
+        if (!switchOf()) return false;
+
+        /* The connection may have been rebuilt since the timer started: the current one switches. */
+        const rustplus = SwitchTimeouts.currentInstance(client, guildId, serverId);
+        if (rustplus === null) return false;
+
+        let switched = false;
+        try {
+            switched = await module.exports.smartSwitchCommandTurnOnOff(rustplus, client, entityId, value);
+        }
+        catch (e) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `The timer of switch ${entityId} could not switch: ${e && e.message ? e.message : e}`, 'warn');
+        }
+
+        const entity = switchOf();
+        if (switched) {
+            if (inGame && entity) {
+                rustplus.sendInGameMessage(client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
+                    device: entity.name,
+                    status: client.intlGet(guildId, value ? 'onCap' : 'offCap')
+                }));
+            }
+            return true;
+        }
+
+        /* Gone (deleted, or not_found made it unreachable): asking again changes nothing. */
+        if (!entity || entity.reachable === false || attempt >= SWITCH_BACK_RETRY_DELAYS_MS.length) {
+            client.log(client.intlGet(null, 'warningCap'),
+                `The timer of switch ${entityId} could not switch it ${value ? 'on' : 'off'}, it is given up.`, 'warn');
+            return false;
+        }
+
+        const delayMs = SWITCH_BACK_RETRY_DELAYS_MS[attempt];
+        client.log(client.intlGet(null, 'warningCap'),
+            `The timer of switch ${entityId} could not switch it ${value ? 'on' : 'off'}, ` +
+            `it tries again in ${Math.round(delayMs / 1000)} s.`, 'warn');
+
+        const record = { kind: 'switch', id: `${entityId}`, value: value, inGame: Boolean(inGame) };
+        SwitchTimeouts.schedule(guildId, serverId, entityId, delayMs, record,
+            () => module.exports.switchBack(client, guildId, serverId, entityId, value, inGame, attempt + 1));
+        return false;
     },
 
     smartSwitchCommandTurnOnOff: async function (rustplus, client, entityId, active) {

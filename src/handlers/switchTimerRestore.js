@@ -65,13 +65,8 @@ async function fire(client, guildId, serverId, key, record) {
     const entity = server.switches ? server.switches[record.id] : null;
     if (!entity) return;
 
-    await SmartSwitchHandler.smartSwitchCommandTurnOnOff(rustplus, client, record.id, record.value);
-    if (record.inGame) {
-        rustplus.sendInGameMessage(client.intlGet(guildId, 'automaticallyTurningBackOnOff', {
-            device: entity.name,
-            status: status
-        }));
-    }
+    /* Announced only when it switched; a switch that did not answer is tried again (see switchBack). */
+    await SmartSwitchHandler.switchBack(client, guildId, serverId, record.id, record.value, record.inGame);
 }
 
 /* Start the stored timers of the server the connection belongs to. Returns how many were started. */
